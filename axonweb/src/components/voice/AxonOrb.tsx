@@ -160,6 +160,14 @@ export function AxonOrb({ state, level = 0, size = 300, scale = 1, className }: 
         // desenha o halo FORA da forma, e o contêiner não o acompanharia.
         transformOrigin: "center center",
         transition: "transform 0.45s cubic-bezier(0.4, 0, 0.2, 1)",
+        // Fora do fluxo de propósito: `transform` não encolhe a altura de
+        // LAYOUT, então um canvas de 280px esticaria um contêiner de 115px e a
+        // orb desceria para o centro da linha esticada, longe do halo.
+        position: "absolute",
+        left: "50%",
+        top: "50%",
+        marginLeft: -size / 2,
+        marginTop: -size / 2,
       }}
     />
   );

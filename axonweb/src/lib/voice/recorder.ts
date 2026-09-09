@@ -53,6 +53,14 @@ export interface VoiceRecorderEvents {
 
 export interface VoiceRecorder {
   start(): Promise<void>;
+  /**
+   * O stream do microfone, enquanto grava.
+   *
+   * Existe para a transcrição ao vivo derivar PCM do MESMO microfone, sem abrir
+   * uma segunda captura: dois `getUserMedia` simultâneos acendem dois ícones de
+   * gravação e, em alguns aparelhos, o segundo simplesmente falha.
+   */
+  readonly stream: MediaStream | null;
   /** Para a gravação e resolve com o áudio capturado. */
   stop(): Promise<VoiceRecording>;
   /** Para e descarta — usado no gesto de "deslizar para cancelar". */
@@ -144,6 +152,10 @@ export function createVoiceRecorder(events: VoiceRecorderEvents = {}): VoiceReco
   return {
     get isRecording() {
       return recording;
+    },
+
+    get stream() {
+      return stream;
     },
 
     async start() {

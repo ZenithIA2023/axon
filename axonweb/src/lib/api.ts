@@ -1068,6 +1068,48 @@ export function streamVoiceMessage(
   );
 }
 
+/**
+ * Mesma rodada de voz, mas com o texto JÁ transcrito ao vivo.
+ *
+ * O par de `streamVoiceMessage`: quando o WebSocket entregou a frase enquanto a
+ * pessoa falava, reenviar o áudio custaria uma segunda transcrição e ~1s a mais
+ * antes de o Axon começar a responder. Os eventos recebidos são idênticos.
+ */
+export function streamVoiceMessageText(
+  text: string,
+  history: ChatMessage[],
+  conversationId: string,
+  onTranscript: (text: string) => void,
+  onChunk: (text: string) => void,
+  onDone: () => void,
+  onError: (err: Error) => void,
+  onTool?: (event: ToolEvent) => void
+): void {
+  streamSSE(
+    "/voice/message-text",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text,
+        conversation_id: conversationId,
+        history: JSON.stringify(history),
+      }),
+    },
+    (parsed) => {
+      if (typeof parsed.transcript === "string") {
+        onTranscript(parsed.transcript);
+      } else if (typeof parsed.text === "string") {
+        onChunk(parsed.text);
+      } else if (typeof parsed.tool === "string") {
+        onTool?.(parsed as unknown as ToolEvent);
+      }
+    },
+    onDone,
+    onError
+  );
+}
+
 /* ============================================================================
  * CHAT PROJECTS
  * Pastas/projetos usados na tela de Chat para agrupar conversas.

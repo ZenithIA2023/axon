@@ -24,6 +24,7 @@ import { resolveVoiceConversation } from "../lib/voice/voiceConversation";
 import { splitSentences } from "../lib/voice/sentenceQueue";
 import { sanitizeForSpeech } from "../lib/voice/sanitize";
 import type { VoiceRecording } from "../lib/voice/recorder";
+import type { ToolEvent } from "../lib/api";
 
 // ===========================================================================
 // TIPOS
@@ -116,6 +117,13 @@ export default function VoiceChat() {
   // Label da ferramenta rodando ("Criando tarefa…"). Sem isso a tela fica
   // parada em "pensando" enquanto o Axon de fato executa o que foi pedido.
   const [toolLabel, setToolLabel] = useState<string | null>(null);
+
+  /**
+   * O que a transcrição ao vivo entendeu até agora, enquanto a pessoa fala.
+   * Vazio quando o streaming não está disponível — e aí a tela se comporta
+   * exatamente como antes, mostrando o texto só no fim.
+   */
+  const [textoAoVivo, setTextoAoVivo] = useState("");
   const [segundos, setSegundos] = useState(0);
 
   // Id do turno do Axon que está recebendo texto agora. Precisa ser state, e
@@ -147,13 +155,14 @@ export default function VoiceChat() {
   // ENVIO
   // -------------------------------------------------------------------------
 
-  const enviarGravacao = useCallback(
-    (recording: VoiceRecording) => {
-      if (!conversationId) {
-        voiceSessionRef.current?.finishProcessing();
-        return;
-      }
-
+  /**
+   * Prepara a tela para uma rodada e devolve os manipuladores do stream.
+   *
+   * Os dois caminhos — áudio completo e texto já transcrito ao vivo — produzem
+   * exatamente os mesmos eventos, então tudo o que muda entre eles é a chamada
+   * de API. Sem isto, a lógica de turnos, fala e erro viveria duplicada.
+   */
+  const prepararRodada = useCallback(() => {
       const history = historyRef.current;
       const axonId = Date.now() + 1;
       let userTurnId: number | null = null;
@@ -169,18 +178,9 @@ export default function VoiceChat() {
       // ouvir de volta é o ponto inteiro.
       speech.begin(true);
 
-      const ext = recording.mimeType.includes("mp4")
-        ? "m4a"
-        : recording.mimeType.includes("ogg")
-        ? "ogg"
-        : "webm";
-
-      api.streamVoiceMessage(
-        recording.blob,
-        `voz.${ext}`,
+      return {
         history,
-        conversationId,
-        (transcript) => {
+        onTranscript: (transcript: string) => {
           // O transcript é o primeiro evento do stream: antes dele não há o que
           // mostrar, por isso os dois turnos nascem juntos aqui.
           userTurnId = Date.now();
@@ -191,13 +191,13 @@ export default function VoiceChat() {
             { id: axonId, sender: "axon", text: "" },
           ]);
         },
-        (chunk) => {
+        onChunk: (chunk: string) => {
           setTurns((prev) =>
             prev.map((t) => (t.id === axonId ? { ...t, text: t.text + chunk } : t))
           );
           speech.push(chunk);
         },
-        () => {
+        onDone: () => {
           speech.finish();
           setStreamingId(null);
           setToolLabel(null);
@@ -216,7 +216,7 @@ export default function VoiceChat() {
             return prev;
           });
         },
-        (err) => {
+        onError: (err: Error) => {
           const mensagem = err.message || "Não consegui processar o áudio. Tente de novo.";
           speech.stop();
           setStreamingId(null);
@@ -241,17 +241,74 @@ export default function VoiceChat() {
           speech.push(mensagem);
           speech.finish();
         },
-        (event) => {
+        onTool: (event: ToolEvent) => {
           setToolLabel(event.status === "running" ? event.label ?? null : null);
-        }
+        },
+      };
+  }, [speech]);
+
+  /** Caminho normal: o áudio inteiro vai para o backend, que transcreve. */
+  const enviarGravacao = useCallback(
+    (recording: VoiceRecording) => {
+      if (!conversationId) {
+        voiceSessionRef.current?.finishProcessing();
+        return;
+      }
+      const r = prepararRodada();
+      const ext = recording.mimeType.includes("mp4")
+        ? "m4a"
+        : recording.mimeType.includes("ogg")
+        ? "ogg"
+        : "webm";
+
+      api.streamVoiceMessage(
+        recording.blob,
+        `voz.${ext}`,
+        r.history,
+        conversationId,
+        r.onTranscript,
+        r.onChunk,
+        r.onDone,
+        r.onError,
+        r.onTool
       );
     },
-    [conversationId, speech]
+    [conversationId, prepararRodada]
+  );
+
+  /**
+   * Caminho da transcrição ao vivo: o texto já chegou enquanto a pessoa falava,
+   * então vai direto para o agente — sem transcrever (e pagar) de novo.
+   */
+  const enviarTexto = useCallback(
+    (texto: string) => {
+      if (!conversationId) {
+        voiceSessionRef.current?.finishProcessing();
+        return;
+      }
+      setTextoAoVivo("");
+      const r = prepararRodada();
+      api.streamVoiceMessageText(
+        texto,
+        r.history,
+        conversationId,
+        r.onTranscript,
+        r.onChunk,
+        r.onDone,
+        r.onError,
+        r.onTool
+      );
+    },
+    [conversationId, prepararRodada]
   );
 
   const voiceSession = useVoiceSession({
     onRecordingReady: enviarGravacao,
     onError: (mensagem) => setErro(mensagem),
+    // Só esta página usa transcrição ao vivo; o botão do chat de texto não.
+    live: true,
+    onLiveText: setTextoAoVivo,
+    onLiveTranscript: enviarTexto,
   });
 
   voiceSessionRef.current = voiceSession;
@@ -324,7 +381,9 @@ export default function VoiceChat() {
     const comportamento = primeiraRolagemRef.current ? "auto" : "smooth";
     primeiraRolagemRef.current = false;
     fimRef.current?.scrollIntoView({ block: "end", behavior: comportamento });
-  }, [turns, estado]);
+    // `textoAoVivo` entra aqui porque ele cresce sem criar turno nenhum: sem
+    // isto, uma fala longa sairia da área visível enquanto é transcrita.
+  }, [turns, estado, textoAoVivo]);
 
   // A orb voltando ao tamanho cheio rouba ~168px da área de texto e empurraria
   // a última mensagem para fora de vista. Reancora no fim quando isso acontece.
@@ -504,16 +563,23 @@ export default function VoiceChat() {
           libera altura nenhuma no layout, e o objetivo do modo registro é
           exatamente devolver essa altura ao texto. */}
       <div
-        className="relative grid shrink-0 place-items-center"
+        className="relative shrink-0"
         style={{
           height: modoRegistro ? ORB_ALTURA_REGISTRO : ORB_ALTURA_NORMAL,
           transition: "height 0.45s cubic-bezier(0.4, 0, 0.2, 1)",
         }}
       >
+        {/* Halo e orb são ambos absolutos e centrados no MESMO ponto — o centro
+            deste contêiner. É isso que os mantém concêntricos em qualquer
+            tamanho; deixar um dos dois no fluxo separaria os dois. */}
         <div
           aria-hidden="true"
           className="absolute h-[210px] w-[210px] rounded-full"
           style={{
+            left: "50%",
+            top: "50%",
+            marginLeft: -105,
+            marginTop: -105,
             background: "radial-gradient(circle, rgba(168,85,247,0.42), transparent 68%)",
             filter: "blur(26px)",
             opacity: estado === "thinking" ? 0.7 : 1,
@@ -649,6 +715,33 @@ export default function VoiceChat() {
             </Fragment>
           );
         })}
+
+        {/* O que está sendo dito AGORA, pela transcrição ao vivo.
+            Fica no lugar onde a fala vai aparecer quando virar turno de
+            verdade, para o texto não pular de posição ao ser confirmado. O
+            cursor piscando é o que separa "ainda estou ouvindo" de "pronto". */}
+        {textoAoVivo && estado === "listening" && (
+          <div className="max-w-[80%] self-end text-right">
+            <p
+              className="m-0 font-bold"
+              style={{
+                fontSize: "0.9375rem",
+                lineHeight: 1.45,
+                letterSpacing: "-0.012em",
+                // Mais apagado que um turno confirmado: ainda pode mudar.
+                color: "rgba(255,255,255,0.38)",
+                textWrap: "pretty",
+              }}
+            >
+              {textoAoVivo}
+              <span
+                aria-hidden="true"
+                className="voice-blink ml-0.5 inline-block h-[0.95em] w-[2px] translate-y-[0.12em] rounded-sm"
+                style={{ background: "rgba(255,255,255,0.5)" }}
+              />
+            </p>
+          </div>
+        )}
 
         {/* Âncora do auto-scroll. */}
         <div ref={fimRef} className="h-px shrink-0" />

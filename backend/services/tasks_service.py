@@ -246,6 +246,12 @@ def create_task(user_id: str, data: dict, now: datetime | None = None) -> dict:
     task = serialize(result.data[0])
     calendar_sync.sync_task_async(user_id, task, "create")
 
+    # O título novo precisa entrar no vocabulário de voz: sem isto o usuário
+    # criaria a tarefa e, ao falar dela em seguida, o reconhecedor ainda não a
+    # conheceria (o cache dura 5 min).
+    from services import stt_vocabulary
+    stt_vocabulary.invalidate(user_id)
+
     if task.get("objective_id"):
         from services.objectives_service import recalculate_progress
         recalculate_progress(task["objective_id"])
