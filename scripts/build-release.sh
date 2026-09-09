@@ -18,7 +18,16 @@ FRONT="$RAIZ/axonweb"
 ANDROID="$FRONT/android"
 
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/android-sdk}"
-export JAVA_HOME="${JAVA_HOME:-/usr/local/sdkman/candidates/java/21.0.10-ms}"
+# NAO usar ${JAVA_HOME:-...}: o Codespace ja exporta JAVA_HOME apontando para
+# o JDK 25 (via .../java/current), entao o default nunca entraria e o Gradle
+# quebraria com "Unsupported class file major version 69". Aqui o 21 e imposto.
+JDK21="/usr/local/sdkman/candidates/java/21.0.10-ms"
+if [[ ! -x "$JDK21/bin/java" ]]; then
+  echo "ERRO: JDK 21 nao encontrado em $JDK21 (o Gradle 8.14 nao suporta o 25)."
+  exit 1
+fi
+export JAVA_HOME="$JDK21"
+export PATH="$JAVA_HOME/bin:$PATH"
 
 echo "==> Verificações de segurança"
 

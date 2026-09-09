@@ -618,3 +618,17 @@ class TranscribeResponse(BaseModel):
     text: str
     confidence: float
     duration_seconds: float
+
+
+class VoiceTextRequest(BaseModel):
+    """
+    Rodada de voz cujo texto já foi transcrito ao vivo (`POST /voice/message-text`).
+
+    `history` vem como string JSON, e não como lista, só para ser o mesmo
+    formato que o `/voice/message` recebe no multipart — os dois caminhos
+    compartilham o `_parse_history` do router.
+    """
+    text: str
+    conversation_id: str
+    history: str = "[]"
+    language: str = "pt-BR"

@@ -19,12 +19,29 @@ FRONT="$RAIZ/axonweb"
 
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/android-sdk}"
 # O Gradle 8.14 não suporta o JDK 25 que vem por padrão no Codespace.
-export JAVA_HOME="${JAVA_HOME:-/usr/local/sdkman/candidates/java/21.0.10-ms}"
+# NAO usar ${JAVA_HOME:-...}: o Codespace ja exporta JAVA_HOME apontando para
+# o JDK 25 (via .../java/current), entao o default nunca entraria e o Gradle
+# quebraria com "Unsupported class file major version 69". Aqui o 21 e imposto.
+JDK21="/usr/local/sdkman/candidates/java/21.0.10-ms"
+if [[ ! -x "$JDK21/bin/java" ]]; then
+  echo "ERRO: JDK 21 nao encontrado em $JDK21 (o Gradle 8.14 nao suporta o 25)."
+  exit 1
+fi
+export JAVA_HOME="$JDK21"
+export PATH="$JAVA_HOME/bin:$PATH"
 
 echo "==> Build do frontend (backend: $API)"
 cd "$FRONT"
 unset CAP_SERVER_URL      # sem isto o APK carregaria do servidor de dev
 VITE_API_URL="$API" npm run build
+
+# Rede de seguranca: um `npm run build` cru pega VITE_API_URL do .env, que
+# aponta para o backend do Codespace. Esse bundle abre e trava numa tela preta
+# no aparelho, porque o tunel do Codespace nao existe para o celular.
+if grep -rq "github.dev" dist/assets/*.js 2>/dev/null; then
+  echo "ERRO: o build contem URL do Codespace. Abortando."
+  exit 1
+fi
 
 echo "==> Sincronizando com o Android"
 npx cap sync android

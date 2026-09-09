@@ -11,9 +11,14 @@
  *     cd axonweb && npx tsx src/lib/voice/voice.test.ts
  */
 
-import { Omega } from "lucide-react";
 import { sanitizeForSpeech } from "./sanitize";
 import { createSentenceQueue, splitSentences } from "./sentenceQueue";
+import {
+  avaliarPausa,
+  ESTADO_PAUSA_INICIAL,
+  rmsDe,
+  type EstadoPausa,
+} from "./pcmCapture";
 import type { SpeechEngine } from "./tts";
 
 let ok = 0;
@@ -182,6 +187,60 @@ async function main(): Promise<void> {
 
   eq("texto vazio não gera frase", splitSentences("   "), []);
   eq("frase sem pontuação final ainda conta", splitSentences("Criei a tarefa"), ["Criei a tarefa"]);
+
+  // ------------------------------------------------------------------------
+  // avaliarPausa — decide onde a transcrição ao vivo corta a fala em trechos.
+  // Cortar cedo demais picota a frase e piora o texto (o modelo perde o
+  // contexto); cortar tarde demais deixa a tela vazia enquanto a pessoa fala.
+  // ------------------------------------------------------------------------
+  console.log("\n— avaliarPausa —");
+
+  const VOZ = 0.2;      // bem acima do limiar
+  const SILENCIO = 0.001; // bem abaixo
+  const BLOCO = 0.1;    // 100ms, o tamanho que o worklet entrega
+
+  /** Roda uma sequência de (rms, segundos) e devolve onde cortou. */
+  function correr(passos: Array<[number, number]>): number[] {
+    let estado: EstadoPausa = { ...ESTADO_PAUSA_INICIAL };
+    const cortes: number[] = [];
+    let t = 0;
+    for (const [rms, dur] of passos) {
+      t += dur;
+      const r = avaliarPausa(estado, rms, dur);
+      estado = r.estado;
+      if (r.cortar) cortes.push(Number(t.toFixed(1)));
+    }
+    return cortes;
+  }
+
+  const bloco = (rms: number, segundos: number): Array<[number, number]> =>
+    Array.from({ length: Math.round(segundos / BLOCO) }, () => [rms, BLOCO] as [number, number]);
+
+  eq("silêncio curto no meio da fala não corta",
+    correr([...bloco(VOZ, 3), ...bloco(SILENCIO, 0.2), ...bloco(VOZ, 2)]), []);
+
+  eq("pausa real depois de fala suficiente corta",
+    correr([...bloco(VOZ, 3), ...bloco(SILENCIO, 0.4)]), [3.4]);
+
+  eq("pausa longa logo no início não corta (frase curta demais)",
+    correr([...bloco(VOZ, 0.5), ...bloco(SILENCIO, 1)]), []);
+
+  // Sem teto, quem fala sem parar ficaria até 60s (o limite do recorder) sem
+  // ver nada na tela.
+  eq("fala contínua corta no teto de 12s",
+    correr(bloco(VOZ, 30)), [12.1, 24.2]);
+
+  eq("duas frases com pausa entre elas dão dois cortes",
+    correr([
+      ...bloco(VOZ, 3), ...bloco(SILENCIO, 0.4),
+      ...bloco(VOZ, 3), ...bloco(SILENCIO, 0.4),
+    ]).length, 2);
+
+  console.log("\n— rmsDe —");
+  eq("silêncio digital", rmsDe(new Int16Array(100)), 0);
+  eq("bloco vazio não divide por zero", rmsDe(new Int16Array(0)), 0);
+  eq("amplitude cheia satura em 1", Math.round(rmsDe(new Int16Array(50).fill(32767))), 1);
+  eq("voz típica fica acima do limiar de silêncio", rmsDe(new Int16Array(50).fill(3000)) > 0.012, true);
 
   console.log(`\n${ok} passaram, ${falhas} falharam`);
   // Sai com código 1 quando algo falha, para servir em CI. `process` só existe
