@@ -2,9 +2,11 @@ import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { AlertCircle, ArrowRight, Eye, EyeOff, Lock, Mail } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
 
 import GoogleAuthButton from "../components/auth/GoogleAuthButton";
 import * as api from "../lib/api";
+import { BUILD_COMMIT } from "../lib/buildInfo";
 
 type InputFieldProps = {
   icon: React.ElementType;
@@ -205,6 +207,14 @@ export default function Login() {
             >
               {loading ? "Entrando..." : "Login"}
               {!loading && <ArrowRight className="ml-2 h-4 w-4" />}
+              {/* Carimbo da versao: so no app instalado, onde nao ha outra
+                  forma de saber se o APK e o novo. Na web o commit aparece na
+                  URL/deploy, entao poluiria a tela sem necessidade. */}
+              {!loading && Capacitor.isNativePlatform() && (
+                <span className="ml-2 font-mono text-[0.6rem] font-normal text-white/55">
+                  {BUILD_COMMIT}
+                </span>
+              )}
             </button>
 
             <div className="py-3.5">
