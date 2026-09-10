@@ -36,6 +36,19 @@ android {
         }
     }
 
+    // POR QUE O APK DE TESTE CONFLITA COM O DA PLAY STORE
+    //
+    // O APK de teste (assembleDebug) e assinado com a chave de DEBUG; o da loja,
+    // com a de RELEASE. Como os dois usam o mesmo applicationId (com.axon.app),
+    // o Android trata como "o mesmo app com assinatura trocada" e RECUSA a
+    // instalacao por cima ("App not installed"/conflito). A saida e desinstalar
+    // o que estiver la antes de instalar o outro.
+    //
+    // A correcao natural seria `applicationIdSuffix ".debug"` no bloco debug,
+    // mas hoje ela NAO e possivel: o google-services.json so tem com.axon.app
+    // registrado, e o plugin do Firebase falha o build com qualquer outro id.
+    // Para adotar o sufixo seria preciso antes registrar com.axon.app.debug no
+    // console do Firebase e baixar o JSON novo (que passa a ter os dois).
     buildTypes {
         release {
             minifyEnabled false
