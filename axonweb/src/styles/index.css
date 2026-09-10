@@ -445,6 +445,16 @@ body {
   height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
 }
 
+/* A página de voz é escura SEMPRE, independente do tema claro/escuro do app.
+   Sem isto, a faixa das safe areas (que é pintada pelo <body>, com a cor do
+   tema) aparece como um bloco de cor diferente em cima e embaixo — no tema
+   claro, uma tarja clara; no escuro, um degrau visível acima da barra do
+   sistema. `:has()` deixa a regra viver junto das outras de safe area, em vez
+   de espalhar a cor da página por um efeito no <body>. */
+.is-native body:has(main[data-tela="voz"]) {
+  background: #07060c;
+}
+
 /* Elementos fixos no rodapé (barra de ação do Dashboard, sheets, modais) não
    herdam o padding do <main>: precisam subir por conta própria. */
 .is-native .fixed.bottom-6 {
