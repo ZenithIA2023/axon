@@ -496,6 +496,7 @@ export default function VoiceChat() {
 
   return (
     <main
+      data-tela="voz"
       className="relative flex h-[100dvh] flex-col overflow-hidden text-white"
       style={{ background: "#07060c", isolation: "isolate" }}
     >
@@ -793,7 +794,11 @@ export default function VoiceChat() {
       </div>
 
       {/* ---------------- controles ---------------- */}
-      <div className="grid justify-items-center gap-3.5 px-6 pb-7 pt-2.5">
+      {/* pb-3 e não pb-7: no app, a regra `.is-native main` já reserva a altura
+          da barra do sistema, e um respiro grande aqui se soma a ela — os
+          botões sobem e sobra uma faixa preta embaixo. O mesmo valor enxuto
+          que Chat e Focus usam. */}
+      <div className="grid justify-items-center gap-3.5 px-6 pb-3 pt-2.5">
         <p
           className="min-h-[1.2em] text-center text-[0.72rem]"
           style={{ color: erro ? "#fb7185" : "rgba(255,255,255,0.46)" }}
