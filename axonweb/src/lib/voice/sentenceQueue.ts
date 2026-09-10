@@ -18,6 +18,31 @@ import { sanitizeForSpeech } from "./sanitize";
 /** Curto demais para valer uma fala isolada; espera o próximo trecho. */
 const MIN_CHARS = 25;
 
+/**
+ * Mínimo da PRIMEIRA frase da resposta, mais baixo que o das seguintes.
+ *
+ * O Axon abre muita resposta com "Feito!", "Claro." ou "Pronto." — com o mínimo
+ * de 25 a fala inteira ficava esperando a frase seguinte fechar, o que atrasa o
+ * primeiro som em segundos. No meio da resposta segurar é certo (evita picotar);
+ * na abertura, o silêncio custa mais que o picote, porque é o intervalo em que
+ * a pessoa não sabe se foi ouvida.
+ */
+const MIN_CHARS_PRIMEIRA = 6;
+
+/**
+ * Até quantos caracteres juntar num único áudio ao tirar frases da fila.
+ *
+ * Cada frase falada isolada é uma emenda entre dois áudios, e emenda é onde a
+ * fala soa travada. Quando várias frases curtas já chegaram ("A primeira é... A
+ * segunda é..."), falá-las num pedido só elimina essas emendas e deixa a
+ * entonação ligada, porque o TTS vê a sequência inteira.
+ *
+ * O teto existe porque a latência do TTS cresce com o texto (medido: 753ms para
+ * uma frase, 3160ms para 308 caracteres): juntar demais atrasaria o início.
+ * Só junta o que JÁ chegou — nunca espera texto novo para completar o grupo.
+ */
+const AGRUPAR_ATE_CHARS = 180;
+
 /** Sem novos deltas por este tempo, fala o que tiver acumulado. */
 const IDLE_FLUSH_MS = 2_500;
 
@@ -102,9 +127,12 @@ export function splitSentences(texto: string): string[] {
     if (corte === -1) break;
 
     const frase = buffer.slice(0, corte).trim();
-    // Mesma regra da fila: fragmento curto se junta ao próximo em vez de virar
-    // uma frase solta.
-    if (frase.length < MIN_CHARS && buffer.length < MAX_BUFFER) {
+    // Mesma regra da fila, INCLUSIVE o mínimo menor da primeira frase: uma
+    // abertura curta ("Feito!") é falada sozinha, e se aqui ela fosse juntada
+    // à seguinte o destaque na tela ficaria uma frase adiantado em relação ao
+    // áudio — o defeito mais visível que a página de voz pode ter.
+    const minimo = frases.length === 0 ? MIN_CHARS_PRIMEIRA : MIN_CHARS;
+    if (frase.length < minimo && buffer.length < MAX_BUFFER) {
       const proximo = proximoCorte(buffer.slice(corte));
       if (proximo === -1) break;
       const junto = buffer.slice(0, corte + proximo).trim();
@@ -145,6 +173,8 @@ export function createSentenceQueue(
   let buffer = "";
   let cancelado = false;
   let falando = false;
+  // Nada foi falado ainda nesta resposta: a primeira frase pode sair mais curta.
+  let primeira = true;
   const pendentes: string[] = [];
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -155,17 +185,29 @@ export function createSentenceQueue(
     }
   };
 
-  /** Fala a fila em ordem, uma frase por vez. */
+  /**
+   * Tira da fila o próximo bloco a falar, juntando as frases curtas que já
+   * chegaram. Nunca espera: junta só o que está disponível agora.
+   */
+  const proximoBloco = (): string => {
+    let bloco = pendentes.shift()!;
+    while (
+      pendentes.length > 0 &&
+      bloco.length + 1 + pendentes[0].length <= AGRUPAR_ATE_CHARS
+    ) {
+      bloco += " " + pendentes.shift()!;
+    }
+    return bloco;
+  };
+
+  /** Fala a fila em ordem, um bloco por vez. */
   const bombear = async () => {
     if (falando || cancelado) return;
     falando = true;
     while (pendentes.length > 0 && !cancelado) {
-      const frase = pendentes.shift()!;
-      options.onSentenceStart?.(frase);
-      // Adianta a próxima ANTES de falar esta: com voz de nuvem, buscar o áudio
-      // leva ~1s, e sem sobrepor haveria um silêncio entre cada frase.
-      if (pendentes.length > 0) engine.prefetch?.(pendentes[0]);
-      await engine.speak(frase);
+      const bloco = proximoBloco();
+      options.onSentenceStart?.(bloco);
+      await engine.speak(bloco);
     }
     falando = false;
     if (!cancelado && pendentes.length === 0) options.onIdle?.();
@@ -175,7 +217,22 @@ export function createSentenceQueue(
     const limpo = sanitizeForSpeech(bruto);
     // Depois de limpar pode não sobrar nada pronunciável (só um emoji, p.ex.).
     if (!/[\p{L}\p{N}]/u.test(limpo)) return;
+    primeira = false;
     pendentes.push(limpo);
+
+    // Adianta o áudio no momento em que a frase CHEGA, não quando a anterior
+    // começa a tocar.
+    //
+    // A versão anterior fazia isto dentro de `bombear`, olhando para a próxima
+    // da fila — mas o texto vem em streaming: quando a 1ª frase começa a
+    // tocar, a 2ª quase nunca chegou ainda, então a fila estava vazia e o
+    // prefetch nunca acontecia. Medido numa resposta de 3 frases: nenhuma das
+    // três pegava cache, e cada uma custava ~1s de silêncio antes de sair.
+    //
+    // Aqui a frase chega enquanto a anterior ainda toca (~3s de áudio contra
+    // ~1s de síntese), então o áudio fica pronto antes de ser preciso.
+    if (falando) engine.prefetch?.(limpo);
+
     void bombear();
   };
 
@@ -188,7 +245,8 @@ export function createSentenceQueue(
       const frase = buffer.slice(0, corte).trim();
       // Fragmento curto ("Ok.") espera o próximo trecho para não picotar —
       // a menos que o buffer já esteja grande, e aí segurar é pior.
-      if (frase.length < MIN_CHARS && buffer.length < MAX_BUFFER) break;
+      const minimo = primeira ? MIN_CHARS_PRIMEIRA : MIN_CHARS;
+      if (frase.length < minimo && buffer.length < MAX_BUFFER) break;
 
       buffer = buffer.slice(corte);
       enfileirar(frase);
@@ -239,6 +297,7 @@ export function createSentenceQueue(
       cancelado = true;
       limparTimer();
       buffer = "";
+      primeira = true;
       pendentes.length = 0;
       engine.cancel();
     },
