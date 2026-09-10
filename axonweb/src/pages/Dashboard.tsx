@@ -1533,6 +1533,9 @@ function PeriodReportCard({
     (a, b) => b.percent - a.percent
   )[0];
 
+  // O relatório completo abre em tela cheia (/relatorio/:id), não em pop-up.
+  const navigate = useNavigate();
+
   return (
     <section className="rounded-[2rem] border border-soft bg-surface-elevated p-4 shadow-card backdrop-blur-2xl">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -1572,11 +1575,19 @@ function PeriodReportCard({
         )}
       </div>
 
+      <button
+        type="button"
+        onClick={() => navigate(`/relatorio/${report.id}`)}
+        className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-2xl bg-accent px-4 text-xs font-black text-white transition active:scale-[0.98]"
+      >
+        Ver relatório completo
+      </button>
+
       {/* Dispensar tira o card do Dashboard; o relatório segue no histórico. */}
       <button
         type="button"
         onClick={() => onSeen(report.id)}
-        className="mt-4 inline-flex min-h-10 w-full items-center justify-center rounded-2xl border border-soft bg-surface-muted px-4 text-xs font-semibold text-muted transition active:scale-[0.98]"
+        className="mt-2 inline-flex min-h-10 w-full items-center justify-center rounded-2xl border border-soft bg-surface-muted px-4 text-xs font-semibold text-muted transition active:scale-[0.98]"
       >
         Entendi, guardar no histórico
       </button>
