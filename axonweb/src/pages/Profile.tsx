@@ -906,6 +906,10 @@ function ReportsHistoryModal({
     { key: "monthly", label: "Mensais" },
   ];
 
+  // O relatório abre em tela cheia (/relatorio/:id), não em pop-up: as 3
+  // seções não cabiam confortavelmente num modal.
+  const navigate = useNavigate();
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -972,7 +976,16 @@ function ReportsHistoryModal({
                 {reports.map((report) => (
                   <article
                     key={report.id}
-                    className="rounded-[1.5rem] border border-soft bg-surface-muted p-4"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => navigate(`/relatorio/${report.id}`)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        navigate(`/relatorio/${report.id}`);
+                      }
+                    }}
+                    className="cursor-pointer rounded-[1.5rem] border border-soft bg-surface-muted p-4 transition active:scale-[0.99]"
                   >
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <span className="rounded-full border border-accent-soft bg-accent-soft px-2.5 py-1 text-[0.62rem] font-black text-accent">

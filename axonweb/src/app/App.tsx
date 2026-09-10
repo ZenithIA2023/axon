@@ -34,6 +34,7 @@ import Insights from "../pages/Insights";
 import { RoutineDetailPage } from "../pages/Routines";
 import Focus from "../pages/Focus";
 import Profile from "../pages/Profile";
+import Report from "../pages/Report";
 import Settings from "../pages/Settings";
 
 // No app empacotado não existe servidor HTTP: os arquivos vêm do sistema de
@@ -99,6 +100,7 @@ export default function App() {
         <Route path="/objetivos" element={<Planning initialView="objetivos" />} />
         <Route path="/focus" element={<Focus />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/relatorio/:id" element={<Report />} />
         <Route path="/settings" element={<Settings />} />
         
 
