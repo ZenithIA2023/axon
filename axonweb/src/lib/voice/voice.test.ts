@@ -149,6 +149,86 @@ async function main(): Promise<void> {
     "Posso ajustar depois.",
   ]);
 
+  // A abertura curta é o caso comum ("Feito!", "Claro.", "Pronto.") e é
+  // justamente onde o silêncio dói: é o intervalo em que a pessoa não sabe se
+  // foi ouvida. Sai sozinha; da segunda em diante volta a valer o mínimo maior.
+  f = motorFalso();
+  q = createSentenceQueue(f.engine);
+  q.push("Feito! ");
+  await tick();
+  eq("abertura curta fala na hora", f.ditas, ["Feito!"]);
+
+  f = motorFalso();
+  q = createSentenceQueue(f.engine);
+  q.push("Feito! Ok. ");
+  await tick();
+  eq("mas só a PRIMEIRA é curta", f.ditas, ["Feito!"]);
+  q.push("Agendei tudo para amanhã de manhã. ");
+  q.flush();
+  await tick();
+  eq("a segunda curta espera a próxima", f.ditas, [
+    "Feito!",
+    "Ok. Agendei tudo para amanhã de manhã.",
+  ]);
+
+  // O prefetch tem que disparar quando a frase CHEGA — se esperar a anterior
+  // começar a tocar, o texto em streaming nunca chega a tempo e cada frase
+  // paga ~1s de silêncio antes de sair.
+  f = motorFalso();
+  const pedidos: string[] = [];
+  const engineComPrefetch = {
+    ...f.engine,
+    speak: (texto: string) => {
+      f.ditas.push(texto);
+      // Fala demorada de propósito: simula o áudio tocando enquanto o resto do
+      // stream chega.
+      return new Promise<void>((r) => setTimeout(r, 30));
+    },
+    prefetch: (texto: string) => pedidos.push(texto),
+  };
+  q = createSentenceQueue(engineComPrefetch);
+  q.push("Movi a revisão do capítulo dois para sábado. ");
+  await tick();
+  q.push("Sua sexta ficou bem mais leve que a média. ");
+  q.flush();
+  await new Promise((r) => setTimeout(r, 60));
+  eq("adianta o áudio da frase que chegou durante a fala", pedidos, [
+    "Sua sexta ficou bem mais leve que a média.",
+  ]);
+
+  // Frases curtas seguidas viram UM áudio: cada emenda entre dois arquivos é
+  // onde a fala soa travada, e "A primeira... A segunda... A terceira..."
+  // geraria três.
+  f = motorFalso();
+  q = createSentenceQueue(f.engine);
+  q.push("A primeira é a revisão. A segunda é a reunião. A terceira é o fechamento. ");
+  q.flush();
+  await tick();
+  // A primeira sai na hora (não faz sentido segurar o começo da fala à espera
+  // de companhia); as que chegam enquanto ela toca é que se juntam.
+  eq("frases curtas seguintes viram um áudio só", f.ditas, [
+    "A primeira é a revisão.",
+    "A segunda é a reunião. A terceira é o fechamento.",
+  ]);
+
+  // Mas o agrupamento tem teto: a latência do TTS cresce com o texto, então
+  // juntar demais atrasaria o começo da fala.
+  f = motorFalso();
+  q = createSentenceQueue(f.engine);
+  const longa = "Essa é uma frase deliberadamente longa para ocupar bastante espaço no bloco. ";
+  q.push(longa + longa + longa);
+  q.flush();
+  await tick();
+  eq("não junta acima do teto", f.ditas.length > 1, true);
+
+  // O agrupamento só vale para o que JÁ chegou: esperar texto novo para
+  // completar um bloco atrasaria a fala, que é o problema oposto.
+  f = motorFalso();
+  q = createSentenceQueue(f.engine);
+  q.push("A primeira é a revisão. ");
+  await tick();
+  eq("não espera para completar o bloco", f.ditas, ["A primeira é a revisão."]);
+
 
   // ------------------------------------------------------------------------
   // splitSentences — usado pela tela de voz para destacar a frase que está

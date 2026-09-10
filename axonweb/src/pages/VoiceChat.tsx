@@ -13,7 +13,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft, Keyboard, Square, X } from "lucide-react";
+import { ChevronLeft, Home, Keyboard, Square } from "lucide-react";
 
 import * as api from "../lib/api";
 import { AxonOrb, type OrbState } from "../components/voice/AxonOrb";
@@ -60,6 +60,20 @@ const SAIDA_FIM_PX = 40; // voltou de fato ao fim: a orb cresce de novo
 // O recuo do passado é lento de propósito: rápido demais vira um pisca-pisca
 // a cada turno, e a ideia é que a conversa "afunde", não que ela salte.
 const TRANSICAO_RECUO = "opacity 0.5s ease, transform 0.5s ease";
+
+/**
+ * Cor do texto no modo registro, quando a pessoa rolou para LER o histórico.
+ *
+ * Durante a conversa, apagar o passado é o que faz a troca atual saltar aos
+ * olhos. Mas quando o objetivo passa a ser ler, a mesma hierarquia vira
+ * obstáculo: medido sobre o fundo #07060c, a fala antiga do usuário ficava em
+ * 2,0:1 de contraste e a do Axon em 3,5:1 — abaixo do mínimo legível de 4,5:1.
+ *
+ * Aqui os dois sobem para bem acima disso, e a distinção entre quem falou o quê
+ * passa a ser feita pelo lado da tela e pelo peso, não por apagar o texto.
+ */
+const REGISTRO_COR_USUARIO = "rgba(255,255,255,0.72)";
+const REGISTRO_COR_AXON = "rgba(255,255,255,0.95)";
 
 /**
  * "hoje · 9:41", "ontem · 18:02" ou "12 de agosto · 14:30" — a marca que separa
@@ -474,9 +488,10 @@ export default function VoiceChat() {
 
   const botaoDireito = () => {
     // Falando, o botão vira "interromper" — quem quer cortar o Axon no meio não
-    // deveria precisar sair da página para isso.
+    // deveria precisar sair da página para isso. Calado, leva ao chat, que é
+    // para onde vai quem prefere escrever a resposta.
     if (speech.speaking) speech.stop();
-    else navigate("/dashboard");
+    else abrirNoChat();
   };
 
   return (
@@ -600,11 +615,32 @@ export default function VoiceChat() {
 
         {/* Selo de status. Gravando, ele desce para longe da orb — a bola fica
             sozinha no alto, sem nada competindo com o movimento dela. No modo
-            registro ele sai de cena: ali a tela é do texto. */}
-        <span
+            registro ele sai de cena: ali a tela é do texto.
+
+            O wrapper existe só para o estado `listening`, em que o selo fica no
+            fluxo: é o `justify-center` dele que centra o selo. Nos demais o
+            selo é absoluto e se centra sozinho, e o wrapper não atrapalha
+            porque não tem altura própria. */}
+        <div
+          className={`flex w-full justify-center ${estado === "listening" ? "mt-2" : ""}`}
           hidden={modoRegistro}
+        >
+          <span
+            // Centrado nos dois estados, cada um pelo meio que o seu
+          // posicionamento permite.
+          //
+          // Absoluto (parado, pensando, falando): `left-1/2` leva a BORDA
+          // esquerda ao meio e o `-translate-x-1/2` puxa de volta metade da
+          // largura — medido: sem esse par o selo ficava 120px à esquerda,
+          // colado na borda, porque `absolute` sem `left` não centra nada.
+          //
+          // Relativo (gravando): continua no fluxo de propósito, para EMPURRAR
+          // o texto abaixo em vez de sobrepô-lo; aí quem centra é o `flex` do
+          // wrapper, já que margem automática não centraliza um `inline-flex`.
           className={`inline-flex items-center gap-2 whitespace-nowrap rounded-full border px-4 py-[7px] text-[0.72rem] font-bold tracking-[0.03em] backdrop-blur-md ${
-            estado === "listening" ? "relative mt-2" : "absolute bottom-1.5"
+            estado === "listening"
+              ? "relative"
+              : "absolute bottom-1.5 left-1/2 -translate-x-1/2"
           }`}
           style={{
             borderColor:
@@ -620,6 +656,7 @@ export default function VoiceChat() {
           />
           {textos.pill}
         </span>
+        </div>
       </div>
 
       {/* ---------------- transcrição ---------------- */}
@@ -646,7 +683,10 @@ export default function VoiceChat() {
           // ainda não há nada de novo na tela: o "último par" é a troca
           // ANTERIOR, então tudo recua e a tela fica limpa para o que vem. Já
           // com o Axon falando, o par atual é o que importa e só ele fica.
-          const recuado = tudoRecua || (passado && emAtividade);
+          // No modo registro nada recua: a opacidade de 0,22 do recuo multiplica
+          // a cor do texto e derrubaria o contraste para ~1,1:1 — ilegível. Quem
+          // rolou para ler quer ler, mesmo que o Axon esteja falando ao fundo.
+          const recuado = !modoRegistro && (tudoRecua || (passado && emAtividade));
 
           // Marca de dia: só no modo registro, e só quando o dia vira. Serve
           // para ancorar a leitura de um histórico longo.
@@ -673,7 +713,11 @@ export default function VoiceChat() {
                     fontSize: passado ? "0.845rem" : "0.9375rem",
                     lineHeight: 1.45,
                     letterSpacing: "-0.012em",
-                    color: passado ? "rgba(255,255,255,0.24)" : "rgba(255,255,255,0.46)",
+                    color: modoRegistro
+                      ? REGISTRO_COR_USUARIO
+                      : passado
+                      ? "rgba(255,255,255,0.24)"
+                      : "rgba(255,255,255,0.46)",
                     textWrap: "pretty",
                   }}
                 >
@@ -697,6 +741,7 @@ export default function VoiceChat() {
                   // O destaque de frase só faz sentido no turno que está sendo
                   // falado agora; num turno antigo seria ruído.
                   fraseAtual={streaming ? fraseAtual : null}
+                  registro={modoRegistro}
                 />
               </div>
             );
@@ -759,8 +804,8 @@ export default function VoiceChat() {
         <div className="grid w-full grid-cols-[46px_1fr_46px] items-center gap-4.5">
           <button
             type="button"
-            onClick={abrirNoChat}
-            aria-label="Escrever em vez de falar"
+            onClick={() => navigate("/dashboard")}
+            aria-label="Ir para o início"
             className="grid h-[46px] w-[46px] place-items-center rounded-2xl border backdrop-blur-lg"
             style={{
               borderColor: "rgba(255,255,255,0.1)",
@@ -768,7 +813,7 @@ export default function VoiceChat() {
               color: "rgba(255,255,255,0.72)",
             }}
           >
-            <Keyboard className="h-5 w-5" />
+            <Home className="h-5 w-5" />
           </button>
 
           <div className="justify-self-center">
@@ -788,7 +833,7 @@ export default function VoiceChat() {
           <button
             type="button"
             onClick={botaoDireito}
-            aria-label={speech.speaking ? "Interromper o Axon" : "Encerrar conversa"}
+            aria-label={speech.speaking ? "Interromper o Axon" : "Escrever em vez de falar"}
             className="grid h-[46px] w-[46px] place-items-center rounded-2xl border backdrop-blur-lg"
             style={{
               borderColor: speech.speaking
@@ -800,7 +845,11 @@ export default function VoiceChat() {
               color: speech.speaking ? "#f0abfc" : "rgba(255,255,255,0.72)",
             }}
           >
-            {speech.speaking ? <Square className="h-4 w-4" /> : <X className="h-4.5 w-4.5" />}
+            {speech.speaking ? (
+              <Square className="h-4 w-4" />
+            ) : (
+              <Keyboard className="h-5 w-5" />
+            )}
           </button>
         </div>
       </div>
@@ -825,25 +874,49 @@ function AxonTurnText({
   text,
   passado,
   fraseAtual,
+  registro,
 }: {
   text: string;
   passado: boolean;
   fraseAtual: string | null;
+  /** A pessoa rolou para ler o histórico: legibilidade vem antes da hierarquia. */
+  registro: boolean;
 }) {
   const frases = useMemo(() => splitSentences(text), [text]);
 
-  // Qual das frases da tela é a que está tocando. `splitSentences` corta igual
-  // à fila, então basta passar cada frase pela mesma sanitização e comparar —
-  // sem contador nem estado, que sairiam de sincronia numa remontagem.
-  const atual = useMemo(() => {
-    if (fraseAtual === null) return -1;
-    return frases.findIndex((f) => sanitizeForSpeech(f) === fraseAtual);
+  // Onde o trecho falado começa e termina, em frases da tela.
+  //
+  // É um INTERVALO porque a fila junta frases curtas seguidas num único áudio
+  // (para não emendar dois arquivos a cada ponto), então o que chega em
+  // `fraseAtual` pode conter mais de uma frase. `splitSentences` corta igual à
+  // fila, então as duas listas têm a mesma ordem — sem contador nem estado, que
+  // sairiam de sincronia numa remontagem.
+  const [atual, fim] = useMemo<[number, number]>(() => {
+    if (fraseAtual === null) return [-1, -1];
+    const limpas = frases.map((f) => sanitizeForSpeech(f));
+
+    // Caso comum: o áudio é exatamente uma frase.
+    const exato = limpas.indexOf(fraseAtual);
+    if (exato >= 0) return [exato, exato];
+
+    // Áudio com várias frases: acha onde a sequência começa e vai juntando até
+    // reconstruir o que foi falado.
+    for (let i = 0; i < limpas.length; i++) {
+      if (!fraseAtual.startsWith(limpas[i])) continue;
+      let junto = limpas[i];
+      for (let j = i + 1; j < limpas.length && junto.length < fraseAtual.length; j++) {
+        junto += " " + limpas[j];
+        if (junto === fraseAtual) return [i, j];
+      }
+    }
+    return [-1, -1];
   }, [frases, fraseAtual]);
 
-  // Sem destaque: turno antigo, fala encerrada, uma frase só, ou a frase falada
-  // não bateu com nenhuma da tela (nesse caso texto corrido é melhor que
-  // destacar a errada).
-  if (passado || fraseAtual === null || frases.length <= 1 || atual < 0) {
+  // Sem destaque: modo registro (as frases fora do destaque ficam em 0,12 de
+  // opacidade, e quem rolou para ler precisa enxergar TODAS), turno antigo,
+  // fala encerrada, uma frase só, ou a frase falada não bateu com nenhuma da
+  // tela (nesse caso texto corrido é melhor que destacar a errada).
+  if (registro || passado || fraseAtual === null || frases.length <= 1 || atual < 0) {
     return (
       <p
         className="m-0 font-bold"
@@ -851,7 +924,7 @@ function AxonTurnText({
           fontSize: passado ? "0.875rem" : "1rem",
           lineHeight: 1.45,
           letterSpacing: "-0.015em",
-          color: passado ? "rgba(255,255,255,0.38)" : "#fff",
+          color: registro ? REGISTRO_COR_AXON : passado ? "rgba(255,255,255,0.38)" : "#fff",
           textWrap: "pretty",
         }}
       >
@@ -864,7 +937,7 @@ function AxonTurnText({
     <p className="m-0" style={{ textWrap: "pretty" }}>
       {frases.map((frase, i) => {
         const jaDita = i < atual;
-        const agora = i === atual;
+        const agora = i >= atual && i <= fim;
         return (
           <span
             key={i}

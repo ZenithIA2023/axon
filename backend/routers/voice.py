@@ -46,6 +46,15 @@ router = APIRouter(prefix="/voice", tags=["voice"])
 _MAX_HISTORY = 50
 _MAX_TRANSCRIPT_LEN = 4_000
 
+# O que a pessoa lê (e ouve) quando o áudio não rendeu nenhuma palavra.
+# Sem números nem termos técnicos: numa conversa falada, "recebido: 48000 bytes"
+# não ajuda ninguém a falar de novo — só faz o Axon soar como um log de erro.
+_ERRO_SEM_FALA = "Não consegui entender o áudio. Pode falar de novo?"
+
+# Falha do provedor de transcrição. A mensagem crua ("OpenAI STT 429: {...}")
+# é útil no log e péssima na tela — e na página de voz ela é LIDA EM VOZ ALTA.
+_ERRO_PROVEDOR = "Tive um problema para processar seu áudio. Pode tentar de novo?"
+
 # Mesmas funções que `routers/chat.py` usa para a conversa digitada — ver
 # services/chat_context.py.
 _load_perfil = chat_context.load_perfil
@@ -216,22 +225,26 @@ async def voice_message(
     try:
         resultado = stt_service.transcribe_billed(user_id, conteudo, audio.content_type, language)
     except stt_service.SttQuotaExceeded as e:
+        # A de cota já é escrita para o usuário ("limite mensal de ...s"): diz o
+        # que aconteceu e não expõe nada de interno.
         raise HTTPException(status_code=429, detail=str(e))
     except stt_service.SttError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        print(f"[voz] falha na transcrição: {e}", flush=True)
+        raise HTTPException(status_code=502, detail=_ERRO_PROVEDOR)
 
     transcript = resultado["text"].strip()[:_MAX_TRANSCRIPT_LEN]
     if not transcript:
-        # Segundos processados e bytes recebidos ajudam a diferenciar "gravou
-        # pouco ou nada" (bug de captura, ambos próximos de 0) de "gravou
-        # normal, mas não tinha fala reconhecível" (mic mudo, ruído, silêncio).
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "Não entendi nada no áudio. Tente falar de novo, mais perto do microfone. "
-                f"(recebido: {len(conteudo)} bytes, {resultado['duration_seconds']}s processados)"
-            ),
+        # Os números vão para o log, não para a tela: bytes e segundos
+        # diferenciam "gravou pouco ou nada" (bug de captura, ambos próximos de
+        # zero) de "gravou normal, mas não tinha fala reconhecível" (mic mudo,
+        # ruído, silêncio) — é diagnóstico nosso, e para quem está falando com o
+        # Axon só atrapalha.
+        print(
+            f"[voz] transcrição vazia: {len(conteudo)} bytes, "
+            f"{resultado['duration_seconds']}s processados",
+            flush=True,
         )
+        raise HTTPException(status_code=422, detail=_ERRO_SEM_FALA)
 
     perfil = _load_perfil(user_id, request.headers.get("X-Timezone"))
     perfil["conversation_type"] = _load_conversation_type(conversation_id, user_id)
