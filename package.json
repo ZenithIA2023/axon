@@ -5,7 +5,7 @@
     "dev": "concurrently --names \"FRONT,BACK\" --prefix-colors \"cyan,magenta\" \"npm run dev --prefix axonweb\" \"cd backend && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload\"",
     "dev:front": "npm run dev --prefix axonweb",
     "dev:back": "cd backend && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload",
-    "install:front": "npm install --prefix agit statusxonweb",
+    "install:front": "npm install --prefix axonweb",
     "build": "npm run build --prefix axonweb",
     "preview": "npm run preview --prefix axonweb"
   },

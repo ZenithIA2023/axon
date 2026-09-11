@@ -4,10 +4,12 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
 } from "react";
+import type { CSSProperties, ElementType, ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
 import {
+  Bell,
   CalendarDays,
   CheckCircle2,
   ChevronDown,
@@ -21,6 +23,7 @@ import {
   Plus,
   Repeat,
   RotateCcw,
+  Menu,
   Sparkles,
   Star,
   Target,
@@ -40,6 +43,7 @@ import PageHeader from "../components/layout/PageHeader";
 import BottomSheet from "../components/ui/BottomSheet";
 import ConfirmDialog from "../components/ui/ConfirmDialog";
 import EmptyState from "../components/ui/EmptyState";
+import { ScrollArea } from "../components/ui/ScrollArea";
 
 // ===========================================================================
 // TIPOS E CONSTANTES GERAIS
@@ -47,6 +51,137 @@ import EmptyState from "../components/ui/EmptyState";
 
 type ViewMode = "month" | "week";
 type DisplayStatus = "todo" | "progress" | "done" | "scheduled";
+type DesktopCalendarKind = "task" | "event" | "routine";
+type DesktopTaskHoverPreview = { task: Task; x: number; y: number } | null;
+type DesktopCalendarColorName =
+  | "purple"
+  | "lilac"
+  | "mint"
+  | "cyan"
+  | "amber"
+  | "rose"
+  | "blue";
+type DesktopCalendarColorPrefs = Record<
+  DesktopCalendarKind,
+  DesktopCalendarColorName
+>;
+
+const DESKTOP_CALENDAR_COLORS_STORAGE_KEY =
+  "axon:planning:desktop-calendar-colors";
+const DESKTOP_CALENDAR_COLORS_UPDATED_EVENT =
+  "axon:planning-desktop-calendar-colors-updated";
+
+const DEFAULT_DESKTOP_CALENDAR_COLORS: DesktopCalendarColorPrefs = {
+  task: "purple",
+  event: "blue",
+  routine: "mint",
+};
+
+const DESKTOP_CALENDAR_COLOR_OPTIONS: {
+  key: DesktopCalendarColorName;
+  label: string;
+  hex: string;
+  iconColor: string;
+  iconBackground: string;
+  iconBorder: string;
+  surface: string;
+  border: string;
+  bar: string;
+  text: string;
+  chip: string;
+}[] = [
+  {
+    key: "purple",
+    label: "Roxo AXON",
+    hex: "#a855f7",
+    iconColor: "#7e22ce",
+    iconBackground: "rgba(168,85,247,0.16)",
+    iconBorder: "rgba(168,85,247,0.34)",
+    surface: "bg-[#7b2cbf]/24 dark:bg-[#7b2cbf]/30",
+    border: "border-[#7b2cbf]/34 dark:border-[#a855f7]/34",
+    bar: "bg-[#a855f7]",
+    text: "text-[#4c1d95] dark:text-[#e9d5ff]",
+    chip: "border-[#a855f7]/36 bg-[#7b2cbf]/18 text-[#7e22ce] dark:text-[#e9d5ff]",
+  },
+  {
+    key: "lilac",
+    label: "Lilás",
+    hex: "#c084fc",
+    iconColor: "#9333ea",
+    iconBackground: "rgba(192,132,252,0.18)",
+    iconBorder: "rgba(192,132,252,0.4)",
+    surface: "bg-[#c084fc]/22 dark:bg-[#c084fc]/16",
+    border: "border-[#9333ea]/30 dark:border-[#c084fc]/34",
+    bar: "bg-[#c084fc]",
+    text: "text-[#581c87] dark:text-[#f3e8ff]",
+    chip: "border-[#c084fc]/36 bg-[#c084fc]/16 text-[#7e22ce] dark:text-[#f3e8ff]",
+  },
+  {
+    key: "mint",
+    label: "Menta",
+    hex: "#14b8a6",
+    iconColor: "#0f766e",
+    iconBackground: "rgba(20,184,166,0.16)",
+    iconBorder: "rgba(20,184,166,0.36)",
+    surface: "bg-[#14b8a6]/20 dark:bg-[#5eead4]/14",
+    border: "border-[#0f766e]/30 dark:border-[#5eead4]/32",
+    bar: "bg-[#14b8a6] dark:bg-[#5eead4]",
+    text: "text-[#0f766e] dark:text-[#ccfbf1]",
+    chip: "border-[#14b8a6]/36 bg-[#14b8a6]/14 text-[#0f766e] dark:text-[#ccfbf1]",
+  },
+  {
+    key: "cyan",
+    label: "Ciano",
+    hex: "#0891b2",
+    iconColor: "#0e7490",
+    iconBackground: "rgba(8,145,178,0.15)",
+    iconBorder: "rgba(8,145,178,0.34)",
+    surface: "bg-[#67e8f9]/20 dark:bg-[#67e8f9]/12",
+    border: "border-[#0e7490]/30 dark:border-[#67e8f9]/30",
+    bar: "bg-[#06b6d4] dark:bg-[#67e8f9]",
+    text: "text-[#0e7490] dark:text-[#cffafe]",
+    chip: "border-[#0891b2]/34 bg-[#0891b2]/12 text-[#0e7490] dark:text-[#cffafe]",
+  },
+  {
+    key: "amber",
+    label: "Amarelo",
+    hex: "#f59e0b",
+    iconColor: "#b45309",
+    iconBackground: "rgba(245,158,11,0.16)",
+    iconBorder: "rgba(245,158,11,0.36)",
+    surface: "bg-amber-300/28 dark:bg-amber-300/16",
+    border: "border-amber-500/36 dark:border-amber-300/38",
+    bar: "bg-amber-400 dark:bg-amber-300",
+    text: "text-amber-700 dark:text-amber-100",
+    chip: "border-amber-500/36 bg-amber-500/12 text-amber-700 dark:text-amber-100",
+  },
+  {
+    key: "rose",
+    label: "Rosa",
+    hex: "#e11d48",
+    iconColor: "#be123c",
+    iconBackground: "rgba(225,29,72,0.12)",
+    iconBorder: "rgba(225,29,72,0.3)",
+    surface: "bg-rose-400/24 dark:bg-rose-300/14",
+    border: "border-rose-500/34 dark:border-rose-300/34",
+    bar: "bg-rose-400 dark:bg-rose-300",
+    text: "text-rose-700 dark:text-rose-100",
+    chip: "border-rose-500/34 bg-rose-500/12 text-rose-700 dark:text-rose-100",
+  },
+  {
+    key: "blue",
+    label: "Azul",
+    hex: "#2563eb",
+    iconColor: "#1d4ed8",
+    iconBackground: "rgba(37,99,235,0.12)",
+    iconBorder: "rgba(37,99,235,0.32)",
+    surface: "bg-blue-400/24 dark:bg-blue-300/14",
+    border: "border-blue-500/34 dark:border-blue-300/34",
+    bar: "bg-blue-400 dark:bg-blue-300",
+    text: "text-blue-700 dark:text-blue-100",
+    chip: "border-blue-600/34 bg-blue-600/12 text-blue-700 dark:text-blue-100",
+  },
+];
 
 const validKeys: ChronotypeResultKey[] = [
   "Matutino",
@@ -83,6 +218,7 @@ const monthNames = [
 const weekdayShort = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 const CALENDAR_SETUP_STORAGE_KEY = "axon_calendar_setup_choice";
+const NOTIFICATIONS_PAGE_SIZE = 10;
 type CalendarSetupChoice = "google" | "independent";
 
 // ===========================================================================
@@ -246,6 +382,8 @@ export default function Planning({
   // Aba ativa do hub e estado da sidebar global.
   const [view, setView] = useState<View>(initialView);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState<number | null>(null);
 
   // Cronotipo usado para alimentar a sidebar.
   const resultKey: ChronotypeResultKey = (() => {
@@ -256,23 +394,80 @@ export default function Planning({
   })();
   const result = results[resultKey];
 
+  const refreshUnreadCount = useCallback(() => {
+    if (!api.isLoggedIn()) {
+      setUnreadCount(null);
+      return;
+    }
+
+    api
+      .getNotifications(NOTIFICATIONS_PAGE_SIZE + 1, 0)
+      .then((notifications) => {
+        const visibleNotifications = notifications.slice(
+          0,
+          NOTIFICATIONS_PAGE_SIZE
+        );
+
+        const nextUnreadCount = visibleNotifications.filter(
+          (notification) => notification.status === "unread"
+        ).length;
+
+        setUnreadCount(nextUnreadCount);
+      })
+      .catch(() => setUnreadCount(0));
+  }, []);
+
+  useEffect(() => {
+    refreshUnreadCount();
+
+    const handleNotificationsUpdated = () => {
+      refreshUnreadCount();
+    };
+
+    const interval = window.setInterval(refreshUnreadCount, 2 * 60 * 1000);
+
+    window.addEventListener(
+      "axon:notifications-updated",
+      handleNotificationsUpdated
+    );
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener(
+        "axon:notifications-updated",
+        handleNotificationsUpdated
+      );
+    };
+  }, [refreshUnreadCount]);
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-app text-primary">
       <AppBackground />
 
-      {/* Mesma medida da tela de Insights: px-1 no telefone (a margem externa
-          era espaço morto) e coluna centrada no desktop. */}
-      <div className="relative z-10 mx-auto min-h-screen w-full max-w-[430px] px-1 pb-6 pt-5 lg:max-w-[1120px] lg:px-8 lg:pt-7">
-        <PageHeader
-          title="Planejamento"
-          subtitle="Agenda, rotinas e objetivos"
-          onBack={() => navigate("/dashboard")}
-          onMenuClick={() => setIsSidebarOpen(true)}
-        />
+      {/* Mobile preservado: mantém a estrutura vertical atual. */}
+      <div className="relative z-10 mx-auto min-h-screen w-full max-w-[430px] px-1 pb-6 pt-5 lg:hidden">
+        <div className="relative">
+          <PageHeader
+            title="Planejamento"
+            subtitle="Agenda, rotinas e objetivos"
+            onBack={() => navigate("/dashboard")}
+            onMenuClick={() => setIsSidebarOpen(true)}
+          />
 
-        {/* Seletor de visão. No desktop fica centrado e com largura limitada:
-            esticado nos 1120px da coluna, as pílulas ficariam enormes. */}
-        <div className="mb-4 flex rounded-full border border-soft bg-surface-elevated p-1.5 shadow-card backdrop-blur-2xl lg:mx-auto lg:max-w-xl">
+          <button
+            type="button"
+            onClick={() => setIsNotificationsOpen(true)}
+            className="absolute right-14 top-0 flex h-11 w-11 items-center justify-center rounded-2xl border border-soft bg-surface-elevated text-muted shadow-card backdrop-blur-xl transition active:scale-[0.96]"
+            aria-label="Abrir notificações"
+          >
+            <Bell className="h-5 w-5" />
+            {(unreadCount ?? 0) > 0 && (
+              <span className="absolute right-[0.46rem] top-[0.46rem] h-2 w-2 rounded-full border border-[var(--surface-elevated)] bg-[var(--accent)] shadow-[0_0_10px_rgba(168,85,247,0.9)]" />
+            )}
+          </button>
+        </div>
+
+        <div className="mb-4 flex rounded-full border border-soft bg-surface-elevated p-1.5 shadow-card backdrop-blur-2xl">
           {TABS.map((tab) => {
             const active = view === tab.key;
             return (
@@ -292,10 +487,44 @@ export default function Planning({
           })}
         </div>
 
-        {/* Conteúdo da visão ativa (sem moldura própria) */}
         {view === "agenda" && <AgendaView embedded />}
         {view === "rotinas" && <Routines embedded />}
         {view === "objetivos" && <Goals embedded />}
+      </div>
+
+      {/* Desktop: layout próprio, inspirado no calendário em painel. */}
+      <div className="relative z-10 hidden min-h-screen bg-[#f4effc]/70 px-4 py-4 lg:block xl:px-5 dark:bg-transparent">
+        {view === "agenda" ? (
+          <AgendaView
+            embedded
+            desktopMode
+            activeView={view}
+            onViewChange={setView}
+            onOpenNotifications={() => setIsNotificationsOpen(true)}
+            unreadCount={unreadCount}
+            onOpenDesktopSidebar={() => setIsSidebarOpen(true)}
+          />
+        ) : view === "objetivos" ? (
+          <Goals
+            embedded
+            desktopMode
+            activeView={view}
+            onViewChange={setView}
+            onOpenNotifications={() => setIsNotificationsOpen(true)}
+            unreadCount={unreadCount}
+            onOpenDesktopSidebar={() => setIsSidebarOpen(true)}
+          />
+        ) : (
+          <Routines
+            embedded
+            desktopMode
+            activeView={view}
+            onViewChange={setView}
+            onOpenNotifications={() => setIsNotificationsOpen(true)}
+            unreadCount={unreadCount}
+            onOpenDesktopSidebar={() => setIsSidebarOpen(true)}
+          />
+        )}
       </div>
 
       <Sidebar
@@ -303,6 +532,12 @@ export default function Planning({
         onClose={() => setIsSidebarOpen(false)}
         chronotypeLabel={result.label}
         energyPeak={result.energyPeak}
+      />
+
+      <NotificationsSheet
+        isOpen={isNotificationsOpen}
+        onClose={() => setIsNotificationsOpen(false)}
+        onUnreadCountChange={setUnreadCount}
       />
     </main>
   );
@@ -312,13 +547,30 @@ export default function Planning({
 // VISÃO DE AGENDA
 // ===========================================================================
 // Pode funcionar embutida no hub ou como página independente.
-function AgendaView({ embedded = false }: { embedded?: boolean } = {}) {
+function AgendaView({
+  embedded = false,
+  desktopMode = false,
+  activeView = "agenda",
+  onViewChange,
+  onOpenNotifications,
+  unreadCount,
+  onOpenDesktopSidebar,
+}: {
+  embedded?: boolean;
+  desktopMode?: boolean;
+  activeView?: View;
+  onViewChange?: (view: View) => void;
+  onOpenNotifications?: () => void;
+  unreadCount?: number | null;
+  onOpenDesktopSidebar?: () => void;
+} = {}) {
   const navigate = useNavigate();
 
   // Controles visuais da agenda.
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [, setDesktopCalendarColorRevision] = useState(0);
   const [subtasksMap, setSubtasksMap] = useState<Record<string, Subtask[]>>({});
 
   const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
@@ -490,6 +742,24 @@ function AgendaView({ embedded = false }: { embedded?: boolean } = {}) {
   useEffect(() => {
     loadDailyStats();
   }, [loadDailyStats]);
+
+  useEffect(() => {
+    function handleDesktopCalendarColorsUpdated() {
+      setDesktopCalendarColorRevision((revision) => revision + 1);
+    }
+
+    window.addEventListener(
+      DESKTOP_CALENDAR_COLORS_UPDATED_EVENT,
+      handleDesktopCalendarColorsUpdated
+    );
+
+    return () => {
+      window.removeEventListener(
+        DESKTOP_CALENDAR_COLORS_UPDATED_EVENT,
+        handleDesktopCalendarColorsUpdated
+      );
+    };
+  }, []);
 
   async function handleToggleDone(task: Task) {
     const next =
@@ -745,7 +1015,7 @@ function AgendaView({ embedded = false }: { embedded?: boolean } = {}) {
                     <CircularProgress value={progress} />
                   </div>
 
-                  {viewMode === "week" && (
+                  {viewMode !== "month" && (
                     <div className="mt-6">
                       <WeekCalendar
                         selectedDate={selectedDate}
@@ -778,7 +1048,7 @@ function AgendaView({ embedded = false }: { embedded?: boolean } = {}) {
                     ela acompanha os dois modos, ocupando a coluna livre. */}
                 <div
                   className={`mt-6 lg:mt-0 lg:min-w-0 ${
-                    viewMode === "week" ? "" : "hidden lg:block"
+                    viewMode !== "month" ? "" : "hidden lg:block"
                   }`}
                 >
                   {/* Chip da fila — sempre visível quando há tarefas sem data */}
@@ -876,6 +1146,10 @@ function AgendaView({ embedded = false }: { embedded?: boolean } = {}) {
           await loadTasks();
           await loadSubtasks();
         }}
+        onDelete={(task) => {
+          setTaskToEdit(null);
+          handleDelete(task);
+        }}
         onSubtaskChange={loadSubtasks}
       />
 
@@ -906,6 +1180,49 @@ function AgendaView({ embedded = false }: { embedded?: boolean } = {}) {
       )}
     </>
   );
+
+  if (embedded && desktopMode) {
+    return (
+      <>
+        <DesktopAgendaExperience
+          view={activeView}
+          onViewChange={onViewChange}
+          onOpenNotifications={onOpenNotifications}
+          unreadCount={unreadCount}
+          onOpenSidebar={onOpenDesktopSidebar}
+          selectedDate={selectedDate}
+          selectedIso={selectedIso}
+          viewMode={viewMode}
+          tasks={tasks}
+          undatedTasks={undatedTasks}
+          subtasksMap={subtasksMap}
+          loading={loading}
+          error={error}
+          progress={progress}
+          completedItems={completedItems}
+          totalItems={totalItems}
+          calendarSetupChoice={calendarSetupChoice}
+          isConnectingCalendar={isConnectingCalendar}
+          calendarConnectError={calendarConnectError}
+          onSelectDate={setSelectedDate}
+          onViewModeChange={setViewMode}
+          onCreate={() => setIsCreateModalOpen(true)}
+          onOpenQueue={() => setIsQueueOpen(true)}
+          onConnectGoogleCalendar={handleConnectGoogleCalendar}
+          onUseIndependentCalendar={handleUseIndependentCalendar}
+          onToggleDone={handleToggleDone}
+          onToggleKey={handleToggleKey}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          onToggleSubtask={handleToggleSubtask}
+          onDeleteSubtask={handleDeleteSubtask}
+          onSubtaskChange={loadSubtasks}
+        />
+
+        {modals}
+      </>
+    );
+  }
 
   // No hub (embedded), a moldura — main, header, Sidebar — vem do componente
   // Planning (hub de abas) acima, neste mesmo arquivo.
@@ -945,6 +1262,1843 @@ function AgendaView({ embedded = false }: { embedded?: boolean } = {}) {
     </main>
   );
 }
+
+// ===========================================================================
+// DESKTOP — PLANEJAMENTO EM PAINEL
+// ===========================================================================
+
+function DesktopPlanningStaticShell({
+  view,
+  onViewChange,
+  onOpenNotifications,
+  unreadCount,
+  onOpenSidebar,
+  children,
+}: {
+  view: View;
+  onViewChange: (view: View) => void;
+  onOpenNotifications: () => void;
+  unreadCount: number | null;
+  onOpenSidebar: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="mx-auto grid h-[calc(100vh-0.6rem)] max-w-[1500px] grid-cols-[272px_minmax(0,1fr)] gap-2.5">
+      <aside className="relative overflow-hidden rounded-[1.7rem] border border-white/8 bg-white/[0.035] p-4 shadow-[0_24px_90px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
+        <DesktopPlanningBrand />
+
+        <div className="mt-6 rounded-[1.55rem] border border-white/8 bg-black/10 p-4">
+          <p className="text-[0.7rem] font-black uppercase tracking-[0.16em] text-white/32">
+            Módulo aberto
+          </p>
+
+          <p className="mt-2 text-2xl font-black tracking-[-0.05em] text-primary">
+            {view === "rotinas" ? "Rotinas" : "Objetivos"}
+          </p>
+
+          <p className="mt-2 text-sm leading-6 text-muted">
+            Continue organizando seu planejamento com a mesma base visual do Axon.
+          </p>
+        </div>
+      </aside>
+
+      <section className="relative flex min-w-0 flex-col overflow-hidden rounded-[1.55rem] border border-slate-200/80 bg-white/[0.82] shadow-[0_24px_90px_rgba(93,64,126,0.16)] dark:border-white/8 dark:bg-white/[0.035] dark:shadow-[0_24px_90px_rgba(0,0,0,0.26)] backdrop-blur-2xl">
+        <DesktopPlanningTopbar
+          title={view === "rotinas" ? "Rotinas" : "Objetivos"}
+          view={view}
+          onViewChange={onViewChange}
+          onOpenNotifications={onOpenNotifications}
+          unreadCount={unreadCount}
+          onOpenSidebar={onOpenSidebar}
+        />
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+          {children}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function DesktopAgendaExperience({
+  view,
+  onViewChange,
+  onOpenNotifications,
+  unreadCount,
+  onOpenSidebar,
+  selectedDate,
+  selectedIso,
+  viewMode,
+  tasks,
+  undatedTasks,
+  subtasksMap,
+  loading,
+  error,
+  progress,
+  completedItems,
+  totalItems,
+  calendarSetupChoice,
+  isConnectingCalendar,
+  calendarConnectError,
+  onSelectDate,
+  onViewModeChange,
+  onCreate,
+  onOpenQueue,
+  onConnectGoogleCalendar,
+  onUseIndependentCalendar,
+  onToggleDone,
+  onToggleKey,
+  onEdit,
+  onDelete,
+  onToggleSubtask,
+  onDeleteSubtask,
+  onSubtaskChange,
+}: {
+  view: View;
+  onViewChange?: (view: View) => void;
+  onOpenNotifications?: () => void;
+  unreadCount?: number | null;
+  onOpenSidebar?: () => void;
+  selectedDate: Date;
+  selectedIso: string;
+  viewMode: ViewMode;
+  tasks: Task[];
+  undatedTasks: Task[];
+  subtasksMap: Record<string, Subtask[]>;
+  loading: boolean;
+  error: string | null;
+  progress: number;
+  completedItems: number;
+  totalItems: number;
+  calendarSetupChoice: CalendarSetupChoice | null;
+  isConnectingCalendar: boolean;
+  calendarConnectError: string | null;
+  onSelectDate: (date: Date) => void;
+  onViewModeChange: (mode: ViewMode) => void;
+  onCreate: () => void;
+  onOpenQueue: () => void;
+  onConnectGoogleCalendar: () => void;
+  onUseIndependentCalendar: () => void;
+  onToggleDone: (task: Task) => void;
+  onToggleKey: (task: Task) => void;
+  onEdit: (task: Task) => void;
+  onDelete: (task: Task) => void;
+  onToggleSubtask: (subtask: Subtask) => void;
+  onDeleteSubtask: (subtask: Subtask) => void;
+  onSubtaskChange?: () => void;
+}) {
+  const monthLabel = `${monthNames[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`;
+
+  function shiftPeriod(delta: number) {
+    const next = new Date(selectedDate);
+
+    if (viewMode === "month") {
+      next.setMonth(selectedDate.getMonth() + delta);
+      next.setDate(1);
+    } else if (viewMode === "week") {
+      next.setDate(selectedDate.getDate() + delta * 7);
+    } else {
+      next.setDate(selectedDate.getDate() + delta);
+    }
+
+    onSelectDate(next);
+  }
+
+  return (
+    <div className="mx-auto grid h-[calc(100vh-0.6rem)] max-w-[1500px] grid-cols-[272px_minmax(0,1fr)] gap-2.5">
+      <DesktopAgendaSidebar
+        selectedDate={selectedDate}
+        tasks={tasks}
+        progress={progress}
+        completedItems={completedItems}
+        totalItems={totalItems}
+        onSelectDate={onSelectDate}
+      />
+
+      <section className="relative flex min-w-0 flex-col overflow-hidden rounded-[1.55rem] border border-slate-200/80 bg-white/[0.82] shadow-[0_24px_90px_rgba(93,64,126,0.16)] dark:border-white/8 dark:bg-white/[0.035] dark:shadow-[0_24px_90px_rgba(0,0,0,0.26)] backdrop-blur-2xl">
+        <DesktopPlanningTopbar
+          title={monthLabel}
+          view={view}
+          onViewChange={(nextView) => onViewChange?.(nextView)}
+          onCreate={onCreate}
+          onOpenNotifications={onOpenNotifications}
+          unreadCount={unreadCount}
+          onOpenSidebar={onOpenSidebar}
+        />
+
+        <div className="min-h-0 flex-1 px-2.5 pb-2.5">
+          <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[1.45rem] border border-slate-200/80 bg-white/90 text-slate-950 dark:border-white/8 dark:bg-[#0b0b14]/72 dark:text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/80 px-4 py-2 dark:border-white/8">
+              <div className="grid grid-cols-2 rounded-full border border-slate-200/80 bg-white/80 p-1 dark:border-white/8 dark:bg-white/[0.045]">
+                {[
+                  { key: "month" as const, label: "Mês" },
+                  { key: "week" as const, label: "Semana" },
+                ].map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => onViewModeChange(option.key)}
+                    className={`min-h-8 rounded-full px-6 text-[0.72rem] font-bold transition active:scale-[0.98] ${
+                      viewMode === option.key
+                        ? "bg-[var(--accent-strong)] text-white shadow-[0_6px_16px_rgba(123,44,191,0.18)]"
+                        : "text-muted hover:text-secondary"
+                    } focus:outline-none focus-visible:ring-1 focus-visible:ring-[#a855f7]/30`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => shiftPeriod(-1)}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200/80 bg-white/80 text-slate-500 transition hover:text-slate-950 active:scale-[0.96] dark:border-white/8 dark:bg-white/[0.045] dark:text-white/44 dark:hover:text-white"
+                  aria-label="Período anterior"
+                >
+                  <ChevronLeft className="h-4.5 w-4.5" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => shiftPeriod(1)}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200/80 bg-white/80 text-slate-500 transition hover:text-slate-950 active:scale-[0.96] dark:border-white/8 dark:bg-white/[0.045] dark:text-white/44 dark:hover:text-white"
+                  aria-label="Próximo período"
+                >
+                  <ChevronRight className="h-4.5 w-4.5" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onSelectDate(new Date())}
+                  className="min-h-9 rounded-xl border border-slate-200/80 bg-white/80 px-4 text-[0.72rem] font-bold text-slate-600 transition hover:text-slate-950 active:scale-[0.98] dark:border-white/8 dark:bg-white/[0.045] dark:text-white/58 dark:hover:text-white"
+                >
+                  Hoje
+                </button>
+              </div>
+            </div>
+
+            {!calendarSetupChoice ? (
+              <div className="flex min-h-0 flex-1 items-center justify-center p-8">
+                <div className="w-full max-w-xl">
+                  <CalendarSetupCard
+                    isConnecting={isConnectingCalendar}
+                    error={calendarConnectError}
+                    onConnect={onConnectGoogleCalendar}
+                    onUseIndependent={onUseIndependentCalendar}
+                  />
+                </div>
+              </div>
+            ) : loading ? (
+              <div className="flex min-h-0 flex-1 items-center justify-center gap-2 text-sm text-muted">
+                <Loader2 className="h-4 w-4 animate-spin text-accent" />
+                Carregando planejamento…
+              </div>
+            ) : error ? (
+              <div className="m-6 rounded-2xl border border-rose-300/25 bg-rose-500/10 p-4 text-sm text-rose-100">
+                {error}
+              </div>
+            ) : viewMode === "month" ? (
+              <DesktopMonthBoard
+                selectedDate={selectedDate}
+                tasks={tasks}
+                subtasksMap={subtasksMap}
+                onSelect={onSelectDate}
+                onEdit={onEdit}
+                onToggle={onToggleDone}
+                onToggleSubtask={onToggleSubtask}
+              />
+            ) : (
+              <DesktopScheduleGrid
+                selectedDate={selectedDate}
+                tasks={tasks}
+                selectedIso={selectedIso}
+                subtasksMap={subtasksMap}
+                onSelectDate={onSelectDate}
+                onToggle={onToggleDone}
+                onToggleKey={onToggleKey}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                onToggleSubtask={onToggleSubtask}
+                onDeleteSubtask={onDeleteSubtask}
+                onSubtaskChange={onSubtaskChange}
+              />
+            )}
+          </div>
+
+          {undatedTasks.length > 0 && (
+            <button
+              type="button"
+              onClick={onOpenQueue}
+              className="absolute bottom-7 right-7 flex items-center gap-2 rounded-full border border-indigo-300/35 bg-indigo-500/12 px-4 py-2 text-xs font-bold text-indigo-700 shadow-[0_18px_48px_rgba(79,70,229,0.16)] backdrop-blur-xl transition active:scale-[0.98] dark:border-indigo-300/20 dark:text-indigo-100 dark:shadow-[0_18px_48px_rgba(0,0,0,0.3)]"
+            >
+              <ListTodo className="h-3.5 w-3.5" />
+              {undatedTasks.length} sem data
+            </button>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function DesktopPlanningBrand() {
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#a855f7]/26 bg-[#7b2cbf]/16 shadow-[0_14px_34px_rgba(123,44,191,0.22)]">
+        <img src="/axon-logo.svg" alt="AXON" className="h-6.5 w-6.5" />
+      </div>
+
+      <div className="min-w-0">
+        <p className="text-[0.95rem] font-black leading-none tracking-[-0.035em] text-primary">
+          AXON
+        </p>
+
+        <p className="mt-1 truncate text-[0.68rem] font-semibold text-muted">
+          Agenda, rotinas e objetivos
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function DesktopPlanningTopbar({
+  title = "Planejamento",
+  view,
+  onViewChange,
+  onCreate,
+  onOpenNotifications,
+  unreadCount,
+  onOpenSidebar,
+}: {
+  title?: string;
+  view?: View;
+  onViewChange?: (view: View) => void;
+  onCreate?: () => void;
+  onOpenNotifications?: () => void;
+  unreadCount?: number | null;
+  onOpenSidebar?: () => void;
+}) {
+  return (
+    <div className="grid shrink-0 grid-cols-[minmax(10rem,1fr)_auto_minmax(10rem,1fr)] items-center gap-4 px-3.5 py-3">
+      <h1 className="min-w-0 truncate text-[1.48rem] font-black leading-none tracking-[-0.06em] text-primary">
+        {title}
+      </h1>
+
+      {view && onViewChange ? (
+        <DesktopPlanningTabs view={view} onViewChange={onViewChange} />
+      ) : (
+        <div />
+      )}
+
+      <div className="flex items-center justify-end gap-2">
+        {onCreate ? (
+          <button
+            type="button"
+            onClick={onCreate}
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-2xl bg-[var(--accent-strong)] px-3.5 text-[0.72rem] font-black text-white shadow-[0_16px_40px_rgba(123,44,191,0.34)] transition hover:brightness-110 active:scale-[0.98]"
+          >
+            <Plus className="h-4 w-4" />
+            Nova tarefa
+          </button>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={onOpenNotifications}
+          disabled={!onOpenNotifications}
+          className="relative flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200/80 bg-white/80 text-muted shadow-card dark:border-white/8 dark:bg-white/[0.04] backdrop-blur-xl transition hover:text-primary active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-45"
+          aria-label="Abrir notificações"
+        >
+          <Bell className="h-4 w-4" />
+          {(unreadCount ?? 0) > 0 && (
+            <span className="absolute right-[0.42rem] top-[0.42rem] h-2 w-2 rounded-full border border-[#12111a] bg-[#a855f7] shadow-[0_0_10px_rgba(168,85,247,0.9)]" />
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={onOpenSidebar}
+          className="flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200/80 bg-white/80 text-muted shadow-card dark:border-white/8 dark:bg-white/[0.04] backdrop-blur-xl transition hover:text-primary active:scale-[0.96]"
+          aria-label="Abrir menu"
+        >
+          <Menu className="h-4.5 w-4.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DesktopPlanningTabs({
+  view,
+  onViewChange,
+}: {
+  view: View;
+  onViewChange: (view: View) => void;
+}) {
+  return (
+    <div className="grid w-[330px] grid-cols-3 rounded-full border border-slate-200/80 bg-white/80 p-1 shadow-card backdrop-blur-2xl dark:border-white/8 dark:bg-white/[0.04]">
+      {TABS.map((tab) => {
+        const active = view === tab.key;
+
+        return (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => onViewChange(tab.key)}
+            className={`min-h-8 rounded-full text-[0.7rem] font-bold transition active:scale-[0.98] ${
+              active
+                ? "bg-[var(--accent-strong)] text-white shadow-[0_10px_24px_rgba(123,44,191,0.28)]"
+                : "text-muted hover:text-secondary"
+            }`}
+          >
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function DesktopAgendaSidebar({
+  selectedDate,
+  tasks,
+  progress,
+  completedItems,
+  totalItems,
+  onSelectDate,
+}: {
+  selectedDate: Date;
+  tasks: Task[];
+  progress: number;
+  completedItems: number;
+  totalItems: number;
+  onSelectDate: (date: Date) => void;
+}) {
+  const [calendarColors, setCalendarColors] =
+    useState<DesktopCalendarColorPrefs>(() => getDesktopCalendarColorPrefs());
+  const [isColorModalOpen, setIsColorModalOpen] = useState(false);
+
+  useEffect(() => {
+    function handleDesktopCalendarColorsUpdated() {
+      setCalendarColors(getDesktopCalendarColorPrefs());
+    }
+
+    window.addEventListener(
+      DESKTOP_CALENDAR_COLORS_UPDATED_EVENT,
+      handleDesktopCalendarColorsUpdated
+    );
+
+    return () => {
+      window.removeEventListener(
+        DESKTOP_CALENDAR_COLORS_UPDATED_EVENT,
+        handleDesktopCalendarColorsUpdated
+      );
+    };
+  }, []);
+
+  function handleSaveColors(nextColors: DesktopCalendarColorPrefs) {
+    saveDesktopCalendarColorPrefs(nextColors);
+    setCalendarColors(nextColors);
+    setIsColorModalOpen(false);
+
+    window.dispatchEvent(new Event(DESKTOP_CALENDAR_COLORS_UPDATED_EVENT));
+  }
+
+  return (
+    <>
+      <aside className="relative grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto_auto] gap-2.5 overflow-hidden rounded-[1.45rem] border border-slate-200/80 bg-white/[0.85] p-2.5 shadow-[0_24px_90px_rgba(93,64,126,0.16)] dark:border-white/8 dark:bg-white/[0.035] dark:shadow-[0_24px_90px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
+        <DesktopPlanningBrand />
+
+        <DesktopMiniMonthCalendar
+          selectedDate={selectedDate}
+          tasks={tasks}
+          onSelect={onSelectDate}
+        />
+
+        <DesktopProgressBlockCard
+          progress={progress}
+          completedItems={completedItems}
+          totalItems={totalItems}
+        />
+
+        <div className="rounded-[1.2rem] border border-slate-200/80 bg-white/70 p-2.5 dark:border-white/8 dark:bg-white/[0.035]">
+          <div className="mb-2.5 flex items-center justify-between gap-3">
+            <p className="text-sm font-black text-primary">Meus calendários</p>
+
+            <button
+              type="button"
+              onClick={() => setIsColorModalOpen(true)}
+              className="flex h-7 w-7 items-center justify-center rounded-xl border border-slate-200/80 bg-white/80 text-slate-500 transition hover:text-slate-900 active:scale-[0.96] dark:border-white/8 dark:bg-white/[0.035] dark:text-white/42 dark:hover:text-white"
+              aria-label="Editar cores dos calendários"
+              title="Editar cores"
+            >
+              <Edit3 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            <DesktopCalendarLegend
+              label="Tarefas"
+              icon={ListTodo}
+              colorName={calendarColors.task}
+            />
+            <DesktopCalendarLegend
+              label="Eventos"
+              icon={CalendarDays}
+              colorName={calendarColors.event}
+            />
+            <DesktopCalendarLegend
+              label="Rotinas"
+              icon={Repeat}
+              colorName={calendarColors.routine}
+            />
+          </div>
+        </div>
+      </aside>
+
+      <DesktopCalendarColorsModal
+        isOpen={isColorModalOpen}
+        value={calendarColors}
+        onClose={() => setIsColorModalOpen(false)}
+        onSave={handleSaveColors}
+      />
+    </>
+  );
+}
+
+function DesktopCalendarLegend({
+  label,
+  icon: Icon,
+  colorName,
+}: {
+  label: string;
+  icon: ElementType;
+  colorName: DesktopCalendarColorName;
+}) {
+  const color = getDesktopCalendarColorOption(colorName);
+
+  return (
+    <div className="flex min-h-5 items-center gap-2.5">
+      <span
+        className="flex h-5 w-5 items-center justify-center rounded-md border"
+        style={{
+          backgroundColor: color.iconBackground,
+          borderColor: color.iconBorder,
+        }}
+      >
+        <Icon className="h-3.5 w-3.5" style={{ color: color.iconColor }} />
+      </span>
+
+      <span className="flex-1 text-xs font-semibold text-secondary">
+        {label}
+      </span>
+
+      <span
+        className="h-2.5 w-2.5 rounded-full"
+        style={{ backgroundColor: color.hex }}
+      />
+    </div>
+  );
+}
+
+
+function DesktopCalendarColorsModal({
+  isOpen,
+  value,
+  onClose,
+  onSave,
+}: {
+  isOpen: boolean;
+  value: DesktopCalendarColorPrefs;
+  onClose: () => void;
+  onSave: (value: DesktopCalendarColorPrefs) => void;
+}) {
+  const [draft, setDraft] = useState<DesktopCalendarColorPrefs>(value);
+
+  useEffect(() => {
+    if (isOpen) {
+      setDraft(value);
+    }
+  }, [isOpen, value]);
+
+  if (!isOpen || typeof document === "undefined") return null;
+
+  function updateColor(
+    kind: DesktopCalendarKind,
+    colorName: DesktopCalendarColorName
+  ) {
+    setDraft((current) => ({
+      ...current,
+      [kind]: colorName,
+    }));
+  }
+
+  const rows: {
+    kind: DesktopCalendarKind;
+    label: string;
+    icon: ElementType;
+    description: string;
+  }[] = [
+    {
+      kind: "task",
+      label: "Tarefas",
+      icon: ListTodo,
+      description: "Ações pontuais do dia",
+    },
+    {
+      kind: "event",
+      label: "Eventos",
+      icon: CalendarDays,
+      description: "Compromissos com horário definido",
+    },
+    {
+      kind: "routine",
+      label: "Rotinas",
+      icon: Repeat,
+      description: "Blocos recorrentes",
+    },
+  ];
+
+  return createPortal(
+    <div className="fixed inset-0 z-[150] hidden items-center justify-center bg-black/35 p-5 backdrop-blur-md dark:bg-black/62 lg:flex">
+      <div className="relative w-full max-w-[470px] overflow-hidden rounded-[1.8rem] border border-slate-200/80 bg-white/96 p-5 text-slate-950 shadow-[0_30px_110px_rgba(93,64,126,0.18)] backdrop-blur-2xl dark:border-white/10 dark:bg-[#11101a]/96 dark:text-white dark:shadow-[0_30px_110px_rgba(0,0,0,0.55)]">
+        <div className="pointer-events-none absolute -right-20 -top-20 h-52 w-52 rounded-full bg-[#7b2cbf]/10 blur-[84px] dark:bg-[#7b2cbf]/18" />
+
+        <div className="relative flex items-start justify-between gap-4">
+          <div>
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#a855f7]/24 bg-[#7b2cbf]/10 px-3 py-1.5 text-[0.68rem] font-black uppercase tracking-[0.12em] text-[#7e22ce] dark:bg-[#7b2cbf]/12 dark:text-[#d8b4fe]">
+              <Edit3 className="h-3.5 w-3.5" />
+              Cores do calendário
+            </div>
+
+            <h2 className="text-xl font-black leading-tight tracking-[-0.045em] text-slate-950 dark:text-white">
+              Personalizar categorias
+            </h2>
+
+            <p className="mt-1.5 text-xs font-medium leading-5 text-slate-500 dark:text-white/44">
+              Escolha cores bem diferentes para reconhecer cada categoria rapidamente.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200/80 bg-slate-50 text-slate-500 transition active:scale-[0.96] dark:border-white/8 dark:bg-white/[0.04] dark:text-white/46"
+            aria-label="Fechar editor de cores"
+          >
+            <X className="h-4.5 w-4.5" />
+          </button>
+        </div>
+
+        <div className="relative mt-5 space-y-4">
+          {rows.map((row) => {
+            const color = getDesktopCalendarColorOption(draft[row.kind]);
+            const Icon = row.icon;
+
+            return (
+              <div
+                key={row.kind}
+                className="rounded-[1.35rem] border border-slate-200/80 bg-slate-50/80 p-3.5 dark:border-white/8 dark:bg-white/[0.035]"
+              >
+                <div className="mb-3 flex items-center gap-3">
+                  <span
+                    className="flex h-9 w-9 items-center justify-center rounded-2xl border"
+                    style={{
+                      backgroundColor: color.iconBackground,
+                      borderColor: color.iconBorder,
+                    }}
+                  >
+                    <Icon className="h-4.5 w-4.5" style={{ color: color.iconColor }} />
+                  </span>
+
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-black text-slate-950 dark:text-white">{row.label}</p>
+                    <p className="mt-0.5 text-xs font-medium text-slate-500 dark:text-white/36">
+                      {row.description}
+                    </p>
+                  </div>
+
+                  <span
+                    className="h-3 w-3 rounded-full"
+                    style={{ backgroundColor: color.hex }}
+                  />
+                </div>
+
+                <div className="grid grid-cols-7 gap-1.5">
+                  {DESKTOP_CALENDAR_COLOR_OPTIONS.map((option) => {
+                    const selected = draft[row.kind] === option.key;
+                    const unavailable =
+                      !selected &&
+                      isDesktopCalendarColorUnavailable(
+                        row.kind,
+                        option.key,
+                        draft
+                      );
+
+                    return (
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={() => {
+                          if (!unavailable) {
+                            updateColor(row.kind, option.key);
+                          }
+                        }}
+                        disabled={unavailable}
+                        className={`flex h-8 items-center justify-center rounded-xl border transition active:scale-[0.96] ${
+                          selected
+                            ? "border-slate-400 bg-white shadow-sm dark:border-white/55 dark:bg-white/[0.075]"
+                            : unavailable
+                            ? "cursor-not-allowed border-slate-200 bg-slate-50 opacity-28 dark:border-white/5 dark:bg-white/[0.018]"
+                            : "border-slate-200 bg-white hover:bg-slate-50 dark:border-white/8 dark:bg-white/[0.028] dark:hover:bg-white/[0.045]"
+                        }`}
+                        aria-label={`Usar ${option.label} em ${row.label}`}
+                        title={
+                          unavailable
+                            ? `${option.label} está muito parecida com outra categoria`
+                            : option.label
+                        }
+                      >
+                        <span
+                          className="h-4 w-4 rounded-full"
+                          style={{
+                            backgroundColor: option.hex,
+                            boxShadow: selected
+                              ? `0 0 18px ${option.hex}66`
+                              : undefined,
+                          }}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="relative mt-5 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setDraft(DEFAULT_DESKTOP_CALENDAR_COLORS)}
+            className="min-h-11 rounded-2xl border border-slate-200/80 bg-slate-50 px-4 text-xs font-black text-slate-600 transition hover:text-slate-950 active:scale-[0.98] dark:border-white/8 dark:bg-white/[0.04] dark:text-white/48 dark:hover:text-white/70"
+          >
+            Restaurar
+          </button>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="min-h-11 flex-1 rounded-2xl border border-slate-200/80 bg-slate-50 px-4 text-xs font-black text-slate-600 transition hover:text-slate-950 active:scale-[0.98] dark:border-white/8 dark:bg-white/[0.04] dark:text-white/58 dark:hover:text-white/76"
+          >
+            Cancelar
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onSave(draft)}
+            className="min-h-11 flex-1 rounded-2xl bg-[var(--accent-strong)] px-4 text-xs font-black text-white shadow-[0_16px_40px_rgba(123,44,191,0.3)] transition active:scale-[0.98]"
+          >
+            Salvar cores
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function DesktopMiniMonthCalendar({
+  selectedDate,
+  tasks,
+  onSelect,
+}: {
+  selectedDate: Date;
+  tasks: Task[];
+  onSelect: (date: Date) => void;
+}) {
+  const year = selectedDate.getFullYear();
+  const month = selectedDate.getMonth();
+  const selectedIso = toISODate(selectedDate);
+  const todayIso = toISODate(new Date());
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const gridStart = new Date(year, month, 1 - firstWeekday);
+
+  const cells = Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(gridStart);
+    date.setDate(gridStart.getDate() + index);
+    return date;
+  });
+
+  function shiftMonth(delta: number) {
+    const next = new Date(selectedDate);
+    next.setMonth(selectedDate.getMonth() + delta);
+    next.setDate(1);
+    onSelect(next);
+  }
+
+  return (
+    <div className="flex min-h-0 flex-col rounded-[1.2rem] border border-slate-200/80 bg-white/70 p-2.5 dark:border-white/8 dark:bg-white/[0.035]">
+      <div className="mb-2 flex shrink-0 items-center justify-between gap-3">
+        <h2 className="text-[0.78rem] font-black tracking-[-0.02em] text-primary">
+          {monthNames[month]} {year}
+        </h2>
+
+        <div className="flex gap-1.5">
+          <button
+            type="button"
+            onClick={() => shiftMonth(-1)}
+            className="flex h-6.5 w-6.5 items-center justify-center rounded-lg border border-white/8 bg-white/[0.04] text-muted transition active:scale-[0.96]"
+            aria-label="Mês anterior"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => shiftMonth(1)}
+            className="flex h-6.5 w-6.5 items-center justify-center rounded-lg border border-white/8 bg-white/[0.04] text-muted transition active:scale-[0.96]"
+            aria-label="Próximo mês"
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-1 grid shrink-0 grid-cols-7 text-center">
+        {["SEG", "TER", "QUA", "QUI", "SEX", "SÁB", "DOM"].map((day) => (
+          <p key={day} className="text-[0.46rem] font-black text-slate-400 dark:text-white/32">
+            {day}
+          </p>
+        ))}
+      </div>
+
+      <div className="grid min-h-0 flex-1 grid-cols-7 gap-[0.1rem]">
+        {cells.map((date) => {
+          const iso = toISODate(date);
+          const isSelected = iso === selectedIso;
+          const isToday = iso === todayIso;
+          const isOutside = date.getMonth() !== month;
+          const hasItems = tasks.some((task) => isTaskOnDate(task, iso));
+
+          return (
+            <button
+              key={iso}
+              type="button"
+              onClick={() => onSelect(date)}
+              className={`relative flex min-h-0 items-center justify-center rounded-md text-[0.62rem] font-bold transition active:scale-[0.96] ${
+                isSelected
+                  ? "bg-[var(--accent-strong)] text-white shadow-[0_10px_22px_rgba(123,44,191,0.36)]"
+                  : isToday
+                  ? "border border-[#a855f7]/24 bg-[#7b2cbf]/12 text-[#d8b4fe]"
+                  : isOutside
+                  ? "text-slate-400 dark:text-white/16"
+                  : "text-secondary hover:bg-white/[0.05]"
+              }`}
+            >
+              {date.getDate()}
+
+              {hasItems && !isSelected && (
+                <span className="absolute bottom-0 h-0.5 w-0.5 rounded-full bg-[#a855f7]" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function DesktopProgressBlockCard({
+  progress,
+  completedItems,
+  totalItems,
+}: {
+  progress: number;
+  completedItems: number;
+  totalItems: number;
+}) {
+  const normalized = Math.min(Math.max(progress, 0), 100);
+
+  return (
+    <div className="relative min-h-[6.1rem] overflow-hidden rounded-[1.2rem] border border-[#a855f7]/24 bg-[#f0ddff] p-3 shadow-[0_18px_46px_rgba(123,44,191,0.13)] dark:bg-[#7b2cbf]/18">
+      <div className="pointer-events-none absolute -right-14 -top-16 h-32 w-32 rounded-full bg-[#c084fc]/18 blur-[58px]" />
+
+      <div className="relative">
+        <p className="text-[0.58rem] font-black uppercase tracking-[0.12em] text-[#6b21a8]/65 dark:text-[#e9d5ff]/58">
+          tarefas concluídas
+        </p>
+
+        <div className="mt-1.5 flex items-end justify-between gap-4">
+          <p className="text-[2.05rem] font-black leading-none tracking-[-0.07em] text-[#23063d] dark:text-white">
+            {normalized}%
+          </p>
+
+          <p className="pb-1 text-right text-[0.66rem] font-semibold leading-4 text-[#5b21b6]/72 dark:text-[#e9d5ff]/62">
+            {completedItems} de {totalItems || 0}
+            <br />
+            no dia selecionado
+          </p>
+        </div>
+
+        <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-[#d9c6ec] dark:bg-white/10">
+          <div
+            className="h-full rounded-full bg-[#c084fc]"
+            style={{ width: `${normalized}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DesktopScheduleGrid({
+  selectedDate,
+  tasks,
+  selectedIso,
+  subtasksMap,
+  onSelectDate,
+  onToggle,
+  onToggleKey,
+  onEdit,
+  onDelete,
+  onToggleSubtask,
+  onDeleteSubtask,
+  onSubtaskChange,
+}: {
+  selectedDate: Date;
+  tasks: Task[];
+  selectedIso: string;
+  subtasksMap: Record<string, Subtask[]>;
+  onSelectDate: (date: Date) => void;
+  onToggle: (task: Task) => void;
+  onToggleKey: (task: Task) => void;
+  onEdit: (task: Task) => void;
+  onDelete: (task: Task) => void;
+  onToggleSubtask: (subtask: Subtask) => void;
+  onDeleteSubtask: (subtask: Subtask) => void;
+  onSubtaskChange?: () => void;
+}) {
+  const [hoverPreview, setHoverPreview] =
+    useState<DesktopTaskHoverPreview>(null);
+  const hoverCloseTimer = useRef<number | null>(null);
+  const days = weekDaysOf(selectedDate);
+  const dayIsos = days.map(toISODate);
+  const todayIso = toISODate(new Date());
+
+  const visibleItems = tasks.filter((task) =>
+    dayIsos.some((iso) => isTaskOnDate(task, iso))
+  );
+
+  const taskMinutes = visibleItems
+    .flatMap((task) => [timeToMinutes(task.start_time), timeToMinutes(task.end_time)])
+    .filter((value): value is number => value !== null);
+
+  const minMinutes = Math.min(...taskMinutes, 8 * 60);
+  const maxMinutes = Math.max(...taskMinutes, 18 * 60);
+  const startHour = Math.max(5, Math.min(8, Math.floor(minMinutes / 60)));
+  const endHour = Math.min(23, Math.max(18, Math.ceil(maxMinutes / 60)));
+  const hourHeight = 45;
+  const totalHeight = (endHour - startHour) * hourHeight;
+  const hours = Array.from({ length: endHour - startHour + 1 }, (_, index) => startHour + index);
+
+  useEffect(() => {
+    return () => {
+      if (hoverCloseTimer.current) {
+        window.clearTimeout(hoverCloseTimer.current);
+      }
+    };
+  }, []);
+
+  function clearHoverCloseTimer() {
+    if (hoverCloseTimer.current) {
+      window.clearTimeout(hoverCloseTimer.current);
+      hoverCloseTimer.current = null;
+    }
+  }
+
+  function scheduleCloseHoverPreview() {
+    clearHoverCloseTimer();
+
+    hoverCloseTimer.current = window.setTimeout(() => {
+      setHoverPreview(null);
+    }, 520);
+  }
+
+  function openHoverPreview(
+    task: Task,
+    event: { currentTarget: HTMLButtonElement; clientX?: number; clientY?: number }
+  ) {
+    clearHoverCloseTimer();
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const clientX = event.clientX ?? rect.right;
+    const clientY = event.clientY ?? rect.top + rect.height / 2;
+
+    setHoverPreview({
+      task,
+      ...getDesktopHoverPreviewPosition(clientX, clientY),
+    });
+  }
+
+  function handlePreviewComplete(task: Task) {
+    setHoverPreview(null);
+
+    if (task.status !== "done") {
+      onToggle(task);
+    }
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div
+        className="grid shrink-0 border-b border-slate-200/70 dark:border-white/8"
+        style={{
+          gridTemplateColumns: `52px repeat(${days.length}, minmax(0, 1fr))`,
+        }}
+      >
+        <div className="border-r border-slate-200/70 dark:border-white/8" />
+
+        {days.map((date) => {
+          const iso = toISODate(date);
+          const isSelected = iso === selectedIso;
+          const isToday = iso === todayIso;
+
+          return (
+            <button
+              key={iso}
+              type="button"
+              onClick={() => onSelectDate(date)}
+              className={`flex min-h-[48px] flex-col items-center justify-center border-r border-slate-200/70 text-center last:border-r-0 dark:border-white/8 ${
+                isSelected
+                  ? "bg-[#7b2cbf]/16 text-[#581c87] dark:bg-[#7b2cbf]/18 dark:text-white"
+                  : isToday
+                  ? "bg-[#7b2cbf]/8 text-[#6b21a8] dark:text-[#d8b4fe]"
+                  : "text-muted"
+              }`}
+            >
+              <span className="text-[0.58rem] font-black uppercase tracking-[0.12em]">
+                {weekdayShort[date.getDay()]}
+              </span>
+
+              <span
+                className={`mt-0.5 text-lg font-black leading-none tracking-[-0.05em] ${
+                  isSelected ? "text-[#7e22ce] dark:text-[#c084fc]" : "text-primary"
+                }`}
+              >
+                {String(date.getDate()).padStart(2, "0")}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div
+          className="grid"
+          style={{
+            gridTemplateColumns: `52px repeat(${days.length}, minmax(0, 1fr))`,
+          }}
+        >
+          <div className="relative border-r border-white/8" style={{ height: totalHeight }}>
+            {hours.slice(0, -1).map((hour, index) => (
+              <p
+                key={hour}
+                className="absolute left-2 text-[0.58rem] font-semibold text-slate-400 dark:text-white/32"
+                style={{ top: index * hourHeight + 8 }}
+              >
+                {String(hour).padStart(2, "0")}:00
+              </p>
+            ))}
+          </div>
+
+          {days.map((date) => {
+            const iso = toISODate(date);
+            const items = tasks
+              .filter((task) => isTaskOnDate(task, iso) && timeToMinutes(task.start_time) !== null)
+              .sort((a, b) => (timeToMinutes(a.start_time) ?? 0) - (timeToMinutes(b.start_time) ?? 0));
+
+            return (
+              <div
+                key={iso}
+                className="relative border-r border-slate-200/60 last:border-r-0 dark:border-white/8"
+                style={{ height: totalHeight }}
+              >
+                {hours.slice(0, -1).map((hour, index) => (
+                  <div
+                    key={hour}
+                    className="absolute inset-x-0 border-t border-slate-200/65 dark:border-white/8"
+                    style={{ top: index * hourHeight }}
+                  >
+                    <div className="mt-[32px] border-t border-dashed border-slate-200/55 dark:border-white/[0.055]" />
+                  </div>
+                ))}
+
+                {items.map((task) => {
+                  const start = timeToMinutes(task.start_time) ?? startHour * 60;
+                  const end = timeToMinutes(task.end_time) ?? start + 60;
+                  const top = ((start - startHour * 60) / 60) * hourHeight;
+                  const height = Math.max(((end - start) / 60) * hourHeight - 4, 36);
+                  const tone = getDesktopScheduleTone(task);
+                  const isDone = task.status === "done";
+                  const kind = getDesktopTaskKind(task);
+                  const subtasks = subtasksMap[task.id] ?? [];
+                  const completedSubtasks = subtasks.filter((subtask) => subtask.done).length;
+                  const hasSubtasks = subtasks.length > 0;
+
+                  return (
+                    <button
+                      key={`${task.id}-${iso}`}
+                      type="button"
+                      onClick={() => onEdit(task)}
+                      onMouseEnter={(event) => openHoverPreview(task, event)}
+                      onMouseMove={(event) => openHoverPreview(task, event)}
+                      onMouseLeave={scheduleCloseHoverPreview}
+                      onFocus={(event) => openHoverPreview(task, event)}
+                      onBlur={scheduleCloseHoverPreview}
+                      className={`absolute left-1 right-1 overflow-hidden rounded-lg border px-2 py-1.5 text-left shadow-[0_12px_28px_rgba(79,70,229,0.08)] backdrop-blur-xl transition hover:scale-[1.01] active:scale-[0.99] dark:shadow-[0_12px_28px_rgba(0,0,0,0.18)] ${tone.surface} ${tone.border} ${
+                        isDone ? "opacity-58" : ""
+                      }`}
+                      style={{
+                        top,
+                        minHeight: height,
+                        height,
+                      }}
+                    >
+                      <span className={`absolute inset-y-0 left-0 w-1 ${tone.bar}`} />
+
+                      <span className="block truncate text-[0.67rem] font-black leading-3.5 text-slate-950 dark:text-white">
+                        {task.title}
+                      </span>
+
+                      <span className={`mt-0.5 block text-[0.6rem] font-bold ${tone.text}`}>
+                        {getDesktopTaskTime(task)}
+                      </span>
+
+                      <span className={`mt-1 flex items-center gap-1 truncate text-[0.56rem] font-bold ${tone.text}`}>
+                        {hasSubtasks ? (
+                          <>
+                            <CheckCircle2 className="h-2.5 w-2.5 shrink-0" />
+                            <span className="truncate">
+                              {completedSubtasks}/{subtasks.length} subtarefas
+                            </span>
+                          </>
+                        ) : kind === "routine" ? (
+                          <Repeat className="h-2.5 w-2.5" />
+                        ) : kind === "event" ? (
+                          <CalendarDays className="h-2.5 w-2.5" />
+                        ) : (
+                          <ListTodo className="h-2.5 w-2.5" />
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <DesktopTaskPreviewPopover
+        preview={hoverPreview}
+        subtasks={
+          hoverPreview ? subtasksMap[hoverPreview.task.id] ?? [] : []
+        }
+        onMouseEnter={clearHoverCloseTimer}
+        onMouseLeave={scheduleCloseHoverPreview}
+        onComplete={handlePreviewComplete}
+        onToggleSubtask={onToggleSubtask}
+      />
+
+      {/* Mantém os handlers detalhados vivos sem alterar o visual desktop. */}
+      <div className="hidden">
+        {visibleItems.map((task) => (
+          <TimelineItem
+            key={task.id}
+            task={task}
+            selectedIso={selectedIso}
+            subtasks={subtasksMap[task.id] ?? []}
+            onToggle={onToggle}
+            onToggleKey={onToggleKey}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onToggleSubtask={onToggleSubtask}
+            onDeleteSubtask={onDeleteSubtask}
+            onSubtaskChange={onSubtaskChange}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DesktopMonthBoard({
+  selectedDate,
+  tasks,
+  subtasksMap,
+  onSelect,
+  onEdit,
+  onToggle,
+  onToggleSubtask,
+}: {
+  selectedDate: Date;
+  tasks: Task[];
+  subtasksMap: Record<string, Subtask[]>;
+  onSelect: (date: Date) => void;
+  onEdit: (task: Task) => void;
+  onToggle: (task: Task) => void;
+  onToggleSubtask: (subtask: Subtask) => void;
+}) {
+  const [hoverPreview, setHoverPreview] =
+    useState<DesktopTaskHoverPreview>(null);
+  const hoverCloseTimer = useRef<number | null>(null);
+  const year = selectedDate.getFullYear();
+  const month = selectedDate.getMonth();
+  const selectedIso = toISODate(selectedDate);
+  const todayIso = toISODate(new Date());
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const totalCells = Math.ceil((firstWeekday + daysInMonth) / 7) * 7;
+  const gridStart = new Date(year, month, 1 - firstWeekday);
+
+  const cells = Array.from({ length: totalCells }, (_, index) => {
+    const date = new Date(gridStart);
+    date.setDate(gridStart.getDate() + index);
+    return date;
+  });
+
+  useEffect(() => {
+    return () => {
+      if (hoverCloseTimer.current) {
+        window.clearTimeout(hoverCloseTimer.current);
+      }
+    };
+  }, []);
+
+  function clearHoverCloseTimer() {
+    if (hoverCloseTimer.current) {
+      window.clearTimeout(hoverCloseTimer.current);
+      hoverCloseTimer.current = null;
+    }
+  }
+
+  function scheduleCloseHoverPreview() {
+    clearHoverCloseTimer();
+
+    hoverCloseTimer.current = window.setTimeout(() => {
+      setHoverPreview(null);
+    }, 520);
+  }
+
+  function openHoverPreview(
+    task: Task,
+    event: { currentTarget: HTMLButtonElement; clientX?: number; clientY?: number }
+  ) {
+    clearHoverCloseTimer();
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const clientX = event.clientX ?? rect.right;
+    const clientY = event.clientY ?? rect.top + rect.height / 2;
+
+    setHoverPreview({
+      task,
+      ...getDesktopHoverPreviewPosition(clientX, clientY),
+    });
+  }
+
+  function handlePreviewComplete(task: Task) {
+    setHoverPreview(null);
+
+    if (task.status !== "done") {
+      onToggle(task);
+    }
+  }
+
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4">
+      <div className="grid grid-cols-7 gap-1.5">
+        {["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"].map((day) => (
+          <p key={day} className="px-2 text-[0.68rem] font-black text-slate-500 dark:text-white/34">
+            {day}
+          </p>
+        ))}
+
+        {cells.map((date) => {
+          const iso = toISODate(date);
+          const isOutside = date.getMonth() !== month;
+          const isSelected = iso === selectedIso;
+          const isToday = iso === todayIso;
+          const allDayItems = tasks
+            .filter((task) => isTaskOnDate(task, iso))
+            .sort(sortDesktopMonthItems);
+          const dayItems = allDayItems.slice(0, 3);
+          const hiddenCount = Math.max(allDayItems.length - dayItems.length, 0);
+
+          return (
+            <div
+              key={iso}
+              role="button"
+              tabIndex={0}
+              onClick={() => onSelect(date)}
+              className={`relative min-h-[120px] overflow-hidden rounded-2xl border p-2 text-left transition active:scale-[0.99] ${
+                isSelected
+                  ? "border-[#a855f7]/55 bg-[#7b2cbf]/12 text-[#2e1065] dark:bg-[#7b2cbf]/16 dark:text-white"
+                  : isToday
+                  ? "border-[#a855f7]/32 bg-[#7b2cbf]/8 text-[#4c1d95] dark:bg-[#7b2cbf]/8 dark:text-white"
+                  : "border-slate-200/80 bg-white/68 dark:border-white/8 dark:bg-white/[0.025]"
+              } ${isOutside ? "opacity-70 dark:opacity-42" : ""}`}
+            >
+              <span className="text-sm font-black text-primary">
+                {date.getDate()}
+              </span>
+
+              {hiddenCount > 0 ? (
+                <span className="absolute right-2 top-2 rounded-full border border-[#7c3aed]/35 bg-[#7c3aed] px-2 py-0.5 text-[0.62rem] font-black text-white shadow-[0_10px_22px_rgba(124,58,237,0.24)] dark:border-[#a855f7]/24 dark:bg-[#7b2cbf]/22 dark:text-[#e9d5ff] dark:shadow-none">
+                  +{hiddenCount}
+                </span>
+              ) : null}
+
+              <span className="mt-2 block space-y-1">
+                {dayItems.map((task) => {
+                  const tone = getDesktopScheduleTone(task);
+                  const subtasks = subtasksMap[task.id] ?? [];
+                  const completedSubtasks = subtasks.filter((subtask) => subtask.done).length;
+
+                  return (
+                    <button
+                      key={task.id}
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onEdit(task);
+                      }}
+                      onMouseEnter={(event) => openHoverPreview(task, event)}
+                      onMouseMove={(event) => openHoverPreview(task, event)}
+                      onMouseLeave={scheduleCloseHoverPreview}
+                      onFocus={(event) => openHoverPreview(task, event)}
+                      onBlur={scheduleCloseHoverPreview}
+                      className={`block w-full truncate rounded-lg border px-2 py-1 text-left text-[0.68rem] font-bold shadow-[0_8px_18px_rgba(79,70,229,0.06)] backdrop-blur-xl dark:shadow-none ${tone.surface} ${tone.border} ${tone.text}`}
+                    >
+                      {task.title}
+                      {subtasks.length > 0 ? ` · ${completedSubtasks}/${subtasks.length}` : ""}
+                    </button>
+                  );
+                })}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <DesktopTaskPreviewPopover
+        preview={hoverPreview}
+        subtasks={
+          hoverPreview ? subtasksMap[hoverPreview.task.id] ?? [] : []
+        }
+        onMouseEnter={clearHoverCloseTimer}
+        onMouseLeave={scheduleCloseHoverPreview}
+        onComplete={handlePreviewComplete}
+        onToggleSubtask={onToggleSubtask}
+      />
+    </div>
+  );
+}
+
+function DesktopTaskPreviewPopover({
+  preview,
+  subtasks,
+  onMouseEnter,
+  onMouseLeave,
+  onComplete,
+  onToggleSubtask,
+}: {
+  preview: DesktopTaskHoverPreview;
+  subtasks: Subtask[];
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+  onComplete: (task: Task) => void;
+  onToggleSubtask: (subtask: Subtask) => void;
+}) {
+  if (!preview || typeof document === "undefined") return null;
+
+  const task = preview.task;
+  const tone = getDesktopScheduleTone(task);
+  const isDone = task.status === "done";
+  const completedSubtasks = subtasks.filter((subtask) => subtask.done).length;
+  const visibleSubtasks = subtasks.slice(0, 6);
+  const hiddenSubtasks = Math.max(subtasks.length - visibleSubtasks.length, 0);
+
+  return createPortal(
+    <div
+      className="fixed z-[999] hidden max-h-[min(78vh,430px)] w-[330px] max-w-[calc(100vw-28px)] overflow-y-auto overflow-x-hidden rounded-[1.45rem] border border-slate-200/90 bg-white/96 p-4 text-slate-950 shadow-[0_28px_90px_rgba(93,64,126,0.22)] backdrop-blur-2xl dark:border-[#a855f7]/28 dark:bg-[#11101a]/96 dark:text-white dark:shadow-[0_28px_90px_rgba(0,0,0,0.48)] lg:block"
+      style={{ left: preview.x, top: preview.y }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
+      <div className="pointer-events-none absolute -right-16 -top-20 h-40 w-40 rounded-full bg-[#7b2cbf]/10 blur-[70px] dark:bg-[#7b2cbf]/20" />
+
+      <div className="relative min-w-0">
+        <div className="mb-3 flex min-w-0 items-center justify-between gap-3">
+          <span
+            className={`inline-flex max-w-[11rem] items-center gap-2 rounded-full border px-2.5 py-1 text-[0.62rem] font-black uppercase tracking-[0.11em] ${tone.chip}`}
+          >
+            {getDesktopTaskIcon(task)}
+            <span className="truncate">{getDesktopTaskTypeLabel(task)}</span>
+          </span>
+
+          <span
+            className={`shrink-0 rounded-full px-2.5 py-1 text-[0.62rem] font-black ${
+              task.is_key_task
+                ? "bg-amber-400/14 text-amber-700 dark:bg-amber-300/12 dark:text-amber-100"
+                : isDone
+                ? "bg-emerald-400/14 text-emerald-700 dark:bg-emerald-400/12 dark:text-emerald-100"
+                : "bg-slate-100 text-slate-500 dark:bg-white/[0.055] dark:text-slate-500 dark:text-white/46"
+            }`}
+          >
+            {task.is_key_task
+              ? "Tarefa chave"
+              : isDone
+              ? "Concluído"
+              : statusLabels[task.status]}
+          </span>
+        </div>
+
+        <h3 className="break-words text-base font-black leading-tight tracking-[-0.035em] text-slate-950 dark:text-slate-950 dark:text-white">
+          {task.title}
+        </h3>
+
+        {task.description ? (
+          <p className="mt-2 line-clamp-3 break-words text-xs font-medium leading-5 text-slate-500 dark:text-slate-500 dark:text-white/48">
+            {task.description}
+          </p>
+        ) : null}
+
+        <div className="mt-4 grid min-w-0 gap-2">
+          <div className="flex min-w-0 items-center gap-2 rounded-2xl border border-slate-200/80 bg-slate-50/80 px-3 py-2 dark:border-white/8 dark:bg-white/[0.035]">
+            <CalendarDays className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-400 dark:text-white/35" />
+            <p className="min-w-0 truncate text-xs font-semibold text-slate-600 dark:text-slate-600 dark:text-white/56">
+              {getDesktopTaskDateLabel(task)}
+            </p>
+          </div>
+
+          <div className="flex min-w-0 items-center gap-2 rounded-2xl border border-slate-200/80 bg-slate-50/80 px-3 py-2 dark:border-white/8 dark:bg-white/[0.035]">
+            <Clock className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-400 dark:text-white/35" />
+            <p className="min-w-0 truncate text-xs font-semibold text-slate-600 dark:text-slate-600 dark:text-white/56">
+              {getDesktopTaskTime(task)}
+            </p>
+          </div>
+        </div>
+
+        {subtasks.length > 0 ? (
+          <div className="mt-3 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3 dark:border-white/8 dark:bg-white/[0.035]">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400 dark:text-white/34">
+                Subtarefas
+              </p>
+
+              <p className="text-[0.62rem] font-black text-[#7e22ce] dark:text-[#d8b4fe]">
+                {completedSubtasks} de {subtasks.length}
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              {visibleSubtasks.map((subtask) => (
+                <button
+                  key={subtask.id}
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onToggleSubtask(subtask);
+                  }}
+                  className="flex w-full min-w-0 items-center gap-2 rounded-xl px-1.5 py-1 text-left text-xs font-semibold text-slate-600 transition hover:bg-slate-100 active:scale-[0.99] dark:text-slate-600 dark:text-white/56 dark:hover:bg-white/[0.045]"
+                >
+                  <span
+                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-md border ${
+                      subtask.done
+                        ? "border-[#a855f7]/40 bg-[#7b2cbf] text-white"
+                        : "border-slate-300 bg-white text-transparent dark:border-white/14 dark:bg-white/[0.035]"
+                    }`}
+                  >
+                    <CheckCircle2 className="h-2.5 w-2.5" />
+                  </span>
+
+                  <span className={`min-w-0 flex-1 truncate ${subtask.done ? "text-slate-400 line-through dark:text-slate-400 dark:text-white/34" : ""}`}>
+                    {subtask.title}
+                  </span>
+                </button>
+              ))}
+
+              {hiddenSubtasks > 0 ? (
+                <p className="pt-0.5 text-[0.68rem] font-semibold text-slate-400 dark:text-slate-400 dark:text-white/30">
+                  + {hiddenSubtasks} subtarefa{hiddenSubtasks === 1 ? "" : "s"}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={() => onComplete(task)}
+          disabled={isDone}
+          className="mt-4 inline-flex min-h-10 w-full min-w-0 items-center justify-center gap-2 rounded-2xl bg-[var(--accent-strong)] px-4 text-xs font-black text-white shadow-[0_16px_40px_rgba(123,44,191,0.3)] transition active:scale-[0.98] hover:brightness-110 disabled:cursor-default disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none dark:text-white dark:disabled:bg-white/[0.06] dark:disabled:text-white/34"
+        >
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          <span className="truncate">
+            {isDone ? "Tarefa já concluída" : "Marcar como concluído"}
+          </span>
+        </button>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function getDesktopHoverPreviewPosition(clientX: number, clientY: number) {
+  const previewWidth = 330;
+  const previewHeight = 390;
+  const margin = 14;
+  const gap = 14;
+
+  const openOnLeft = clientX + gap + previewWidth > window.innerWidth - margin;
+  const rawX = openOnLeft ? clientX - previewWidth - gap : clientX + gap;
+
+  const openAbove =
+    clientY + gap + previewHeight > window.innerHeight - margin;
+  const rawY = openAbove ? clientY - previewHeight - gap : clientY + gap;
+
+  const maxX = Math.max(margin, window.innerWidth - previewWidth - margin);
+  const maxY = Math.max(margin, window.innerHeight - previewHeight - margin);
+
+  return {
+    x: Math.min(Math.max(rawX, margin), maxX),
+    y: Math.min(Math.max(rawY, margin), maxY),
+  };
+}
+
+const ROUTINE_TITLE_HINTS = [
+  "academia",
+  "treino",
+  "pilates",
+  "faculdade",
+  "fiap",
+  "aula fiap",
+  "ingles",
+  "inglês",
+  "alemao",
+  "alemão",
+  "idioma",
+  "idiomas",
+  "curso",
+] as const;
+
+const ROUTINE_META_KEYS = [
+  "recurrence",
+  "recurrence_rule",
+  "rrule",
+  "repeat",
+  "frequency",
+  "routine_id",
+  "parent_routine_id",
+  "routine_template_id",
+  "template_routine_id",
+  "recurring_task_id",
+  "recurrence_id",
+  "source_type",
+  "source",
+  "category",
+  "calendar_type",
+  "kind",
+  "item_type",
+  "type",
+] as const;
+
+const ROUTINE_BOOLEAN_KEYS = [
+  "is_routine",
+  "is_recurring",
+  "generated_from_routine",
+  "from_routine",
+] as const;
+
+function normalizeDesktopKindText(value: unknown) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function getDesktopTaskKind(task: Task): DesktopCalendarKind {
+  const rawTaskType = normalizeDesktopKindText(task.task_type);
+
+  if (rawTaskType === "event" || rawTaskType === "evento") {
+    return "event";
+  }
+
+  if (rawTaskType === "routine" || rawTaskType === "rotina") {
+    return "routine";
+  }
+
+  const record = task as Task & Record<string, unknown>;
+
+  const hasRoutineBooleanFlag = ROUTINE_BOOLEAN_KEYS.some(
+    (key) => record[key] === true
+  );
+
+  if (hasRoutineBooleanFlag) {
+    return "routine";
+  }
+
+  const metaText = ROUTINE_META_KEYS.map((key) => record[key])
+    .filter((value: unknown) => value !== undefined && value !== null && value !== "")
+    .map(normalizeDesktopKindText)
+    .join(" ");
+
+  if (
+    metaText.includes("routine") ||
+    metaText.includes("rotina") ||
+    metaText.includes("recurring") ||
+    metaText.includes("recorrente") ||
+    metaText.includes("daily") ||
+    metaText.includes("weekly") ||
+    metaText.includes("monthly")
+  ) {
+    return "routine";
+  }
+
+  const titleText = normalizeDesktopKindText(
+    [
+      task.title,
+      task.description,
+      (task as Task & { group_name?: string | null }).group_name,
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+
+  if (ROUTINE_TITLE_HINTS.some((hint) => titleText.includes(normalizeDesktopKindText(hint)))) {
+    return "routine";
+  }
+
+  return "task";
+}
+
+function getDesktopTaskTypeLabel(task: Task) {
+  return typeLabels[getDesktopTaskKind(task)];
+}
+
+function getDesktopTaskIcon(task: Task) {
+  const kind = getDesktopTaskKind(task);
+
+  if (kind === "routine") {
+    return <Repeat className="h-3.5 w-3.5" />;
+  }
+
+  if (kind === "event") {
+    return <CalendarDays className="h-3.5 w-3.5" />;
+  }
+
+  return <ListTodo className="h-3.5 w-3.5" />;
+}
+
+function normalizeTaskDate(value?: string | null) {
+  return value ? value.slice(0, 10) : null;
+}
+
+function getDesktopTaskDateLabel(task: Task) {
+  const start = normalizeTaskDate(task.scheduled_date);
+  const end = normalizeTaskDate((task as Task & { end_date?: string | null }).end_date);
+
+  if (!start) return "Sem data";
+
+  const startLabel = formatDesktopDate(start);
+  const endLabel = end && end !== start ? formatDesktopDate(end) : null;
+
+  return endLabel ? `${startLabel} até ${endLabel}` : startLabel;
+}
+
+function formatDesktopDate(isoDate: string) {
+  const [year, month, day] = isoDate.split("-").map(Number);
+
+  if (!year || !month || !day) return isoDate;
+
+  return new Date(year, month - 1, day).toLocaleDateString("pt-BR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+  });
+}
+
+
+function isDesktopCalendarColorName(
+  value: unknown
+): value is DesktopCalendarColorName {
+  return DESKTOP_CALENDAR_COLOR_OPTIONS.some((option) => option.key === value);
+}
+
+function getDesktopCalendarColorOption(colorName: DesktopCalendarColorName) {
+  return (
+    DESKTOP_CALENDAR_COLOR_OPTIONS.find((option) => option.key === colorName) ??
+    DESKTOP_CALENDAR_COLOR_OPTIONS[0]
+  );
+}
+
+function getDesktopCalendarColorPrefs(): DesktopCalendarColorPrefs {
+  if (typeof window === "undefined") {
+    return DEFAULT_DESKTOP_CALENDAR_COLORS;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(
+      DESKTOP_CALENDAR_COLORS_STORAGE_KEY
+    );
+
+    if (!raw) {
+      return DEFAULT_DESKTOP_CALENDAR_COLORS;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<
+      Record<DesktopCalendarKind, unknown>
+    >;
+
+    return normalizeDesktopCalendarColorPrefs({
+      task: isDesktopCalendarColorName(parsed.task)
+        ? parsed.task
+        : DEFAULT_DESKTOP_CALENDAR_COLORS.task,
+      event: isDesktopCalendarColorName(parsed.event)
+        ? parsed.event
+        : DEFAULT_DESKTOP_CALENDAR_COLORS.event,
+      routine: isDesktopCalendarColorName(parsed.routine)
+        ? parsed.routine
+        : DEFAULT_DESKTOP_CALENDAR_COLORS.routine,
+    });
+  } catch {
+    return DEFAULT_DESKTOP_CALENDAR_COLORS;
+  }
+}
+
+function normalizeDesktopCalendarColorPrefs(
+  colors: DesktopCalendarColorPrefs
+): DesktopCalendarColorPrefs {
+  const normalized = { ...colors };
+
+  if (
+    normalized.task === normalized.event ||
+    areDesktopCalendarColorsTooSimilar(normalized.task, normalized.event)
+  ) {
+    normalized.event = "blue";
+  }
+
+  if (
+    normalized.routine === normalized.task ||
+    normalized.routine === normalized.event ||
+    areDesktopCalendarColorsTooSimilar(normalized.routine, normalized.task) ||
+    areDesktopCalendarColorsTooSimilar(normalized.routine, normalized.event)
+  ) {
+    normalized.routine = "mint";
+  }
+
+  if (
+    normalized.event === normalized.task ||
+    normalized.event === normalized.routine ||
+    areDesktopCalendarColorsTooSimilar(normalized.event, normalized.task) ||
+    areDesktopCalendarColorsTooSimilar(normalized.event, normalized.routine)
+  ) {
+    normalized.event = "blue";
+  }
+
+  return normalized;
+}
+
+function isDesktopCalendarColorUnavailable(
+  kind: DesktopCalendarKind,
+  colorName: DesktopCalendarColorName,
+  colors: DesktopCalendarColorPrefs
+) {
+  return (Object.keys(colors) as DesktopCalendarKind[]).some((otherKind) => {
+    if (otherKind === kind) return false;
+
+    const otherColor = colors[otherKind];
+
+    return (
+      otherColor === colorName ||
+      areDesktopCalendarColorsTooSimilar(otherColor, colorName)
+    );
+  });
+}
+
+function areDesktopCalendarColorsTooSimilar(
+  first: DesktopCalendarColorName,
+  second: DesktopCalendarColorName
+) {
+  const pairs = new Set([
+    "purple:lilac",
+    "lilac:purple",
+    "mint:cyan",
+    "cyan:mint",
+  ]);
+
+  return pairs.has(`${first}:${second}`);
+}
+
+function saveDesktopCalendarColorPrefs(colors: DesktopCalendarColorPrefs) {
+  window.localStorage.setItem(
+    DESKTOP_CALENDAR_COLORS_STORAGE_KEY,
+    JSON.stringify(normalizeDesktopCalendarColorPrefs(colors))
+  );
+}
+
+function getDesktopScheduleTone(task: Task) {
+  if (task.is_key_task) {
+    return getDesktopCalendarColorOption("amber");
+  }
+
+  const kind = getDesktopTaskKind(task);
+  const prefs = getDesktopCalendarColorPrefs();
+
+  return getDesktopCalendarColorOption(prefs[kind]);
+}
+
+function sortDesktopMonthItems(a: Task, b: Task) {
+  if (!!a.is_key_task !== !!b.is_key_task) {
+    return a.is_key_task ? -1 : 1;
+  }
+
+  const byTime = (timeToMinutes(a.start_time) ?? 9999) - (timeToMinutes(b.start_time) ?? 9999);
+
+  if (byTime !== 0) {
+    return byTime;
+  }
+
+  return a.title.localeCompare(b.title);
+}
+
+function getDesktopTaskTime(task: Task) {
+  const start = hhmm(task.start_time);
+  const end = hhmm(task.end_time);
+
+  if (start && end) return `${start} – ${end}`;
+  if (start) return start;
+
+  return "Sem horário";
+}
+
+function timeToMinutes(value?: string | null) {
+  const time = hhmm(value);
+  if (!time) return null;
+
+  const [hours, minutes] = time.split(":").map(Number);
+
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+}
+
 
 // ===========================================================================
 // CONFIGURAÇÃO INICIAL DO CALENDÁRIO
@@ -2254,13 +4408,16 @@ function CreatePlanningItemModal({
       onClose={onClose}
       closeOnOverlayClick={false}
       ariaLabel="Adicionar ao planejamento"
-      maxHeightClassName="max-h-[88vh]"
-      surfaceClassName="bg-surface-elevated"
+      maxHeightClassName="max-h-[88vh] lg:max-h-[78dvh]"
+      className="overflow-x-hidden lg:inset-x-auto lg:bottom-auto lg:left-1/2 lg:right-auto lg:top-1/2 lg:mx-0 lg:w-[min(520px,calc(100vw-2rem))] lg:max-w-[520px] lg:-translate-x-1/2 lg:-translate-y-1/2 lg:rounded-[2rem]"
+      contentClassName="overflow-x-hidden bg-white text-slate-950 lg:px-6 lg:py-5 dark:bg-[#181421] dark:text-white"
+      footerClassName="overflow-x-hidden border-t border-slate-200/80 bg-white/95 lg:px-6 lg:pb-5 lg:pt-4 dark:border-white/10 dark:bg-[#181421]/95"
+      surfaceClassName="overflow-x-hidden bg-white text-slate-950 shadow-soft lg:bg-white/98 lg:shadow-[0_30px_110px_rgba(93,64,126,0.18)] dark:bg-[#181421] dark:text-white dark:lg:bg-[#181421]/95 dark:lg:shadow-[0_30px_110px_rgba(0,0,0,0.55)]"
       footer={
         <>
           <button
             type="button"
-            onClick={handleSubmit}
+            onClick={() => void handleSubmit()}
             disabled={submitting}
             className="inline-flex min-h-14 w-full items-center justify-center rounded-2xl bg-[var(--accent-strong)] px-6 text-sm font-semibold text-white shadow-card transition active:scale-[0.98] disabled:opacity-60"
           >
@@ -2303,7 +4460,7 @@ function CreatePlanningItemModal({
         </p>
       </div>
 
-          <div className="mb-4 grid grid-cols-3 gap-2">
+          <div className="mb-4 grid grid-cols-2 gap-2">
             <TypeButton
               active={selectedType === "task"}
               icon={ListTodo}
@@ -2316,13 +4473,6 @@ function CreatePlanningItemModal({
               icon={CalendarDays}
               label="Evento"
               onClick={() => setSelectedType("event")}
-            />
-
-            <TypeButton
-              active={selectedType === "routine"}
-              icon={Repeat}
-              label="Rotina"
-              onClick={() => setSelectedType("routine")}
             />
           </div>
 
@@ -2525,7 +4675,7 @@ function CreatePlanningItemModal({
                   onChange={(e) =>
                     setPriority(e.target.value as "low" | "medium" | "high")
                   }
-                  className={`min-h-[52px] w-full rounded-2xl border px-4 text-sm text-white outline-none transition ${
+                  className={`min-h-[52px] w-full rounded-2xl border px-4 text-sm text-primary outline-none transition ${
                     isKeyTask
                       ? "cursor-not-allowed border-amber-300/20 bg-amber-400/[0.06] opacity-70"
                       : "border-soft bg-surface-muted focus:border-accent-soft"
@@ -2663,7 +4813,7 @@ function TypeButton({
   onClick,
 }: {
   active: boolean;
-  icon: React.ElementType;
+  icon: ElementType;
   label: string;
   onClick: () => void;
 }) {
@@ -2701,7 +4851,7 @@ function DeletePlanningItemModal({
 }) {
   if (!task) return null;
 
-  const itemLabel = typeLabels[task.task_type].toLowerCase();
+  const itemLabel = getDesktopTaskTypeLabel(task).toLowerCase();
 
   return (
     <ConfirmDialog
@@ -2725,7 +4875,7 @@ function DeletePlanningItemModal({
             </p>
 
             <p className="mt-1 text-xs text-muted">
-              {typeLabels[task.task_type]} · {statusLabels[task.status]}
+              {getDesktopTaskTypeLabel(task)} · {statusLabels[task.status]}
             </p>
           </div>
         </>
@@ -2748,11 +4898,13 @@ function EditPlanningItemModal({
   task,
   onClose,
   onUpdated,
+  onDelete,
   onSubtaskChange,
 }: {
   task: Task | null;
   onClose: () => void;
   onUpdated: () => void | Promise<void>;
+  onDelete?: (task: Task) => void;
   onSubtaskChange?: () => void;
 }) {
   const [title, setTitle] = useState("");
@@ -2868,13 +5020,16 @@ function EditPlanningItemModal({
       closeOnOverlayClick={false}
       dismissDisabled={submitting}
       ariaLabel="Ajustar planejamento"
-      maxHeightClassName="max-h-[88vh]"
-      surfaceClassName="bg-surface-elevated"
+      maxHeightClassName="max-h-[88vh] lg:max-h-[78dvh]"
+      className="overflow-x-hidden lg:inset-x-auto lg:bottom-auto lg:left-1/2 lg:right-auto lg:top-1/2 lg:mx-0 lg:w-[min(520px,calc(100vw-2rem))] lg:max-w-[520px] lg:-translate-x-1/2 lg:-translate-y-1/2 lg:rounded-[2rem]"
+      contentClassName="overflow-x-hidden bg-white text-slate-950 lg:px-6 lg:py-5 dark:bg-[#181421] dark:text-white"
+      footerClassName="overflow-x-hidden border-t border-slate-200/80 bg-white/95 lg:px-6 lg:pb-5 lg:pt-4 dark:border-white/10 dark:bg-[#181421]/95"
+      surfaceClassName="overflow-x-hidden bg-white text-slate-950 shadow-soft lg:bg-white/98 lg:shadow-[0_30px_110px_rgba(93,64,126,0.18)] dark:bg-[#181421] dark:text-white dark:lg:bg-[#181421]/95 dark:lg:shadow-[0_30px_110px_rgba(0,0,0,0.55)]"
       footer={
         <>
           <button
             type="button"
-            onClick={handleSubmit}
+            onClick={() => void handleSubmit()}
             disabled={submitting}
             className="inline-flex min-h-14 w-full items-center justify-center rounded-2xl bg-[var(--accent-strong)] px-6 text-sm font-semibold text-white shadow-card transition active:scale-[0.98] disabled:opacity-60"
           >
@@ -2906,7 +5061,7 @@ function EditPlanningItemModal({
       <div className="mb-4">
         <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-accent-soft bg-accent-soft px-3 py-1.5 text-xs font-medium text-accent">
           <Edit3 className="h-3.5 w-3.5" />
-          Editar {typeLabels[task.task_type].toLowerCase()}
+          Editar {getDesktopTaskTypeLabel(task).toLowerCase()}
         </div>
 
         <h2 className="text-[1.55rem] font-semibold leading-[1.05] tracking-[-0.05em] text-primary">
@@ -2924,7 +5079,7 @@ function EditPlanningItemModal({
             </p>
 
             <p className="mt-1 text-sm font-semibold text-primary">
-              {typeLabels[task.task_type]}
+              {getDesktopTaskTypeLabel(task)}
             </p>
 
             <p className="mt-1 text-xs leading-5 text-muted">
@@ -3079,7 +5234,7 @@ function EditPlanningItemModal({
                   onChange={(e) =>
                     setPriority(e.target.value as "low" | "medium" | "high")
                   }
-                  className={`min-h-[52px] w-full rounded-2xl border px-4 text-sm text-white outline-none transition ${
+                  className={`min-h-[52px] w-full rounded-2xl border px-4 text-sm text-primary outline-none transition ${
                     isKeyTask
                       ? "cursor-not-allowed border-amber-300/20 bg-amber-400/[0.06] opacity-70"
                       : "border-soft bg-surface-muted focus:border-accent-soft"
@@ -3170,6 +5325,18 @@ function EditPlanningItemModal({
             {formError && (
               <p className="text-xs font-medium text-rose-300">{formError}</p>
             )}
+
+            {onDelete ? (
+              <button
+                type="button"
+                onClick={() => onDelete(task)}
+                disabled={submitting}
+                className="flex min-h-12 w-full items-center justify-center rounded-2xl border border-rose-300/20 bg-rose-500/10 px-6 text-sm font-semibold text-rose-700 transition active:scale-[0.98] disabled:opacity-60 dark:text-rose-100"
+              >
+                Excluir item
+                <Trash2 className="ml-2 h-4 w-4" />
+              </button>
+            ) : null}
           </div>
     </BottomSheet>
   );
@@ -3316,9 +5483,24 @@ function SubtaskEditor({
 // ===========================================================================
 
 const PRIORITY_META_QUEUE = {
-  high: { label: "Alta", dot: "bg-rose-400", badge: "border-rose-300/25 bg-rose-500/10 text-rose-200" },
-  medium: { label: "Média", dot: "bg-amber-400", badge: "border-amber-300/25 bg-amber-500/10 text-amber-200" },
-  low: { label: "Baixa", dot: "bg-sky-400", badge: "border-sky-300/25 bg-sky-500/10 text-sky-200" },
+  high: {
+    label: "Alta",
+    dot: "bg-rose-400",
+    badge:
+      "border-rose-300/35 bg-rose-500/10 text-rose-700 dark:border-rose-300/25 dark:text-rose-200",
+  },
+  medium: {
+    label: "Média",
+    dot: "bg-amber-400",
+    badge:
+      "border-amber-300/35 bg-amber-500/10 text-amber-700 dark:border-amber-300/25 dark:text-amber-200",
+  },
+  low: {
+    label: "Baixa",
+    dot: "bg-sky-400",
+    badge:
+      "border-sky-300/35 bg-sky-500/10 text-sky-700 dark:border-sky-300/25 dark:text-sky-200",
+  },
 };
 
 const QUEUE_PAGE_SIZE = 10;
@@ -3345,12 +5527,14 @@ function UndatedTasksSheet({
       isOpen
       onClose={onClose}
       ariaLabel="Tarefas sem data"
-      maxHeightClassName="max-h-[82vh]"
-      surfaceClassName="bg-surface-elevated"
+      maxHeightClassName="max-h-[82vh] lg:max-h-[78dvh]"
+      className="overflow-x-hidden lg:inset-x-auto lg:bottom-auto lg:left-1/2 lg:right-auto lg:top-1/2 lg:mx-0 lg:w-[min(520px,calc(100vw-2rem))] lg:max-w-[520px] lg:-translate-x-1/2 lg:-translate-y-1/2 lg:rounded-[2rem]"
+      contentClassName="overflow-x-hidden bg-white text-slate-950 lg:px-6 lg:py-5 dark:bg-[#181421] dark:text-white"
+      surfaceClassName="overflow-x-hidden bg-white text-slate-950 shadow-soft lg:bg-white/98 lg:shadow-[0_30px_110px_rgba(93,64,126,0.18)] dark:bg-[#181421] dark:text-white dark:lg:bg-[#181421]/95 dark:lg:shadow-[0_30px_110px_rgba(0,0,0,0.55)]"
     >
       {/* Cabeçalho da fila mantido no conteúdo para preservar o visual. */}
       <div className="mb-4">
-        <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-indigo-300/20 bg-indigo-500/10 px-3 py-1 text-xs font-medium text-indigo-100">
+        <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-indigo-300/35 bg-indigo-500/10 px-3 py-1 text-xs font-medium text-indigo-700 dark:border-indigo-300/20 dark:text-indigo-100">
           <ListTodo className="h-3.5 w-3.5" />
           Fila · {tasks.length} {tasks.length === 1 ? "tarefa" : "tarefas"}
         </div>
@@ -3407,7 +5591,7 @@ function UndatedTasksSheet({
                       <button
                         type="button"
                         onClick={() => onToggle(task)}
-                        className={`flex h-7 w-7 items-center justify-center rounded-xl active:scale-[0.94] ${
+                        className={`flex h-7 w-7 items-center justify-center rounded-xl border border-soft active:scale-[0.94] ${
                           isDone ? "bg-emerald-400/15 text-emerald-600 dark:text-emerald-300" : "bg-surface-muted text-muted"
                         }`}
                         aria-label={isDone ? "Desmarcar" : "Marcar como feita"}
@@ -3417,7 +5601,7 @@ function UndatedTasksSheet({
                       <button
                         type="button"
                         onClick={() => onEdit(task)}
-                        className="flex h-7 w-7 items-center justify-center rounded-xl bg-surface-muted text-muted transition active:scale-[0.94]"
+                        className="flex h-7 w-7 items-center justify-center rounded-xl border border-soft bg-surface-muted text-muted transition active:scale-[0.94]"
                         aria-label="Editar"
                       >
                         <Edit3 className="h-3.5 w-3.5" />
@@ -3425,7 +5609,7 @@ function UndatedTasksSheet({
                       <button
                         type="button"
                         onClick={() => onDelete(task)}
-                        className="flex h-7 w-7 items-center justify-center rounded-xl bg-surface-muted text-muted transition active:scale-[0.94]"
+                        className="flex h-7 w-7 items-center justify-center rounded-xl border border-soft bg-surface-muted text-muted transition active:scale-[0.94]"
                         aria-label="Excluir"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -3447,5 +5631,524 @@ function UndatedTasksSheet({
             </div>
           )}
     </BottomSheet>
+  );
+}
+
+// ===========================================================================
+// CENTRAL DE NOTIFICAÇÕES
+// ===========================================================================
+
+type NotificationAction = {
+  task_id?: string;
+  new_date?: string | null;
+  new_start_time?: string | null;
+  new_end_time?: string | null;
+  reason?: string | null;
+};
+
+type NotificationWithAction = api.NotificationData & {
+  action?: NotificationAction | null;
+};
+
+// Item individual do modal: leitura simples, alteração aplicada ou sugestão acionável.
+function NotificationItem({
+  notification,
+  onRead,
+  onAccept,
+  onReject,
+}: {
+  notification: api.NotificationData;
+  onRead: (id: string) => void;
+  onAccept: (id: string) => void;
+  onReject: (id: string) => void;
+}) {
+  const typedNotification = notification as NotificationWithAction;
+
+  const isUnread = notification.status === "unread";
+  const isImprovement = notification.type === "improvement";
+  const isChange = notification.type === "change";
+  const isAccepted = notification.status === "accepted";
+  const isRejected = notification.status === "rejected";
+  const isHandled = isAccepted || isRejected;
+
+  const canAct = isImprovement && !isHandled;
+  const action = typedNotification.action;
+
+  function handleCardClick() {
+    if (isUnread) {
+      onRead(notification.id);
+    }
+  }
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={handleCardClick}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          handleCardClick();
+        }
+      }}
+      className={`rounded-[1.55rem] border p-4 text-left transition active:scale-[0.99] ${
+        isImprovement
+          ? isHandled
+            ? "border-soft bg-surface-muted"
+            : "border-accent-soft bg-surface-elevated shadow-card"
+          : isUnread
+          ? "border-accent-soft bg-surface-elevated shadow-card"
+          : "border-soft bg-surface-muted"
+      }`}
+    >
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <div
+            className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border ${
+              isImprovement || isChange || isUnread
+                ? "border-accent-soft bg-accent-soft text-accent"
+                : "border-soft bg-surface-muted text-secondary"
+            }`}
+          >
+            {isImprovement ? (
+              <Sparkles className="h-4 w-4" />
+            ) : (
+              <Bell className="h-4 w-4" />
+            )}
+          </div>
+
+          <div className="min-w-0">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span
+                className={`rounded-full border px-2.5 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.12em] ${
+                  isImprovement || isChange || isUnread
+                    ? "border-accent-soft bg-accent-soft text-accent"
+                    : "border-soft bg-surface-muted text-secondary"
+                }`}
+              >
+                {isImprovement
+                  ? "Sugestão"
+                  : isChange
+                  ? "Alteração"
+                  : "Aviso"}
+              </span>
+
+              {isUnread && (
+                <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
+              )}
+            </div>
+
+            <p className="text-sm font-semibold leading-5 text-primary">
+              {notification.title}
+            </p>
+
+            <p className="mt-1 text-xs leading-5 text-muted">
+              {notification.body}
+            </p>
+          </div>
+        </div>
+
+        <span
+          className={`shrink-0 text-[0.65rem] font-medium ${
+            isUnread ? "text-accent" : "text-soft"
+          }`}
+        >
+          {formatNotificationTime(notification.created_at)}
+        </span>
+      </div>
+
+      {isImprovement && action && !isHandled && (
+        <div className="mb-3 rounded-[1.15rem] border border-soft bg-surface-muted p-3">
+          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-soft">
+            Ajuste sugerido
+          </p>
+
+          {(action.new_date || action.new_start_time || action.new_end_time) && (
+            <p className="mt-2 text-xs font-semibold text-secondary">
+              {action.new_date && <>Data: {action.new_date}</>}
+              {action.new_start_time && (
+                <>
+                  {action.new_date ? " · " : ""}
+                  {action.new_start_time}
+                  {action.new_end_time ? ` – ${action.new_end_time}` : ""}
+                </>
+              )}
+            </p>
+          )}
+
+          {action.reason && (
+            <p className="mt-1 text-xs leading-5 text-muted">
+              {action.reason}
+            </p>
+          )}
+        </div>
+      )}
+
+      {canAct && (
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onAccept(notification.id);
+            }}
+            className="inline-flex min-h-10 items-center justify-center rounded-2xl bg-purple-500 px-4 text-xs font-semibold text-white shadow-lg shadow-purple-950/25 active:scale-[0.98]"
+          >
+            Aceitar
+          </button>
+
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onReject(notification.id);
+            }}
+            className="inline-flex min-h-10 items-center justify-center rounded-2xl border border-soft bg-surface-muted px-4 text-xs font-semibold text-muted active:scale-[0.98]"
+          >
+            Recusar
+          </button>
+        </div>
+      )}
+
+      {!isImprovement && isUnread && (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onRead(notification.id);
+          }}
+          className="mt-3 inline-flex min-h-8 items-center justify-center rounded-xl border border-accent-soft bg-accent-soft px-3 text-[0.68rem] font-semibold text-accent transition active:scale-[0.98]"
+        >
+          Marcar como lida
+        </button>
+      )}
+
+      {isAccepted && (
+        <p className="mt-3 text-[0.68rem] font-semibold text-accent">
+          Sugestão aceita
+        </p>
+      )}
+
+      {isRejected && (
+        <p className="mt-3 text-[0.68rem] font-semibold text-soft">
+          Sugestão recusada
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Formata datas recentes em linguagem curta para caber no card mobile.
+function formatNotificationTime(createdAt: string) {
+  const date = new Date(createdAt);
+  const now = new Date();
+
+  const diffMin = Math.floor((now.getTime() - date.getTime()) / 60000);
+
+  if (diffMin < 1) return "Agora";
+  if (diffMin < 60) return `Há ${diffMin} min`;
+
+  const diffH = Math.floor(diffMin / 60);
+
+  if (diffH < 24) return `Há ${diffH}h`;
+
+  const diffDays = Math.floor(diffH / 24);
+
+  if (diffDays === 1) return "Ontem";
+
+  return date.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+  });
+}
+
+function NotificationsSheet({
+  isOpen,
+  onClose,
+  onUnreadCountChange,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onUnreadCountChange: (count: number) => void;
+}) {
+  // Estados do modal: lista local, aba ativa, paginação e carregamento.
+  const [notifications, setNotifications] = useState<api.NotificationData[]>([]);
+  const [notificationView, setNotificationView] = useState<"unread" | "read">(
+    "unread"
+  );
+  const [hasMore, setHasMore] = useState(false);
+  const [loading, setLoading] = useState(false);
+  // Listas derivadas para separar rapidamente o que está pendente do que já foi tratado.
+  const unreadNotifications = notifications.filter(
+    (notification) => notification.status === "unread"
+  );
+
+  const readNotifications = notifications.filter(
+    (notification) => notification.status !== "unread"
+  );
+
+  const filteredNotifications =
+    notificationView === "unread" ? unreadNotifications : readNotifications;
+  const shouldShowLoadMore =
+    hasMore && filteredNotifications.length >= NOTIFICATIONS_PAGE_SIZE;
+
+  const unreadCount = unreadNotifications.length;
+  const readCount = readNotifications.length;
+
+  // Carrega uma página extra para descobrir se ainda existe “Ver mais”.
+  function loadNotifications({ showLoading = true } = {}) {
+    if (showLoading) {
+      setLoading(true);
+    }
+
+    api
+      .getNotifications(NOTIFICATIONS_PAGE_SIZE + 1, 0)
+      .then((data) => {
+        const visibleNotifications = data.slice(0, NOTIFICATIONS_PAGE_SIZE);
+
+        setNotifications(visibleNotifications);
+        setHasMore(data.length > NOTIFICATIONS_PAGE_SIZE);
+
+        const nextUnreadCount = visibleNotifications.filter(
+          (notification) => notification.status === "unread"
+        ).length;
+
+        onUnreadCountChange(nextUnreadCount);
+      })
+      .catch(() => null)
+      .finally(() => {
+        if (showLoading) {
+          setLoading(false);
+        }
+      });
+  }
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    loadNotifications({ showLoading: true });
+
+    const handleNotificationsUpdated = () => {
+      loadNotifications({ showLoading: false });
+    };
+
+    window.addEventListener(
+      "axon:notifications-updated",
+      handleNotificationsUpdated
+    );
+
+    return () => {
+      window.removeEventListener(
+        "axon:notifications-updated",
+        handleNotificationsUpdated
+      );
+    };
+  }, [isOpen]);
+
+  async function loadMore() {
+    try {
+      const more = await api.getNotifications(
+        NOTIFICATIONS_PAGE_SIZE + 1,
+        notifications.length
+      );
+
+      const visibleMore = more.slice(0, NOTIFICATIONS_PAGE_SIZE);
+
+      setNotifications((prev) => {
+        const next = [...prev, ...visibleMore];
+
+        return next;
+      });
+
+      setHasMore(more.length > NOTIFICATIONS_PAGE_SIZE);
+    } catch {
+      // Falha silenciosa para não travar a central de notificações.
+    }
+  }
+
+  function syncUnreadCount(nextNotifications: api.NotificationData[]) {
+    const nextUnreadCount = nextNotifications.filter(
+      (notification) => notification.status === "unread"
+    ).length;
+
+    onUnreadCountChange(nextUnreadCount);
+  }
+
+  // Marca como lida de forma otimista, sem recarregar a central inteira.
+  async function handleRead(id: string) {
+    const currentNotification = notifications.find(
+      (notification) => notification.id === id
+    );
+
+    if (!currentNotification || currentNotification.status !== "unread") {
+      return;
+    }
+
+    const nextNotifications = notifications.map((notification) =>
+      notification.id === id
+        ? { ...notification, status: "read" as const }
+        : notification
+    );
+
+    setNotifications(nextNotifications);
+    syncUnreadCount(nextNotifications);
+
+    await api.markNotificationRead(id).catch(() => {
+      loadNotifications({ showLoading: false });
+    });
+  }
+
+  // Aceita sugestões de melhoria e move o item para a aba de lidas/tratadas.
+  async function handleAccept(id: string) {
+    const nextNotifications = notifications.map((notification) =>
+      notification.id === id
+        ? { ...notification, status: "accepted" as const }
+        : notification
+    );
+
+    setNotifications(nextNotifications);
+    syncUnreadCount(nextNotifications);
+    setNotificationView("read");
+
+    await api.acceptNotification(id).catch(() => {
+      loadNotifications({ showLoading: false });
+    });
+  }
+
+  // Recusa sugestões mantendo o histórico visível na aba de lidas/tratadas.
+  async function handleReject(id: string) {
+    const nextNotifications = notifications.map((notification) =>
+      notification.id === id
+        ? { ...notification, status: "rejected" as const }
+        : notification
+    );
+
+    setNotifications(nextNotifications);
+    syncUnreadCount(nextNotifications);
+    setNotificationView("read");
+
+    await api.rejectNotification(id).catch(() => {
+      loadNotifications({ showLoading: false });
+    });
+  }
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/45 px-4 backdrop-blur-sm">
+      <div className="relative flex h-[82dvh] max-h-[720px] w-full max-w-[430px] flex-col overflow-hidden rounded-[2rem] border border-soft bg-surface-elevated shadow-soft backdrop-blur-2xl">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(168,85,247,0.22),transparent_48%)]" />
+
+        <div className="relative border-b border-soft px-5 pb-4 pt-5">
+          <div className="mb-4 flex items-start justify-between gap-4">
+            <div>
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-accent-soft bg-accent-soft px-3 py-1.5 text-xs font-medium text-accent">
+                <Bell className="h-3.5 w-3.5" />
+                Central do Axon
+              </div>
+
+              <h2 className="text-[1.65rem] font-semibold leading-[1.05] tracking-[-0.055em] text-primary">
+                Notificações
+              </h2>
+
+              <p className="mt-2 text-xs leading-5 text-muted">
+                Avisos importantes, lembretes inteligentes e sugestões para
+                melhorar seu planejamento.
+              </p>
+            </div>
+
+            <button
+              onClick={onClose}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-soft bg-surface-muted text-muted active:scale-[0.96]"
+              aria-label="Fechar notificações"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="flex rounded-2xl border border-soft bg-surface-muted p-1">
+            <button
+              type="button"
+              onClick={() => setNotificationView("unread")}
+              className={`min-h-10 flex-1 rounded-xl text-xs font-semibold transition active:scale-[0.98] ${
+                notificationView === "unread"
+                  ? "bg-purple-500 text-white shadow-lg shadow-purple-950/25"
+                  : "text-muted"
+              }`}
+            >
+              Não lidas
+              {unreadCount > 0 && (
+                <span className="ml-1 text-[0.65rem] opacity-75">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setNotificationView("read")}
+              className={`min-h-10 flex-1 rounded-xl text-xs font-semibold transition active:scale-[0.98] ${
+                notificationView === "read"
+                  ? "bg-purple-500 text-white shadow-lg shadow-purple-950/25"
+                  : "text-muted"
+              }`}
+            >
+              Lidas
+              {readCount > 0 && (
+                <span className="ml-1 text-[0.65rem] opacity-75">
+                  {readCount}
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+
+        <ScrollArea
+          className="min-h-0 flex-1 overflow-hidden"
+          contentClassName="relative px-5 py-4"
+        >
+          {loading && notifications.length === 0 ? (
+            <div className="py-8 text-center text-sm text-muted">
+              Carregando...
+            </div>
+          ) : filteredNotifications.length === 0 ? (
+            <EmptyState
+              icon={Bell}
+              title={
+                notificationView === "unread"
+                  ? "Nenhuma notificação não lida"
+                  : "Nenhuma notificação lida"
+              }
+              description={
+                notificationView === "unread"
+                  ? "Quando houver novos avisos ou sugestões, eles aparecerão aqui."
+                  : "Notificações já lidas, aceitas ou recusadas aparecerão nesta aba."
+              }
+            />
+          ) : (
+            <div className="space-y-3">
+              {filteredNotifications.map((notification) => (
+                <NotificationItem
+                  key={notification.id}
+                  notification={notification}
+                  onRead={handleRead}
+                  onAccept={handleAccept}
+                  onReject={handleReject}
+                />
+              ))}
+
+              {shouldShowLoadMore && (
+                <button
+                  type="button"
+                  onClick={loadMore}
+                  className="mt-1 inline-flex min-h-10 w-full items-center justify-center rounded-2xl border border-soft bg-surface-muted px-4 text-xs font-semibold text-muted active:scale-[0.98]"
+                >
+                  Ver mais
+                </button>
+              )}
+            </div>
+          )}
+        </ScrollArea>
+      </div>
+    </div>
   );
 }

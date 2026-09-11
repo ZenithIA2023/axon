@@ -167,7 +167,11 @@ export default function NewRoutineSheet({ isOpen, onClose, onCreated }: Props) {
         title={stepTitle}
         subtitle={`Passo ${step} de 3`}
         ariaLabel="Criar nova rotina"
-        maxHeightClassName="max-h-[92vh]"
+        maxHeightClassName="max-h-[92vh] lg:max-h-[82dvh]"
+        className="overflow-x-hidden lg:inset-x-auto lg:bottom-auto lg:left-1/2 lg:right-auto lg:top-1/2 lg:w-[min(680px,calc(100vw-2rem))] lg:max-w-[680px] lg:-translate-x-1/2 lg:-translate-y-1/2 lg:rounded-[2rem]"
+        contentClassName="overflow-x-hidden bg-white text-slate-950 lg:px-6 lg:py-5 dark:bg-[#181421] dark:text-white"
+        footerClassName="overflow-x-hidden border-t border-slate-200/80 bg-white/95 lg:px-6 lg:pb-5 lg:pt-4 dark:border-white/10 dark:bg-[#181421]/95"
+        surfaceClassName="overflow-x-hidden bg-white text-slate-950 shadow-soft lg:bg-white/98 lg:shadow-[0_30px_110px_rgba(93,64,126,0.18)] dark:bg-[#181421] dark:text-white dark:lg:bg-[#181421]/95 dark:lg:shadow-[0_30px_110px_rgba(0,0,0,0.55)]"
         footer={
           <SheetFooter
             step={step}
