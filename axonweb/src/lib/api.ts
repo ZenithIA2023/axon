@@ -527,13 +527,70 @@ export function getRoutineConsistency() {
   );
 }
 
+export interface ReportRoutineRow {
+  routine_id: string;
+  name: string;
+  /** Um estado por dia do período, na ordem. */
+  days: ("done" | "missed" | "not_scheduled")[];
+  days_done: number;
+  days_total: number;
+  percent: number;
+}
+
+export interface ReportObjective {
+  id: string;
+  title: string;
+  progress: number;
+  /** Quanto avançou dentro do período, em pontos percentuais. */
+  delta: number;
+}
+
+export interface ReportPlanVsReal {
+  label: string;
+  done: number;
+  planned: number;
+  /** "h" formata como horas; ausente = contagem simples. */
+  unit?: string;
+}
+
+export interface ReportWellbeingScore {
+  key: "mood" | "productivity" | "sleep_quality";
+  label: string;
+  /** 0–5, uma casa decimal. */
+  value: number;
+}
+
+// Espelha o dict montado por report_service._collect_period_data. Relatórios
+// gerados antes desta versão têm só os campos antigos, por isso os novos são
+// opcionais — o frontend esconde o card correspondente quando faltam.
 export interface PeriodReportData {
   period_start: string;
   period_end: string;
+  generated_at?: string;
   avg_completion_rate: number;
+  /** null quando não há período anterior com que comparar. */
+  completion_delta?: number | null;
+  completed_items?: number;
+  total_items?: number;
+  /** Sem fórmula validada: vem null e o card não é desenhado. */
+  time_saved_minutes?: number | null;
   most_productive_day: { date: string; completion_rate: number } | null;
+  plan_vs_real?: ReportPlanVsReal[];
+  objectives?: ReportObjective[];
+  routines?: ReportRoutineRow[];
+  /** Campo antigo, mantido para relatórios já gravados. */
   routine_consistency: RoutineConsistency[];
   key_tasks: { defined: number; done: number };
+  sleep?: {
+    avg_minutes: number;
+    delta_minutes: number | null;
+    avg_sleep_time: string | null;
+    avg_wake_time: string | null;
+  } | null;
+  wellbeing?: {
+    scores: ReportWellbeingScore[];
+    logs_count: number;
+  } | null;
 }
 
 export interface PeriodReport {

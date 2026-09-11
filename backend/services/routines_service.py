@@ -236,6 +236,95 @@ def weekly_consistency(user_id: str, today: date) -> list[dict]:
     return consistency_for_range(user_id, week_start, today)
 
 
+def daily_grid_for_range(user_id: str, start: date, end: date) -> list[dict]:
+    """
+    Como `consistency_for_range`, mais o estado de CADA dia do intervalo —
+    é o que o relatório desenha como grade de quadradinhos.
+
+    `days` tem um item por dia entre start e end (inclusive), em ordem:
+      - "done"          → todas as tarefas daquele dia concluídas
+      - "missed"        → tinha tarefa gerada e ficou pendente
+      - "not_scheduled" → a rotina não gerou tarefa naquele dia (dia pausado,
+                          fora dos days_of_week, ou anterior à criação)
+
+    Rotinas sem nenhuma tarefa no intervalo são omitidas, igual à função
+    original.
+    """
+    routines = (
+        supabase.table("routines")
+        .select("id, name")
+        .eq("user_id", user_id)
+        .eq("status", "active")
+        .execute()
+    ).data or []
+
+    if not routines:
+        return []
+
+    routine_ids = [r["id"] for r in routines]
+
+    items = (
+        supabase.table("routine_items")
+        .select("id, routine_id")
+        .in_("routine_id", routine_ids)
+        .execute()
+    ).data or []
+
+    if not items:
+        return []
+
+    routine_by_item: dict[str, str] = {it["id"]: it["routine_id"] for it in items}
+
+    tasks = (
+        supabase.table("tasks")
+        .select("scheduled_date, status, routine_item_id")
+        .eq("user_id", user_id)
+        .in_("routine_item_id", list(routine_by_item.keys()))
+        .gte("scheduled_date", str(start))
+        .lte("scheduled_date", str(end))
+        .execute()
+    ).data or []
+
+    by_routine: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
+    for t in tasks:
+        rid = routine_by_item.get(t.get("routine_item_id"))
+        if rid is None:
+            continue
+        by_routine[rid][str(t["scheduled_date"])].append(t["status"])
+
+    span = [start + timedelta(days=i) for i in range((end - start).days + 1)]
+
+    out = []
+    for r in routines:
+        by_date = by_routine.get(r["id"])
+        if not by_date:
+            continue
+
+        days = []
+        for day in span:
+            statuses = by_date.get(str(day))
+            if not statuses:
+                days.append("not_scheduled")
+            elif all(s == "done" for s in statuses):
+                days.append("done")
+            else:
+                days.append("missed")
+
+        days_total = len(by_date)
+        days_done = sum(1 for s in by_date.values() if all(x == "done" for x in s))
+
+        out.append({
+            "routine_id": r["id"],
+            "name": r["name"],
+            "days": days,
+            "days_done": days_done,
+            "days_total": days_total,
+            "percent": round(days_done / days_total * 100) if days_total else 0,
+        })
+
+    return out
+
+
 # --- Exclusão de tarefas futuras geradas ---------------------------------
 
 def _delete_future_tasks(user_id: str, item_ids: list[str], today: date) -> None:
