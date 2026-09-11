@@ -14,6 +14,7 @@ import ResetPassword from "../pages/ResetPassword";
 import AuthCallback from "../pages/AuthCallback";
 import DeepLinkHandler from "../components/auth/DeepLinkHandler";
 import NativeShell from "../components/layout/NativeShell";
+import { BottomNavGate } from "../components/layout/BottomNav";
 
 // Onboarding
 import QuestionnaireIntro from "../pages/QuestionnaireIntro";
@@ -54,6 +55,9 @@ export default function App() {
       <NativeShell />
 
       <NotificationToastProvider />
+
+      {/* Navegação do app instalado. Na web fica a Sidebar de cada página. */}
+      <BottomNavGate />
 
       <Routes>
         {/* Public — no app instalado a landing não faz sentido: quem abre já
