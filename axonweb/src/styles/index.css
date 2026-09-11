@@ -480,6 +480,31 @@ body {
   bottom: calc(0.75rem + env(safe-area-inset-bottom));
 }
 
+/* ---------------------------------------------------------------------------
+   BARRA DE NAVEGAÇÃO INFERIOR (app instalado)
+   ---------------------------------------------------------------------------
+   A barra existe SÓ no app empacotado (iOS/Android) — ver BottomNavGate. Por
+   isso todas as regras vivem sob `.is-native`: no navegador a navegação
+   continua sendo a Sidebar, e reservar espaço para uma barra que não existe
+   deixaria um vão morto no rodapé de toda página.
+
+   A barra é `fixed`, então não herda o padding de safe area que o <main> ganha
+   acima: precisa se afastar da barra do sistema por conta própria. */
+.is-native [data-bottom-nav] {
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+}
+
+/* O conteúdo das páginas precisa terminar ACIMA da barra, senão o último card
+   fica embaixo dela. A altura da barra (bolinha de 3.75rem + o padding do
+   container) mais uma folga de respiro. Só as telas roláveis: as de altura
+   travada (Chat, Focus) escondem a barra ou tratam o rodapé por conta própria.
+
+   `:has()` limita a regra às telas que REALMENTE têm a barra: sem isso, login,
+   onboarding e a landing ganhariam a folga sem precisar dela. */
+.is-native body:has([data-bottom-nav]) main:not(.h-\[100dvh\]) {
+  padding-bottom: calc(5.75rem + env(safe-area-inset-bottom));
+}
+
 /* O "puxar além do fim" do WebView denuncia que é um site dentro de uma
    janela. Num app instalado ele não existe. */
 .is-native html,
