@@ -91,6 +91,7 @@ export default function Report() {
           ) : (
             <ReportFullView
               periodType={report.period_type}
+              data={report.data}
               narrative={report.narrative}
             />
           )}

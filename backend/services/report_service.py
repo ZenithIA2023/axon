@@ -76,6 +76,272 @@ def _key_task_stats(user_id: str, start: date, end: date) -> dict:
     return {"defined": len(rows), "done": done}
 
 
+# ── Bem-estar (registro diário) ────────────────────────────────────────────
+
+def _avg(values: list[float]) -> float | None:
+    return sum(values) / len(values) if values else None
+
+
+def _minutes_of(clock: str | None) -> int | None:
+    """'23:40' / '23:40:00' → minutos desde a meia-noite."""
+    if not clock:
+        return None
+    try:
+        hh, mm = str(clock).split(":")[:2]
+        return int(hh) * 60 + int(mm)
+    except (ValueError, TypeError):
+        return None
+
+
+def _avg_clock(clocks: list[str | None]) -> str | None:
+    """
+    Horário médio em 'HH:MM'. Horários noturnos cruzam a meia-noite: 23h40 e
+    00h20 têm média 00h00, não 12h00. Por isso os valores antes das 12h são
+    somados como se fossem do dia seguinte quando a lista é predominantemente
+    noturna (heurística usada só para dormir; acordar nunca cruza).
+    """
+    minutes = [m for m in (_minutes_of(c) for c in clocks) if m is not None]
+    if not minutes:
+        return None
+
+    # Se há valores nos dois extremos do dia, trata os da madrugada como +24h.
+    if any(m >= 18 * 60 for m in minutes) and any(m < 6 * 60 for m in minutes):
+        minutes = [m + 24 * 60 if m < 6 * 60 else m for m in minutes]
+
+    avg = round(sum(minutes) / len(minutes)) % (24 * 60)
+    return f"{avg // 60:02d}:{avg % 60:02d}"
+
+
+def _wellbeing_stats(user_id: str, start: date, end: date) -> tuple[dict | None, dict | None]:
+    """
+    (sono, bem-estar) a partir dos registros diários do período.
+
+    Dias marcados como folga (`is_day_off`) entram normalmente: o usuário
+    descansou, mas dormiu e teve humor — o que não vale para eles é a leitura
+    de produtividade, e essa já é média só dos dias que a preencheram.
+
+    Qualquer um dos dois pode vir None quando não há registro utilizável, e o
+    frontend simplesmente não desenha o card correspondente.
+    """
+    rows = (
+        supabase.table("daily_logs")
+        .select("hours_slept, sleep_time, wake_time, sleep_rating, "
+                "mood_rating, productivity_rating")
+        .eq("user_id", user_id)
+        .gte("date", str(start))
+        .lte("date", str(end))
+        .execute()
+    ).data or []
+
+    if not rows:
+        return None, None
+
+    hours = [float(r["hours_slept"]) for r in rows if r.get("hours_slept") is not None]
+    avg_hours = _avg(hours)
+
+    sleep = None
+    if avg_hours is not None:
+        sleep = {
+            "avg_minutes": round(avg_hours * 60),
+            # Preenchido depois, comparando com o período anterior.
+            "delta_minutes": None,
+            "avg_sleep_time": _avg_clock([r.get("sleep_time") for r in rows]),
+            "avg_wake_time": _avg_clock([r.get("wake_time") for r in rows]),
+        }
+
+    scores = []
+    for key, column, label in (
+        ("mood", "mood_rating", "Humor"),
+        ("productivity", "productivity_rating", "Produtividade"),
+        ("sleep_quality", "sleep_rating", "Qualidade do sono"),
+    ):
+        avg = _avg([float(r[column]) for r in rows if r.get(column) is not None])
+        if avg is not None:
+            scores.append({"key": key, "label": label, "value": round(avg, 1)})
+
+    wellbeing = {"scores": scores, "logs_count": len(rows)} if scores else None
+    return sleep, wellbeing
+
+
+def _avg_sleep_minutes(user_id: str, start: date, end: date) -> int | None:
+    """Média de sono (minutos) de um período — usada para o delta do card."""
+    rows = (
+        supabase.table("daily_logs")
+        .select("hours_slept")
+        .eq("user_id", user_id)
+        .gte("date", str(start))
+        .lte("date", str(end))
+        .execute()
+    ).data or []
+
+    hours = [float(r["hours_slept"]) for r in rows if r.get("hours_slept") is not None]
+    avg = _avg(hours)
+    return round(avg * 60) if avg is not None else None
+
+
+# ── Planejado x realizado ──────────────────────────────────────────────────
+
+def _duration_hours(task: dict) -> float:
+    """
+    Duração agendada da tarefa em horas. Sem start/end definidos a tarefa não
+    ocupa faixa na agenda e conta como 0 — só entram no total as que o usuário
+    de fato colocou num horário.
+    """
+    start_min = _minutes_of(task.get("start_time"))
+    end_min = _minutes_of(task.get("end_time"))
+    if start_min is None or end_min is None:
+        return 0.0
+    if end_min <= start_min:  # vira o dia (ex.: 23:00 → 00:30)
+        end_min += 24 * 60
+    return (end_min - start_min) / 60
+
+
+def _plan_vs_real(user_id: str, start: date, end: date) -> list[dict]:
+    """
+    Três linhas: horas agendadas x cumpridas, tarefas e eventos.
+
+    "Realizado" = status 'done'. Para eventos isso inclui os auto-concluídos
+    ao passar do horário, que é como o resto do app os trata.
+    Rotinas (task_type 'routine') ficam de fora: elas têm o próprio card.
+    """
+    rows = (
+        supabase.table("tasks")
+        .select("task_type, status, start_time, end_time")
+        .eq("user_id", user_id)
+        .in_("task_type", ["task", "event"])
+        .gte("scheduled_date", str(start))
+        .lte("scheduled_date", str(end))
+        .execute()
+    ).data or []
+
+    if not rows:
+        return []
+
+    hours_planned = hours_done = 0.0
+    tasks_planned = tasks_done = 0
+    events_planned = events_done = 0
+
+    for row in rows:
+        done = row.get("status") == "done"
+        hours = _duration_hours(row)
+
+        hours_planned += hours
+        if done:
+            hours_done += hours
+
+        if row.get("task_type") == "event":
+            events_planned += 1
+            events_done += 1 if done else 0
+        else:
+            tasks_planned += 1
+            tasks_done += 1 if done else 0
+
+    out = []
+    if hours_planned > 0:
+        out.append({
+            "label": "Horas registradas",
+            "done": round(hours_done, 1),
+            "planned": round(hours_planned, 1),
+            "unit": "h",
+        })
+    if tasks_planned > 0:
+        out.append({"label": "Tarefas", "done": tasks_done, "planned": tasks_planned})
+    if events_planned > 0:
+        out.append({"label": "Eventos", "done": events_done, "planned": events_planned})
+    return out
+
+
+# ── Objetivos ──────────────────────────────────────────────────────────────
+
+def _objectives_progress(user_id: str, start: date, end: date) -> list[dict]:
+    """
+    Progresso dos objetivos ao FIM do período, e quanto avançou dentro dele.
+
+    `objectives.progress` guarda só o valor de agora, sem histórico — mas o
+    progresso é sempre (etapas concluídas / total), e cada etapa concluída tem
+    `completed_at`. Dá para reconstruir o valor em qualquer data contando
+    quantas etapas já estavam concluídas até lá:
+        progress(d) = concluídas até d / total de etapas
+
+    Isso assume que o conjunto de etapas não mudou durante o período (etapa
+    criada depois dilui o passado). É aproximação aceitável — o alternativa
+    seria uma tabela de snapshot diário por objetivo, que não existe.
+
+    Objetivos sem etapa nenhuma ficam de fora: progresso 0/0 não diz nada.
+    """
+    objectives = (
+        supabase.table("objectives")
+        .select("id, title, progress, status")
+        .eq("user_id", user_id)
+        .execute()
+    ).data or []
+
+    if not objectives:
+        return []
+
+    by_id = {o["id"]: o for o in objectives}
+
+    # Uma consulta para todas as etapas de todos os objetivos (evita N+1).
+    steps = (
+        supabase.table("tasks")
+        .select("objective_id, status, completed_at")
+        .eq("user_id", user_id)
+        .in_("objective_id", list(by_id.keys()))
+        .execute()
+    ).data or []
+
+    if not steps:
+        return []
+
+    start_iso = str(start)
+    end_iso = str(end)
+
+    totals: dict[str, int] = {}
+    done_by_end: dict[str, int] = {}
+    done_before: dict[str, int] = {}
+
+    for step in steps:
+        oid = step.get("objective_id")
+        if oid not in by_id:
+            continue
+
+        totals[oid] = totals.get(oid, 0) + 1
+        if step.get("status") != "done":
+            continue
+
+        # Sem completed_at (concluída antes da coluna existir) conta como
+        # anterior ao período: não infla o avanço deste relatório.
+        stamp = str(step.get("completed_at") or "")[:10]
+        if not stamp or stamp < start_iso:
+            done_before[oid] = done_before.get(oid, 0) + 1
+            done_by_end[oid] = done_by_end.get(oid, 0) + 1
+        elif stamp <= end_iso:
+            done_by_end[oid] = done_by_end.get(oid, 0) + 1
+
+    out = []
+    for oid, total in totals.items():
+        if total == 0:
+            continue
+
+        progress = round(done_by_end.get(oid, 0) / total * 100)
+        previous = round(done_before.get(oid, 0) / total * 100)
+
+        # Objetivo que não existia/não andou e segue em 0: não vale a linha.
+        if progress == 0 and previous == 0:
+            continue
+
+        out.append({
+            "id": oid,
+            "title": by_id[oid]["title"],
+            "progress": progress,
+            "delta": progress - previous,
+        })
+
+    # Quem mais avançou primeiro; empate pelo maior progresso.
+    out.sort(key=lambda o: (o["delta"], o["progress"]), reverse=True)
+    return out
+
+
 def _collect_period_data(user_id: str, start: date, end: date, tz_name: str) -> dict:
     # No disparo pontual (20h do último dia), `end` é HOJE e ainda não tem
     # snapshot congelado — os dias anteriores vêm do snapshot e `end` é
@@ -85,16 +351,22 @@ def _collect_period_data(user_id: str, start: date, end: date, tz_name: str) -> 
     # snapshot: usar live_day_stats aqui traria os números de hoje rotulados
     # como se fossem do último dia do período.
     today = datetime.now(user_tz_service.zone(tz_name)).date()
-    end_is_today = end >= today
 
-    frozen_end = end - timedelta(days=1) if end_is_today else end
+    # Nenhuma métrica olha para o futuro: no disparo normal `end` é hoje, mas
+    # num catch-up (ou num período ainda em curso) `end` pode estar à frente.
+    # Sem este corte, dias que ainda não chegaram entrariam no "planejado" e
+    # afundariam toda taxa de cumprimento.
+    data_end = min(end, today)
+    end_is_today = data_end >= today
+
+    frozen_end = data_end - timedelta(days=1) if end_is_today else data_end
     snapshots = (
         daily_stats_service.get_range(user_id, str(start), str(frozen_end))
         if frozen_end >= start else []
     )
 
     if end_is_today:
-        live_today = daily_stats_service.live_day_stats(user_id, end, tz_name)
+        live_today = daily_stats_service.live_day_stats(user_id, data_end, tz_name)
         if live_today["total"] > 0:
             snapshots = snapshots + [live_today]
 
@@ -103,13 +375,52 @@ def _collect_period_data(user_id: str, start: date, end: date, tz_name: str) -> 
         if snapshots else 0
     )
 
+    completed_items = sum(s["completed_items"] for s in snapshots)
+    total_items = sum(s["total"] for s in snapshots)
+
+    # Período anterior de mesma duração, imediatamente antes deste. Serve para
+    # os dois "vs. período anterior" do relatório (conclusão e sono).
+    span_days = (end - start).days + 1
+    prev_end = start - timedelta(days=1)
+    prev_start = prev_end - timedelta(days=span_days - 1)
+
+    prev_snapshots = daily_stats_service.get_range(
+        user_id, str(prev_start), str(prev_end)
+    )
+    completion_delta = None
+    if prev_snapshots:
+        prev_rate = round(
+            sum(s["completion_rate"] for s in prev_snapshots) / len(prev_snapshots)
+        )
+        completion_delta = avg_completion_rate - prev_rate
+
+    sleep, wellbeing = _wellbeing_stats(user_id, start, data_end)
+    if sleep is not None:
+        prev_sleep = _avg_sleep_minutes(user_id, prev_start, prev_end)
+        if prev_sleep is not None:
+            sleep["delta_minutes"] = sleep["avg_minutes"] - prev_sleep
+
     return {
         "period_start": str(start),
         "period_end": str(end),
+        "generated_at": str(today),
         "avg_completion_rate": avg_completion_rate,
+        "completion_delta": completion_delta,
+        "completed_items": completed_items,
+        "total_items": total_items,
+        # Sem fórmula validada (completed_at marca quando o usuário MARCOU, não
+        # quando terminou). O frontend esconde o card quando vem None.
+        "time_saved_minutes": None,
         "most_productive_day": _most_productive_day(snapshots),
-        "routine_consistency": routines_service.consistency_for_range(user_id, start, end),
-        "key_tasks": _key_task_stats(user_id, start, end),
+        "plan_vs_real": _plan_vs_real(user_id, start, data_end),
+        "objectives": _objectives_progress(user_id, start, data_end),
+        "routines": routines_service.daily_grid_for_range(user_id, start, data_end),
+        # Mantido para não quebrar relatórios/consumidores antigos que leem
+        # este campo; a grade nova é `routines`.
+        "routine_consistency": routines_service.consistency_for_range(user_id, start, data_end),
+        "key_tasks": _key_task_stats(user_id, start, data_end),
+        "sleep": sleep,
+        "wellbeing": wellbeing,
     }
 
 

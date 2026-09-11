@@ -2,10 +2,10 @@
  * Relatório completo (semanal/mensal) — layout novo, baseado na referência
  * visual de 3 seções: Resumo, Progresso e Bem-estar.
  *
- * ETAPA ATUAL: alimentado por `REPORT_MOCK` (dados falsos) para aprovação do
- * visual. O backend ainda não calcula a maioria destes campos — ver
- * reportMock.ts. Cada seção já trata ausência de dado (null / lista vazia),
- * então ligar no backend real é trocar a origem do `data`.
+ * Os dados vêm de `weekly_reports.data`, montado por
+ * report_service._collect_period_data. Relatórios gerados antes desta versão
+ * não têm os campos novos, então cada seção só desenha quando o dado existe —
+ * nunca quebra num relatório antigo.
  *
  * Na referência as 3 seções ficam lado a lado; aqui elas empilham no mobile e
  * viram colunas a partir de lg. O conteúdo é o mesmo nos dois casos.
@@ -15,7 +15,6 @@ import { useId, type ReactNode } from "react";
 import {
   Check,
   CalendarDays,
-  Lightbulb,
   Moon,
   Share2,
   Smile,
@@ -26,12 +25,7 @@ import {
   BarChart3,
 } from "lucide-react";
 
-import {
-  REPORT_MOCK,
-  REPORT_MOCK_NARRATIVE,
-  type ReportMockData,
-  type ReportRoutineRow,
-} from "./reportMock";
+import type { PeriodReportData, ReportRoutineRow } from "../../lib/api";
 
 /* ------------------------------------------------------------------ */
 /* Formatação                                                          */
@@ -122,15 +116,22 @@ function PanelHeader({
   icon: Icon,
   title,
   subtitle,
+  iconClassName = "border-purple-400/35 bg-purple-500/10 text-[#cf8aff]",
+  iconFilled = false,
 }: {
   icon: typeof Star;
   title: string;
   subtitle?: string;
+  /** Cores do selo do ícone. Padrão: roxo; tarefas-chave usam âmbar. */
+  iconClassName?: string;
+  iconFilled?: boolean;
 }) {
   return (
     <div className="mb-3 flex items-start gap-2.5">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-purple-400/35 bg-purple-500/10 text-[#cf8aff]">
-        <Icon className="h-4 w-4" />
+      <div
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border ${iconClassName}`}
+      >
+        <Icon className={`h-4 w-4 ${iconFilled ? "fill-current" : ""}`} />
       </div>
       <div className="min-w-0">
         <p className="text-sm font-black leading-tight text-white">{title}</p>
@@ -177,7 +178,7 @@ function SummarySection({
   narrative,
   periodLabel,
 }: {
-  data: ReportMockData;
+  data: PeriodReportData;
   narrative: string;
   periodLabel: string;
 }) {
@@ -192,9 +193,11 @@ function SummarySection({
         <h2 className="mt-1 text-[2rem] sm:text-[2.5rem] font-black leading-[1.06] tracking-[-0.03em] text-white">
           {formatLongRange(data.period_start, data.period_end)}
         </h2>
-        <p className="mt-1 text-[0.7rem] text-[#bfb7d2]">
-          Gerado em {formatShortDay(data.generated_at)}
-        </p>
+        {data.generated_at && (
+          <p className="mt-1 text-[0.7rem] text-[#bfb7d2]">
+            Gerado em {formatShortDay(data.generated_at)}
+          </p>
+        )}
 
         {/* Resumo do Axon: fica ENTRE o título e a porcentagem. Sem corte —
             a narrativa vem do Claude e aparece inteira; o tamanho é limitado
@@ -213,11 +216,11 @@ function SummarySection({
           das tarefas concluídas
         </p>
 
-        {data.completion_delta !== null && (
+        {data.completion_delta != null && (
           <div className="mt-3">
             <DeltaChip positive={data.completion_delta > 0}>
               {data.completion_delta > 0 ? "+" : ""}
-              {data.completion_delta} p.p. vs. período anterior
+              {data.completion_delta}% vs. período anterior
             </DeltaChip>
           </div>
         )}
@@ -231,7 +234,7 @@ function SummarySection({
       {/* Tempo poupado: PLACEHOLDER VISUAL. A métrica não tem fórmula
           validada (completed_at marca quando o usuário marcou, não quando
           terminou), então o card é rotulado como estimativa. */}
-      {data.time_saved_minutes !== null && (
+      {data.time_saved_minutes != null && (
         <div className="relative mb-3 flex items-center gap-4 overflow-hidden rounded-[1.5rem] border border-purple-400/70 bg-[radial-gradient(ellipse_at_top_right,#aa27fc,#4c099d_55%,#26094d)] p-5 shadow-[inset_0_1px_0_#ffffff30]">
           <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-purple-400/35 bg-purple-500/10 text-[#cf8aff]">
             <Zap className="h-9 w-9 fill-current" />
@@ -251,12 +254,12 @@ function SummarySection({
       )}
 
       {/* O que foi marcado x o que foi feito. */}
-      {data.plan_vs_real.length > 0 && (
+      {!!data.plan_vs_real?.length && (
         <Panel>
           <PanelHeader icon={Target} title="Planejado x realizado" />
 
           <div className="space-y-3">
-            {data.plan_vs_real.map((row) => {
+            {data.plan_vs_real!.map((row) => {
               const pct = percentOf(row.done, row.planned);
               return (
                 <div key={row.label}>
@@ -359,23 +362,30 @@ function RoutineDaysGrid({ routines }: { routines: ReportRoutineRow[] }) {
   );
 }
 
-function ProgressSection({ data }: { data: ReportMockData }) {
-  const topRoutine = [...data.routines].sort((a, b) => b.percent - a.percent)[0];
+function ProgressSection({ data }: { data: PeriodReportData }) {
+  const topRoutine = [...(data.routines ?? [])].sort((a, b) => b.percent - a.percent)[0];
 
   return (
     <section className="min-w-0">
       <SectionTitle index="02" label="Progresso" />
 
       <div className="space-y-3">
-        {/* Tarefas-chave (prioridades do período). */}
+        {/* Tarefas-chave do período. O âmbar é o mesmo que marca a tarefa
+            como chave no Planning e no Dashboard (fill-amber-400), para o
+            usuário reconhecer o código de cor. */}
         {data.key_tasks.defined > 0 && (
           <Panel>
-            <PanelHeader icon={Star} title="Prioridades do período" />
+            <PanelHeader
+              icon={Star}
+              iconClassName="border-amber-400/35 bg-amber-400/10 text-amber-400"
+              iconFilled
+              title="Tarefas-chave concluídas"
+            />
 
-            {/* As bolinhas NUNCA quebram de linha: a trilha encolhe cada uma
+            {/* Os quadrados NUNCA quebram de linha: a trilha encolhe cada um
                 (min 0.9rem) até caber na largura disponível, em vez de jogar
-                as últimas para baixo em telas estreitas ou com muitas
-                prioridades definidas. */}
+                os últimos para baixo em telas estreitas ou com muitas
+                tarefas-chave definidas. */}
             <div className="flex items-center justify-between gap-3">
               <p className="shrink-0 text-2xl font-black leading-none text-white">
                 {data.key_tasks.done} de {data.key_tasks.defined}
@@ -387,16 +397,18 @@ function ProgressSection({ data }: { data: ReportMockData }) {
                   return (
                     <span
                       key={i}
-                      className={`flex aspect-square min-w-[0.9rem] max-w-[1.5rem] flex-1 items-center justify-center rounded-full border ${
+                      className={`flex aspect-square min-w-[0.9rem] max-w-[1.5rem] flex-1 items-center justify-center rounded-[0.3rem] border ${
                         done
-                          ? "border-purple-400/35 bg-gradient-to-r from-[#9525f5] to-[#c15aff]"
+                          ? "border-amber-400 bg-amber-400"
                           : "border-white/15 bg-[#39374d]"
                       }`}
-                      aria-label={done ? "Prioridade concluída" : "Prioridade pendente"}
+                      aria-label={
+                        done ? "Tarefa-chave concluída" : "Tarefa-chave pendente"
+                      }
                     >
                       {done && (
                         <Check
-                          className="h-2/3 w-2/3 text-white"
+                          className="h-2/3 w-2/3 text-[#3d2c00]"
                           strokeWidth={3}
                         />
                       )}
@@ -413,12 +425,12 @@ function ProgressSection({ data }: { data: ReportMockData }) {
         )}
 
         {/* Objetivos: progresso atual + quanto avançou no período. */}
-        {data.objectives.length > 0 && (
+        {!!data.objectives?.length && (
           <Panel>
             <PanelHeader icon={Target} title="Progresso dos seus objetivos" />
 
             <div className="space-y-3">
-              {data.objectives.map((objective) => (
+              {data.objectives!.map((objective) => (
                 <div key={objective.id}>
                   <div className="mb-1.5 flex items-baseline justify-between gap-2">
                     <p className="min-w-0 break-words text-sm text-[#e4dff1]">
@@ -431,7 +443,7 @@ function ProgressSection({ data }: { data: ReportMockData }) {
                   <ProgressBar percent={objective.progress} />
                   {objective.delta > 0 && (
                     <p className="mt-1 text-right text-[0.65rem] font-semibold text-emerald-300">
-                      +{objective.delta} p.p. no período
+                      +{objective.delta}% no período
                     </p>
                   )}
                 </div>
@@ -441,11 +453,11 @@ function ProgressSection({ data }: { data: ReportMockData }) {
         )}
 
         {/* Constância nas rotinas. */}
-        {data.routines.length > 0 && (
+        {!!data.routines?.length && (
           <Panel>
             <PanelHeader icon={CalendarDays} title="Suas rotinas" />
 
-            <RoutineDaysGrid routines={data.routines} />
+            <RoutineDaysGrid routines={data.routines!} />
 
             {topRoutine && (
               <div className="mt-3 flex items-center gap-2.5 rounded-[1.1rem] border border-white/15 bg-[#39374d] p-3">
@@ -507,7 +519,7 @@ function SleepIllustration() {
   );
 }
 
-function WellbeingSection({ data }: { data: ReportMockData }) {
+function WellbeingSection({ data }: { data: PeriodReportData }) {
   const scoreIcon = {
     mood: Smile,
     productivity: BarChart3,
@@ -542,24 +554,30 @@ function WellbeingSection({ data }: { data: ReportMockData }) {
             </div>
 
             <SleepIllustration />
-            <div className="mt-1 flex items-start justify-between gap-3 border-t border-white/15 pt-3">
-              <div>
-                <p className="text-[0.68rem] text-[#bfb7d2]">
-                  Horário médio de dormir
-                </p>
-                <p className="mt-0.5 text-lg font-black leading-none text-white">
-                  {formatClock(data.sleep.avg_sleep_time)}
-                </p>
+            {(data.sleep.avg_sleep_time || data.sleep.avg_wake_time) && (
+              <div className="mt-1 flex items-start justify-between gap-3 border-t border-white/15 pt-3">
+                <div>
+                  <p className="text-[0.68rem] text-[#bfb7d2]">
+                    Horário médio de dormir
+                  </p>
+                  <p className="mt-0.5 text-lg font-black leading-none text-white">
+                    {data.sleep.avg_sleep_time
+                      ? formatClock(data.sleep.avg_sleep_time)
+                      : "—"}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[0.68rem] text-[#bfb7d2]">
+                    Horário médio de acordar
+                  </p>
+                  <p className="mt-0.5 text-lg font-black leading-none text-white">
+                    {data.sleep.avg_wake_time
+                      ? formatClock(data.sleep.avg_wake_time)
+                      : "—"}
+                  </p>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-[0.68rem] text-[#bfb7d2]">
-                  Horário médio de acordar
-                </p>
-                <p className="mt-0.5 text-lg font-black leading-none text-white">
-                  {formatClock(data.sleep.avg_wake_time)}
-                </p>
-              </div>
-            </div>
+            )}
           </Panel>
         )}
 
@@ -592,18 +610,6 @@ function WellbeingSection({ data }: { data: ReportMockData }) {
           </Panel>
         )}
 
-        {/* Descoberta do Axon. */}
-        {data.discovery && (
-          <div className="rounded-[1.5rem] border border-purple-400/35 bg-purple-500/10 p-4">
-            <div className="mb-2 flex items-center gap-2">
-              <Lightbulb className="h-4 w-4 text-[#cf8aff]" />
-              <p className="text-xs font-black text-[#cf8aff]">
-                Uma descoberta do Axon
-              </p>
-            </div>
-            <p className="text-sm leading-6 text-white">{data.discovery}</p>
-          </div>
-        )}
       </div>
     </section>
   );
@@ -615,13 +621,13 @@ function WellbeingSection({ data }: { data: ReportMockData }) {
 
 export function ReportFullView({
   periodType,
-  data = REPORT_MOCK,
-  narrative = REPORT_MOCK_NARRATIVE,
+  data,
+  narrative,
   onShare,
 }: {
   periodType: "weekly" | "monthly";
-  data?: ReportMockData;
-  narrative?: string;
+  data: PeriodReportData;
+  narrative: string;
   /** Sem handler, o botão de compartilhar não aparece. */
   onShare?: () => void;
 }) {
