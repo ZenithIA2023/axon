@@ -17,6 +17,7 @@ _MAX_HISTORY = 50
 _load_perfil = chat_context.load_perfil
 _load_conversation_type = chat_context.load_conversation_type
 _stream_and_save = chat_context.stream_and_save
+_assert_conversation_owned = chat_context.assert_conversation_owned
 
 
 @router.post("/message")
@@ -56,43 +57,6 @@ def chat_message(
     )
 
 
-@router.get("/debug/test")
-def debug_test():
-    """Endpoint público de teste."""
-    return {"status": "ok", "message": "Backend está funcionando"}
-
-
-@router.get("/debug/perfil")
-def debug_perfil(current_user: dict = Depends(get_current_user)):
-    """Endpoint de debug para ver o que está sendo carregado do perfil."""
-    user_id = current_user["id"]
-
-    profile_res = (
-        supabase.table("profiles")
-        .select("*")
-        .eq("id", user_id)
-        .single()
-        .execute()
-    )
-    profile_data = profile_res.data or {}
-
-    answers_res = (
-        supabase.table("respostas")
-        .select("pergunta, alternativa")
-        .eq("user_id", user_id)
-        .execute()
-    )
-    respostas = answers_res.data or []
-
-    perfil = _load_perfil(user_id)
-
-    return {
-        "profile_data": profile_data,
-        "respostas": respostas,
-        "perfil_carregado": perfil,
-    }
-
-
 @router.post("", response_model=ChatResponse)
 @chat_limiter.limit("30/minute")
 def chat(
@@ -116,6 +80,7 @@ def chat(
 
     base_row = {"user_id": user_id}
     if body.conversation_id:
+        _assert_conversation_owned(body.conversation_id, user_id)
         base_row["conversation_id"] = body.conversation_id
 
     supabase.table("messages").insert([

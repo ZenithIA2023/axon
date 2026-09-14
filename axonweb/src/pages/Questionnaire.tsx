@@ -442,26 +442,10 @@ export default function Questionnaire() {
 
     const logged = api.isLoggedIn();
 
-    console.log(
-      "[questionario] isLoggedIn:",
-      logged,
-      "| respostas:",
-      respostas,
-      "| sono:",
-      qualidade_sono,
-      "| sched:",
-      schedule_type
-    );
-
     try {
       const result = logged
         ? await api.classifyAndSave(respostas, qualidade_sono, schedule_type)
         : await api.classify(respostas, qualidade_sono, schedule_type);
-
-      console.log(
-        "[questionario] salvo com sucesso. cronotipo:",
-        result.cronotipo
-      );
 
       localStorage.setItem("axon_chronotype", result.cronotipo);
 

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import GoogleAuthButton from "../components/auth/GoogleAuthButton";
+import AuthGlow from "../components/auth/AuthGlow";
 import * as api from "../lib/api";
 
 // ===========================================================================
@@ -236,7 +237,12 @@ export default function Signup() {
                   Termos de Uso
                 </a>{" "}
                 e a{" "}
-                <a href="#" className="font-black text-[#6d28d9] dark:text-[#d8b4fe] hover:text-[#7b2cbf] dark:text-[#d8b4fe]">
+                <a
+                  href="https://axonapp.tech/legal/privacidade.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-black text-[#6d28d9] dark:text-[#d8b4fe] hover:text-[#7b2cbf] dark:text-[#d8b4fe]"
+                >
                   Política de Privacidade
                 </a>
                 .
@@ -305,17 +311,6 @@ function SignupLogo() {
           className="h-12 w-12 -rotate-45 object-contain"
         />
       </Link>
-    </div>
-  );
-}
-
-function AuthGlow() {
-  return (
-    <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div className="absolute left-1/2 top-[-14rem] h-[30rem] w-[30rem] -translate-x-1/2 rounded-full bg-[#7b2cbf]/60 blur-[120px]" />
-      <div className="absolute bottom-[-18rem] left-[-12rem] h-[30rem] w-[30rem] rounded-full bg-[#7b2cbf]/32 blur-[120px]" />
-      <div className="absolute bottom-[-16rem] right-[-12rem] h-[30rem] w-[30rem] rounded-full bg-[#7b2cbf]/22 blur-[120px]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:22px_22px] opacity-[0.1]" />
     </div>
   );
 }

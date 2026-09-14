@@ -28,15 +28,42 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 _extra_origins = [u.strip() for u in os.getenv("CORS_ORIGINS", "").split(",") if u.strip()]
 _origins = list({FRONTEND_URL, "http://localhost:5173"} | set(_extra_origins))
 
+# Só em desenvolvimento: cobre os subdomínios do GitHub Codespaces sem depender de env vars.
+# Em produção fica None — qualquer Codespace conseguiria fazer requests com credenciais (SEC-001).
+_dev_origin_regex = r"https://[^.]+\.app\.github\.dev" if _env == "development" else None
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
-    # Cobre todos os subdomínios do GitHub Codespaces sem depender de env vars do processo
-    allow_origin_regex=r"https://[^.]+\.app\.github\.dev",
+    allow_origin_regex=_dev_origin_regex,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-Timezone"],
 )
+
+
+# Cabeçalhos de segurança em toda resposta. Esta é uma API JSON (não serve HTML),
+# então o conjunto é enxuto: sem CSP (não protege JSON e só arriscaria quebrar o
+# /docs em dev). O HSTS só entra em produção — em localhost forçaria HTTPS e
+# atrapalharia o desenvolvimento.
+_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "X-Frame-Options": "DENY",
+}
+
+
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    for name, value in _SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+    if _env != "development":
+        response.headers.setdefault(
+            "Strict-Transport-Security",
+            "max-age=31536000; includeSubDomains",
+        )
+    return response
 
 app.include_router(classify.router)
 app.include_router(conversations.router)

@@ -153,6 +153,26 @@ def load_perfil(user_id: str, tz_header: str | None = None) -> dict:
     }
 
 
+def assert_conversation_owned(conversation_id: str, user_id: str) -> None:
+    """Garante que a conversa pertence ao usuário antes de gravar mensagens nela.
+
+    Sem isso, um cliente poderia mandar o `conversation_id` de outra pessoa e
+    inserir mensagens na conversa alheia (SEC-006): a linha em `messages` carrega
+    o `user_id` do atacante mas o `conversation_id` da vítima.
+    """
+    from fastapi import HTTPException
+
+    res = (
+        supabase.table("conversations")
+        .select("id")
+        .eq("id", conversation_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada")
+
+
 def load_conversation_type(conversation_id: str | None, user_id: str) -> str:
     """Descobre o conversation_type da conversa atual (regular por padrão)."""
     if not conversation_id:
@@ -192,6 +212,8 @@ def stream_and_save(
     `voice=True` também vem da conversa por voz: tira as tools de exclusão da
     lista oferecida ao modelo (ver agent_tools.tools_for_conversation).
     """
+    assert_conversation_owned(conversation_id, user_id)
+
     response_text = ""
     try:
         for chunk in claude_service.stream_chat_with_tools(

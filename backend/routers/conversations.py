@@ -34,26 +34,47 @@ def _to_response(conv: dict, last_message: str | None, message_count: int) -> Co
     )
 
 
-def _load_last_message_and_count(conversation_id: str) -> tuple[str | None, int]:
-    msgs_res = (
+def _load_messages_batch(
+    conversation_ids: list[str],
+) -> dict[str, tuple[str | None, int]]:
+    """Última mensagem e contagem de TODAS as conversas da página em 1 query.
+
+    Antes cada conversa disparava 2 queries (última msg + count), o clássico
+    N+1: uma página de 8 conversas custava ~17 idas ao banco (~105ms cada).
+    Aqui uma única query traz as mensagens dos ids da página ordenadas por data;
+    em memória a primeira de cada conversa é a última mensagem e o tamanho do
+    grupo é a contagem. O volume por conversa é pequeno (dezenas de linhas)."""
+    if not conversation_ids:
+        return {}
+
+    res = (
         supabase.table("messages")
-        .select("content, role, created_at")
-        .eq("conversation_id", conversation_id)
+        .select("conversation_id, content, created_at, role")
+        .in_("conversation_id", conversation_ids)
         .order("created_at", desc=True)
-        .limit(1)
-        .execute()
-    )
-    msgs = msgs_res.data or []
-    last_message = msgs[0]["content"] if msgs else None
-
-    count_res = (
-        supabase.table("messages")
-        .select("id", count="exact")
-        .eq("conversation_id", conversation_id)
         .execute()
     )
 
-    return last_message, count_res.count or 0
+    # A mensagem do usuário e a resposta do assistente são inseridas no MESMO
+    # created_at, então "a mais recente" empata. A ordem entre linhas de mesmo
+    # timestamp é indefinida no Postgres, então desempatamos aqui: no empate, a
+    # do assistente é a última fala da conversa. (O código antigo pegava uma
+    # das duas ao acaso — variava entre requests.)
+    last_seen: dict[str, dict] = {}
+    counts: dict[str, int] = {}
+    for row in res.data or []:
+        cid = row["conversation_id"]
+        counts[cid] = counts.get(cid, 0) + 1
+        prev = last_seen.get(cid)
+        if prev is None:
+            last_seen[cid] = row
+        elif row["created_at"] == prev["created_at"] and row["role"] == "assistant":
+            last_seen[cid] = row
+
+    return {
+        cid: (last_seen.get(cid, {}).get("content"), counts.get(cid, 0))
+        for cid in conversation_ids
+    }
 
 
 @router.get("", response_model=list[ConversationResponse])
@@ -91,16 +112,16 @@ def list_conversations(
     res = query.execute()
     conversations = res.data or []
 
-    result = []
-
     # O Canal do Axon só entra na 1ª página e apenas quando não há filtro por
     # projeto específico (ele nunca pertence a um projeto).
-    if offset == 0 and project_id is None:
-        last_message, message_count = _load_last_message_and_count(axon_direct_conv["id"])
-        result.append(_to_response(axon_direct_conv, last_message, message_count))
+    include_axon = offset == 0 and project_id is None
+    ordered = ([axon_direct_conv] if include_axon else []) + conversations
 
-    for conv in conversations:
-        last_message, message_count = _load_last_message_and_count(conv["id"])
+    msgs_by_conv = _load_messages_batch([c["id"] for c in ordered])
+
+    result = []
+    for conv in ordered:
+        last_message, message_count = msgs_by_conv.get(conv["id"], (None, 0))
         result.append(_to_response(conv, last_message, message_count))
 
     return result
