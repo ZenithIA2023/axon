@@ -33,6 +33,7 @@ import type { ConversationData } from "../lib/api";
 import AppBackground from "../components/layout/AppBackground";
 import ConfirmDialog from "../components/ui/ConfirmDialog";
 import EmptyState from "../components/ui/EmptyState";
+import ChatListDrawer from "../components/chat/ChatListDrawer";
 
 /* ==========================================================================
  * Tipos e aliases locais
@@ -179,12 +180,19 @@ export default function Chat() {
    * -------------------------------------------------------------------------- */
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [createMode, setCreateMode] = useState<"conversation" | "project">(
+    "conversation"
+  );
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"all" | "projects">("all");
   const [visibleCount, setVisibleCount] = useState(8);
   const [showIntroCard, setShowIntroCard] = useState(false);
   const [lastAccessByConversation, setLastAccessByConversation] =
     useState<LastAccessMap>(() => readLastAccessMap());
+  // Mobile: qual conversa está aberta na tela (a gaveta troca este valor).
+  const [mobileConversationId, setMobileConversationId] = useState<string | null>(null);
+  const [isChatListOpen, setIsChatListOpen] = useState(false);
+
   const [desktopConversationId, setDesktopConversationId] = useState<string | null>(
     null
   );
@@ -467,6 +475,35 @@ export default function Chat() {
     setDesktopConversationId(defaultDesktopConversationId);
   }, [conversations, defaultDesktopConversationId, desktopConversationId]);
 
+  // Mobile: /chat abre direto na conversa principal do Axon. Se ela ainda não
+  // existir (conta nova), cai na conversa mais recente disponível.
+  useEffect(() => {
+    if (isDesktopChatViewport()) return;
+    if (loadingConversations) return;
+
+    const stillExists =
+      !!mobileConversationId &&
+      conversations.some(
+        (conversation) =>
+          conversation.id === mobileConversationId && !conversation.archived
+      );
+
+    if (stillExists) return;
+
+    const fallback =
+      axonDirectConversation ??
+      sortConversationsByRecent(
+        conversations.filter((conversation) => !conversation.archived)
+      )[0];
+
+    setMobileConversationId(fallback?.id ?? null);
+  }, [
+    axonDirectConversation,
+    conversations,
+    loadingConversations,
+    mobileConversationId,
+  ]);
+
   /* --------------------------------------------------------------------------
    * Último acesso do usuário em uma conversa
    * -------------------------------------------------------------------------- */
@@ -489,14 +526,19 @@ export default function Chat() {
       return;
     }
 
-    navigate(`/chat/${conversationId}`);
+    // No mobile a conversa troca dentro da própria tela /chat.
+    setMobileConversationId(conversationId);
   }
 
   /* --------------------------------------------------------------------------
    * Criação de conversa/projeto
    * -------------------------------------------------------------------------- */
-  function openCreateConversationModal(projectId?: string | null) {
+  function openCreateConversationModal(
+    projectId?: string | null,
+    mode: "conversation" | "project" = "conversation"
+  ) {
     setCreateConversationProjectId(projectId ?? null);
+    setCreateMode(mode);
     setIsCreateModalOpen(true);
   }
 
@@ -679,210 +721,46 @@ export default function Chat() {
     <main className="relative h-[100dvh] overflow-hidden bg-app text-primary">
       <AppBackground />
 
-      <div className="relative z-10 flex h-full flex-col px-4 pb-4 pt-5 lg:hidden">
-        {/* Header fixo: retorno ao dashboard, criação rápida e menu lateral. */}
-        <header className="mb-4 flex shrink-0 items-center justify-between">
-          <button
-            type="button"
-            onClick={() => navigate("/dashboard")}
-            className="flex items-center gap-3 text-left transition active:scale-[0.98]"
-          >
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-accent-soft bg-accent-soft text-accent shadow-card">
-              <img
-                src="/axon-logo.svg"
-                alt="Axon"
-                className="h-8 w-8 object-contain"
-              />
-            </div>
-
-            <div>
-              <p className="text-sm font-semibold text-primary">Chat</p>
-              <p className="text-xs text-muted">Conversas com o Axon</p>
-            </div>
-          </button>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() =>
-                openCreateConversationModal(
-                  view === "projects" ? selectedProjectId : null
-                )
-              }
-              className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--accent-strong)] text-white shadow-card transition active:scale-[0.96]"
-              aria-label="Nova conversa ou projeto"
-            >
-              <Plus className="h-5 w-5" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsSidebarOpen(true)}
-              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-soft bg-surface-muted text-secondary backdrop-blur-2xl transition active:scale-[0.96]"
-              aria-label="Abrir menu"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
+      {/* ----------------------------------------------------------------
+        * Mobile: /chat É a conversa. O histórico saiu do caminho principal
+        * e virou a gaveta lateral, aberta pelo ícone do canto esquerdo.
+        * ---------------------------------------------------------------- */}
+      <div className="relative z-10 h-full lg:hidden">
+        {mobileConversationId ? (
+          <ChatConversationPanel
+            key={mobileConversationId}
+            conversationId={mobileConversationId}
+            onOpenChatList={() => setIsChatListOpen(true)}
+            onCreateConversation={() => openCreateConversationModal(null)}
+            onOpenSidebar={() => setIsSidebarOpen(true)}
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center px-6">
+            <p className="text-sm text-muted">
+              {loadingConversations
+                ? "Abrindo sua conversa com o Axon..."
+                : "Nenhuma conversa disponível."}
+            </p>
           </div>
-        </header>
-
-        {showIntroCard && <ChatIntroCard onHide={hideIntroCard} />}
-
-        <ChatSearchPanel
-          search={search}
-          view={view}
-          isInsideProject={view === "projects" && Boolean(selectedProjectId)}
-          onSearchChange={setSearch}
-          onViewChange={setView}
-        />
-
-        <ScrollArea className="min-h-0 flex-1" contentClassName="pr-1 pt-1 pb-8">
-          {/* Lista principal: muda entre conversas, projetos e conversas do projeto selecionado. */}
-          <section className="space-y-3">
-            {loadingConversations || (view === "projects" && loadingProjects) ? (
-              <div className="rounded-[2rem] border border-soft bg-surface-elevated p-5 text-center shadow-card backdrop-blur-2xl">
-                <p className="text-sm text-muted">
-                  {view === "projects"
-                    ? "Carregando projetos..."
-                    : "Carregando conversas..."}
-                </p>
-              </div>
-            ) : view === "projects" ? (
-              selectedProjectId && selectedProject ? (
-                <>
-
-                  {selectedProject && (
-                    <SelectedProjectHeader
-                      project={selectedProject}
-                      conversationCount={activeConversationList.length}
-                      onBack={() => setSelectedProjectId(null)}
-                      onCreateConversation={() =>
-                        openCreateConversationModal(selectedProject.id)
-                      }
-                    />
-                  )}
-
-                  {activeConversationList.length === 0 ? (
-                    <EmptyState
-                      icon={MessageCircle}
-                      title="Nenhuma conversa neste projeto"
-                      description="Quando conversas forem adicionadas a este projeto, elas aparecerão aqui."
-                      actionLabel="Criar conversa"
-                      onAction={() => {
-                        if (selectedProjectId) {
-                          openCreateConversationModal(selectedProjectId);
-                        }
-                      }}
-                    />
-                  ) : (
-                    <>
-                      {visibleConversations.map((conversation) => (
-                        <ConversationCard
-                          key={conversation.id}
-                          conversation={conversation}
-                          lastAccessedAt={lastAccessByConversation[conversation.id]}
-                          onClick={() => openConversation(conversation.id)}
-                        />
-                      ))}
-
-                      {hasMoreConversations && (
-                        <button
-                          type="button"
-                          onClick={() => setVisibleCount((current) => current + 8)}
-                          className="mt-2 inline-flex min-h-12 w-full items-center justify-center rounded-2xl border border-soft bg-surface-muted px-5 text-sm font-semibold text-secondary backdrop-blur-2xl transition active:scale-[0.98]"
-                        >
-                          Ver mais conversas
-                        </button>
-                      )}
-                    </>
-                  )}
-                </>
-              ) : filteredProjects.length === 0 ? (
-                <EmptyState
-                  icon={Briefcase}
-                  title="Nenhum projeto encontrado"
-                  description="Crie projetos para reunir conversas relacionadas em um mesmo contexto."
-                  actionLabel="Criar projeto"
-                  onAction={() => openCreateConversationModal(null)}
-                />
-              ) : (
-                filteredProjects.map((project) => {
-                  const localCount = projectConversations.filter(
-                    (conversation) => getConversationProjectId(conversation) === project.id
-                  ).length;
-
-                  const count = project.conversation_count ?? localCount;
-
-                  return (
-                    <ProjectFolderCard
-                      key={project.id}
-                      project={project}
-                      count={count}
-                      onClick={() => setSelectedProjectId(project.id)}
-                      onCreateConversation={() => openCreateConversationModal(project.id)}
-                      onEdit={() => setProjectToEdit(project)}
-                      onDelete={() => setProjectToDelete(project)}
-                    />
-                  );
-                })
-              )
-            ) : activeConversationList.length === 0 && !axonDirectConversation ? (
-              <EmptyState
-                icon={MessageCircle}
-                title="Nenhuma conversa solta encontrada"
-                description="Conversas que pertencem a projetos aparecem apenas na aba Projetos."
-                actionLabel="Criar conversa"
-                onAction={() => openCreateConversationModal(null)}
-              />
-            ) : (
-              <>
-                {axonDirectConversation && (
-                  <div className="space-y-3">
-                    <AxonDirectConversationCard
-                      conversation={axonDirectConversation}
-                      lastAccessedAt={
-                        lastAccessByConversation[axonDirectConversation.id]
-                      }
-                      onClick={() => openConversation(axonDirectConversation.id)}
-                    />
-
-                    {visibleConversations.length > 0 && (
-                      <div className="flex items-center gap-3 px-1">
-                        <div className="h-px flex-1 bg-[var(--border-soft)]" />
-
-                        <span className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-soft">
-                          Conversas regulares
-                        </span>
-
-                        <div className="h-px flex-1 bg-[var(--border-soft)]" />
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {visibleConversations.map((conversation) => (
-                  <ConversationCard
-                    key={conversation.id}
-                    conversation={conversation}
-                    lastAccessedAt={lastAccessByConversation[conversation.id]}
-                    onClick={() => openConversation(conversation.id)}
-                  />
-                ))}
-
-                {hasMoreConversations && (
-                  <button
-                    type="button"
-                    onClick={() => setVisibleCount((current) => current + 8)}
-                    className="mt-2 inline-flex min-h-12 w-full items-center justify-center rounded-2xl border border-soft bg-surface-muted px-5 text-sm font-semibold text-secondary backdrop-blur-2xl transition active:scale-[0.98]"
-                  >
-                    Ver mais conversas
-                  </button>
-                )}
-              </>
-            )}
-          </section>
-        </ScrollArea>
+        )}
       </div>
+
+      <ChatListDrawer
+        isOpen={isChatListOpen}
+        conversations={conversations}
+        projects={projects}
+        activeConversationId={mobileConversationId}
+        loading={loadingConversations}
+        onClose={() => setIsChatListOpen(false)}
+        onSelect={(id) => {
+          setMobileConversationId(id);
+          openConversation(id);
+        }}
+        onCreate={(projectId, mode) =>
+          openCreateConversationModal(projectId ?? null, mode)
+        }
+      />
+
 
       <div className="relative z-10 hidden h-full grid-cols-[360px_minmax(0,1fr)] gap-4 px-5 py-5 lg:grid xl:grid-cols-[390px_minmax(0,1fr)]">
         <aside className="flex min-h-0 flex-col overflow-hidden rounded-[2rem] border border-soft bg-surface-elevated text-primary shadow-soft backdrop-blur-2xl">
@@ -970,6 +848,7 @@ export default function Chat() {
       <CreateConversationModal
         isOpen={isCreateModalOpen}
         defaultProjectId={createConversationProjectId}
+        defaultMode={createMode}
         onClose={() => {
           setIsCreateModalOpen(false);
           setCreateConversationProjectId(null);
@@ -1424,12 +1303,14 @@ function DesktopChatEmptyPane({ onCreate }: { onCreate: () => void }) {
 function CreateConversationModal({
   isOpen,
   defaultProjectId,
+  defaultMode = "conversation",
   onClose,
   onCreated,
   onProjectCreated,
 }: {
   isOpen: boolean;
   defaultProjectId?: string | null;
+  defaultMode?: "conversation" | "project";
   onClose: () => void;
   onCreated: (conv: ConversationData) => void;
   onProjectCreated: (project: api.ChatProjectData) => void;
@@ -1451,14 +1332,14 @@ function CreateConversationModal({
   useEffect(() => {
     if (!isOpen) return;
 
-    setCreateMode("conversation");
+    setCreateMode(defaultProjectId ? "conversation" : defaultMode);
     setSelectedType(defaultProjectId ? "project" : "general");
     setTitle("");
     setProjectName("");
     setProjectDescription("");
     setFormError(null);
     setIsLoading(false);
-  }, [isOpen, defaultProjectId]);
+  }, [isOpen, defaultProjectId, defaultMode]);
 
   if (!isOpen) return null;
 
