@@ -13,6 +13,8 @@ import {
   Loader2,
   Menu,
   MoreVertical,
+  PanelLeft,
+  Plus,
   Send,
   Sparkles,
   Trash2,
@@ -181,6 +183,10 @@ type ChatConversationPanelProps = {
   embedded?: boolean;
   onBack?: () => void;
   onOpenSidebar?: () => void;
+  // No mobile a conversa é a própria tela /chat: o histórico vem de uma gaveta
+  // lateral e a criação acontece aqui no header, sem passar por uma lista.
+  onOpenChatList?: () => void;
+  onCreateConversation?: () => void;
 };
 
 export function ChatConversationPanel({
@@ -188,6 +194,8 @@ export function ChatConversationPanel({
   embedded = false,
   onBack,
   onOpenSidebar,
+  onOpenChatList,
+  onCreateConversation,
 }: ChatConversationPanelProps = {}) {
   const navigate = useNavigate();
   const { chatId } = useParams();
@@ -617,7 +625,20 @@ export function ChatConversationPanel({
         <header className="mb-4 shrink-0">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
-              {!embedded && (
+              {/* Mobile: a conversa É a tela, então o canto esquerdo abre o
+                  histórico em vez de voltar para uma lista que não existe. */}
+              {!embedded && onOpenChatList && (
+                <button
+                  type="button"
+                  onClick={onOpenChatList}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-soft bg-surface-muted text-secondary transition active:scale-[0.96]"
+                  aria-label="Abrir suas conversas"
+                >
+                  <PanelLeft className="h-5 w-5" />
+                </button>
+              )}
+
+              {!embedded && !onOpenChatList && (
                 <button
                   type="button"
                   onClick={handleBack}
@@ -628,66 +649,87 @@ export function ChatConversationPanel({
                 </button>
               )}
 
-              <div className="min-w-0">
-                <p className="truncate text-base font-black leading-tight tracking-[-0.035em] text-primary">
-                  {chatTitle}
-                </p>
-                <p className="truncate text-xs text-muted">
-                  Conversa com o Axon
-                </p>
-              </div>
+              {/* No mobile o título sai do header: a identidade já está no
+                  ícone, e o nome da conversa vive na gaveta. */}
+              {!onOpenChatList && (
+                <div className="min-w-0">
+                  <p className="truncate text-base font-black leading-tight tracking-[-0.035em] text-primary">
+                    {chatTitle}
+                  </p>
+                  <p className="truncate text-xs text-muted">
+                    Conversa com o Axon
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const ligando = !speech.enabled;
-                  speech.setEnabled(ligando);
-                  // Destravar o áudio precisa acontecer DENTRO do clique: o
-                  // navegador só libera som que nasce de um gesto do usuário.
-                  if (ligando) speech.warmup();
-                }}
-                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border shadow-card backdrop-blur-2xl transition active:scale-[0.96] ${
-                  speech.enabled
-                    ? "border-accent-soft bg-accent-soft text-accent"
-                    : "border-soft bg-surface-muted text-secondary"
-                }`}
-                aria-label={
-                  speech.enabled ? "Desativar leitura em voz alta" : "Ler respostas em voz alta"
-                }
-                aria-pressed={speech.enabled}
-                title={
-                  speech.enabled && !speech.available
-                    ? "Nenhuma voz disponível — veja Configurações › Voz do Axon"
-                    : undefined
-                }
-              >
-                {speech.enabled ? (
-                  <Volume2 className={`h-5 w-5 ${speech.speaking ? "animate-pulse" : ""}`} />
-                ) : (
-                  <VolumeX className="h-5 w-5" />
-                )}
-              </button>
+              {/* Mobile: apenas criar conversa e abrir o menu. As ações de voz
+                  e de conversa moram no menu de opções e na gaveta. */}
+              {onCreateConversation && (
+                <button
+                  type="button"
+                  onClick={onCreateConversation}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--accent-strong)] text-white transition active:scale-[0.96]"
+                  aria-label="Nova conversa"
+                >
+                  <Plus className="h-5 w-5" />
+                </button>
+              )}
 
-              <button
-                type="button"
-                onClick={() => navigate("/voz")}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-soft bg-surface-muted text-secondary shadow-card backdrop-blur-2xl transition active:scale-[0.96]"
-                aria-label="Conversar por voz"
-                title="Conversar por voz"
-              >
-                <AudioLines className="h-5 w-5" />
-              </button>
+              {!onOpenChatList && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const ligando = !speech.enabled;
+                      speech.setEnabled(ligando);
+                      // Destravar o áudio precisa acontecer DENTRO do clique: o
+                      // navegador só libera som que nasce de um gesto do usuário.
+                      if (ligando) speech.warmup();
+                    }}
+                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border shadow-card backdrop-blur-2xl transition active:scale-[0.96] ${
+                      speech.enabled
+                        ? "border-accent-soft bg-accent-soft text-accent"
+                        : "border-soft bg-surface-muted text-secondary"
+                    }`}
+                    aria-label={
+                      speech.enabled ? "Desativar leitura em voz alta" : "Ler respostas em voz alta"
+                    }
+                    aria-pressed={speech.enabled}
+                    title={
+                      speech.enabled && !speech.available
+                        ? "Nenhuma voz disponível — veja Configurações › Voz do Axon"
+                        : undefined
+                    }
+                  >
+                    {speech.enabled ? (
+                      <Volume2 className={`h-5 w-5 ${speech.speaking ? "animate-pulse" : ""}`} />
+                    ) : (
+                      <VolumeX className="h-5 w-5" />
+                    )}
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => setIsOptionsOpen(true)}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-soft bg-surface-muted text-secondary shadow-card backdrop-blur-2xl transition active:scale-[0.96]"
-                aria-label="Opções da conversa"
-              >
-                <MoreVertical className="h-5 w-5" />
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/voz")}
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-soft bg-surface-muted text-secondary shadow-card backdrop-blur-2xl transition active:scale-[0.96]"
+                    aria-label="Conversar por voz"
+                    title="Conversar por voz"
+                  >
+                    <AudioLines className="h-5 w-5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsOptionsOpen(true)}
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-soft bg-surface-muted text-secondary shadow-card backdrop-blur-2xl transition active:scale-[0.96]"
+                    aria-label="Opções da conversa"
+                  >
+                    <MoreVertical className="h-5 w-5" />
+                  </button>
+                </>
+              )}
 
               <button
                 type="button"
@@ -704,6 +746,19 @@ export function ChatConversationPanel({
         <ScrollArea className="min-h-0 flex-1" contentClassName="pr-1 pb-4">
           <div className="space-y-3 pb-4">
             {messages.length === 0 ? (
+              onOpenChatList ? (
+                // Mobile: a tela vazia é só o convite. Sem card, sem ícone —
+                // o que precisa de atenção é o campo de texto logo abaixo.
+                <div className="flex min-h-[56vh] flex-col items-center justify-center px-6 text-center">
+                  <h2 className="max-w-[16ch] text-2xl font-bold leading-tight text-primary">
+                    Envie qualquer mensagem para começar o Chat
+                  </h2>
+
+                  <p className="mt-3 text-sm text-muted">
+                    Axon está pronto para te ajudar
+                  </p>
+                </div>
+              ) : (
               <div className="flex min-h-[56vh] items-center justify-center">
                 <div className="relative w-full overflow-hidden rounded-[2rem] border border-soft bg-surface-elevated p-6 text-center text-primary shadow-soft backdrop-blur-2xl">
                   <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,var(--accent-soft),transparent_58%)]" />
@@ -724,6 +779,7 @@ export function ChatConversationPanel({
                   </div>
                 </div>
               </div>
+              )
             ) : (
               <>
                 {messages
@@ -747,8 +803,23 @@ export function ChatConversationPanel({
         <footer className="shrink-0 pt-3">
           <form
             onSubmit={(e) => handleSend(e)}
-            className="flex min-h-[58px] items-end gap-2 rounded-[1.7rem] border border-soft bg-surface-elevated p-2 shadow-soft backdrop-blur-2xl"
+            className={
+              onOpenChatList
+                ? "flex min-h-[58px] items-end gap-1 rounded-[1.9rem] bg-surface-muted p-2"
+                : "flex min-h-[58px] items-end gap-2 rounded-[1.7rem] border border-soft bg-surface-elevated p-2 shadow-soft backdrop-blur-2xl"
+            }
           >
+            {onOpenChatList && (
+              <button
+                type="button"
+                onClick={onCreateConversation}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted transition active:scale-[0.96]"
+                aria-label="Nova conversa"
+              >
+                <Plus className="h-5 w-5" />
+              </button>
+            )}
+
             <textarea
               value={message}
               onChange={(event) => setMessage(event.target.value)}
@@ -762,12 +833,23 @@ export function ChatConversationPanel({
                   handleSend();
                 }
               }}
-              placeholder="Mensagem para o Axon..."
+              placeholder={onOpenChatList ? "Mensagem Axon" : "Mensagem para o Axon..."}
               rows={1}
               className="max-h-28 min-h-[42px] flex-1 resize-none overflow-y-auto bg-transparent px-3 py-2 text-sm leading-6 text-primary outline-none placeholder:text-soft"
             />
 
-            {!message.trim() && voiceSession.available ? (
+            {/* Mobile: com o campo vazio, o ícone de voz leva para a conversa
+                falada com o Axon; ao digitar, o mesmo lugar vira Enviar. */}
+            {onOpenChatList && !message.trim() ? (
+              <button
+                type="button"
+                onClick={() => navigate("/voz")}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-secondary transition active:scale-[0.96]"
+                aria-label="Conversar por voz com o Axon"
+              >
+                <AudioLines className="h-5 w-5" />
+              </button>
+            ) : !onOpenChatList && !message.trim() && voiceSession.available ? (
               <VoiceButton
                 session={voiceSession}
                 disabled={isSending}
@@ -1181,18 +1263,12 @@ function MessageBubble({
   return (
     <div className={`animate-[messageIn_0.25s_ease-out] flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[84%] rounded-[1.45rem] px-4 py-3 text-sm leading-6 shadow-card ${
+        className={`rounded-[1.6rem] px-4 py-3 text-sm leading-6 ${
           isUser
-            ? "rounded-br-md bg-[var(--accent-strong)] text-white"
-            : "rounded-bl-md border border-soft bg-surface-elevated text-secondary backdrop-blur-2xl"
+            ? "max-w-[84%] rounded-br-lg bg-[var(--accent-strong)] font-medium text-white"
+            : "max-w-[94%] rounded-bl-lg bg-surface-muted text-primary"
         }`}
       >
-        {!isUser && (
-          <div className="mb-2 flex items-center gap-2">
-            <Brain className="h-3.5 w-3.5 text-accent" />
-            <p className="text-xs font-semibold text-accent">Axon</p>
-          </div>
-        )}
 
         {!isUser && message.tools && message.tools.length > 0 && (
           <div className="mb-2 flex flex-col gap-1.5">
