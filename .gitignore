@@ -27,3 +27,7 @@ keystore.properties
 
 # Claude Code: config pessoal fica local, skills vao pro repo
 .claude/settings.local.json
+
+# Dependências do package.json da raiz (só o concurrently para rodar front+back).
+# Estava versionado por engano: 3.886 arquivos de terceiros no repo.
+node_modules/

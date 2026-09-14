@@ -5,7 +5,9 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // `android/` guarda o build do Capacitor (bundles minificados copiados de dist/):
+  // lintar aquilo gerava 8 MB de saída sem nenhum erro nosso.
+  globalIgnores(['dist', 'android']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [
@@ -17,5 +19,10 @@ export default defineConfig([
       globals: globals.browser,
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
+  },
+  {
+    // Arquivos de configuração rodam no Node (process, __dirname), não no navegador.
+    files: ['*.config.js'],
+    languageOptions: { globals: { ...globals.browser, ...globals.node } },
   },
 ])

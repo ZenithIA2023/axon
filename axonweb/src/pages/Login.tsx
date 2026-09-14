@@ -5,45 +5,10 @@ import { AlertCircle, ArrowRight, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 
 import GoogleAuthButton from "../components/auth/GoogleAuthButton";
+import AuthGlow from "../components/auth/AuthGlow";
+import InputField from "../components/auth/InputField";
 import * as api from "../lib/api";
 import { BUILD_COMMIT } from "../lib/buildInfo";
-
-type InputFieldProps = {
-  icon: React.ElementType;
-  label: string;
-  type?: string;
-  placeholder?: string;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-};
-
-function InputField({
-  icon: Icon,
-  label,
-  type = "text",
-  placeholder,
-  value,
-  onChange,
-}: InputFieldProps) {
-  return (
-    <label className="block">
-      <span className="sr-only">{label}</span>
-
-      <div className="flex min-h-10 items-center gap-3 rounded-2xl border border-[#7b2cbf]/20 bg-[#fbf8ff] px-3.5 dark:border-white/10 dark:bg-[#191722] text-[#5b21b6] dark:text-white/78 transition focus-within:border-[#7b2cbf]/45 focus-within:bg-white dark:focus-within:border-[#a855f7]/45 dark:focus-within:bg-[#211c2d]">
-        <Icon className="h-4 w-4 shrink-0 text-[#7b2cbf] dark:text-[#d8b4fe]/85" />
-
-        <input
-          type={type}
-          placeholder={placeholder}
-          value={value}
-          onChange={onChange}
-          required
-          className="auth-input w-full bg-transparent text-[0.72rem] font-medium text-[#4c1d95] outline-none placeholder:text-[#7b2cbf]/42 dark:text-white/82 dark:placeholder:text-white/38"
-        />
-      </div>
-    </label>
-  );
-}
 
 type PasswordFieldProps = {
   label: string;
@@ -259,17 +224,6 @@ function LoginLogo() {
           className="h-12 w-12 -rotate-45 object-contain"
         />
       </Link>
-    </div>
-  );
-}
-
-function AuthGlow() {
-  return (
-    <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div className="absolute left-1/2 top-[-14rem] h-[30rem] w-[30rem] -translate-x-1/2 rounded-full bg-[#7b2cbf]/60 blur-[120px]" />
-      <div className="absolute bottom-[-18rem] left-[-12rem] h-[30rem] w-[30rem] rounded-full bg-[#7b2cbf]/32 blur-[120px]" />
-      <div className="absolute bottom-[-16rem] right-[-12rem] h-[30rem] w-[30rem] rounded-full bg-[#7b2cbf]/22 blur-[120px]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:22px_22px] opacity-[0.1]" />
     </div>
   );
 }

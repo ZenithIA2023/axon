@@ -369,30 +369,6 @@ export function updateTagPreferences(prefs: TagPreferences): Promise<TagPreferen
  * Dados do usuário atual e salvamento do resultado do questionário.
  * ========================================================================== */
 
-export interface UserProfile {
-  id: string;
-  email: string;
-  name?: string;
-  chronotype?: string;
-  chronotype_scores?: Record<string, number>;
-}
-
-export function getMe() {
-  return request<UserProfile>("/users/me");
-}
-
-// Usado após o questionário para persistir cronotipo, pontuação e respostas.
-export function saveChronotype(
-  chronotype: string,
-  scores: Record<string, number>,
-  answers: Record<string, string>
-) {
-  return request("/users/me/chronotype", {
-    method: "PUT",
-    body: JSON.stringify({ chronotype, scores, answers }),
-  });
-}
-
 export interface ClassifyResponse {
   cronotipo: string;
   pontos: Record<string, number>;
@@ -822,10 +798,6 @@ export function getNotifications(limit = 10, offset = 0) {
   return request<NotificationData[]>(
     `/notifications?limit=${limit}&offset=${offset}`
   );
-}
-
-export function getUnreadCount() {
-  return request<{ unread: number }>("/notifications/unread-count");
 }
 
 // Dispara a análise do backend para gerar possíveis sugestões/notificações.
