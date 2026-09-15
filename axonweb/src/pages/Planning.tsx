@@ -4994,12 +4994,14 @@ function EditPlanningItemModal({
           title: title.trim(),
           scheduled_date: date || undefined,
           end_date: isEvent ? endDate || date : undefined,
-          start_time: startTime || undefined,
-          end_time: endTime || undefined,
+          // null limpa o campo no banco (apagou o horário e salvou = sem horário);
+          // undefined deixa como está. Ver TaskUpdateInput em lib/api.ts.
+          start_time: startTime || null,
+          end_time: endTime || null,
           priority: isTask ? priority : undefined,
-          location: isEvent ? location || undefined : undefined,
+          location: isEvent ? location || null : undefined,
           recurrence: isRoutine ? recurrence : undefined,
-          description: description || undefined,
+          description: description || null,
           is_key_task: isTask ? isKeyTask : undefined,
           objective_id: isTask ? objectiveId : undefined,
         } as any

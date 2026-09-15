@@ -102,10 +102,26 @@ def list_for_task(user_id: str, task_id: str) -> list[dict]:
     return [_serialize(r) for r in (res.data or [])]
 
 
+def _assert_task_owned(user_id: str, task_id: str) -> None:
+    """A tarefa-mãe precisa ser do usuário. Sem isso dava para inserir subtarefas
+    em tarefas alheias conhecendo o UUID (C1 do relatório de segurança)."""
+    res = (
+        supabase.table("tasks")
+        .select("id")
+        .eq("id", task_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    if not res.data:
+        raise ValueError("Tarefa não encontrada")
+
+
 def create_subtask(user_id: str, task_id: str, data: dict) -> dict:
     title = (data.get("title") or "").strip()
     if not title:
         raise ValueError("O título da subtarefa é obrigatório")
+
+    _assert_task_owned(user_id, task_id)
 
     existing = (
         supabase.table("subtasks")

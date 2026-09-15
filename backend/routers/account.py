@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from auth_helper import get_current_user
 from services import account_service
+from limiter import limiter
 
 router = APIRouter(prefix="/account", tags=["account"])
 
@@ -22,8 +23,11 @@ def delete_account(user=Depends(get_current_user)):
         )
 
 
+# Público de propósito (fluxo de exclusão exigido pela Play Store), mas permite
+# descobrir e-mails de contas apagadas — o rate limit por IP é o freio.
 @router.get("/deletion-info")
-def deletion_info(email: str):
+@limiter.limit("10/minute")
+def deletion_info(request: Request, email: str):
     """
     Consulta opcional: informa se um e-mail está bloqueado e quando poderá ser reutilizado.
     Retorna 200 com can_reuse_at se bloqueado, ou 404 se liberado.

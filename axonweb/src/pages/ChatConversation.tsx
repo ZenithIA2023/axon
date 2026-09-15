@@ -246,14 +246,8 @@ export function ChatConversationPanel({
     if (!conversationId || conversationId === "axon-notifications") return;
 
     api
-      .getConversations()
-      .then((items) => {
-        const currentConversation = items.find(
-          (item) => item.id === conversationId
-        );
-
-        if (!currentConversation) return;
-
+      .getConversation(conversationId)
+      .then((currentConversation) => {
         setConversation(currentConversation);
         setChatTitle(currentConversation.title);
         setDraftTitle(currentConversation.title);

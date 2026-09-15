@@ -145,9 +145,24 @@ def _process_user(user: dict, now_utc: datetime) -> None:
     current_hhmm    = now_local.strftime("%H:%M")
     current_weekday = now_local.weekday()
 
+    # O job roda a cada 5 min e cada rodada processa todos os usuários em série.
+    # Comparar o minuto EXATO (`==`) perdia disparos de duas formas: horário
+    # configurado fora dos múltiplos de 5 (ex.: 08:37) nunca batia, e uma
+    # rodada que atrasasse pulava o minuto. Regra nova:
+    #   - lembretes (diário/semanal): disparam em qualquer rodada a partir do
+    #     horário, e o dedup por dia/semana LOCAL segura a duplicata;
+    #   - snapshot 00:10: janela curta (reconcile é idempotente, mas pesado);
+    #   - relatórios 20:00: janela curta — o catch_up das 09:00 já cobre
+    #     ausências longas, e gerar relatório chama o Claude (custo).
+    def _in_window(fire: str, minutes: int = 15) -> bool:
+        fh, fm = map(int, fire.split(":"))
+        ch, cm = map(int, current_hhmm.split(":"))
+        delta = (ch * 60 + cm) - (fh * 60 + fm)
+        return 0 <= delta < minutes
+
     # Fim do dia local: congela o snapshot de conclusão do dia que acabou e
     # carrega as pendentes. Roda independente das preferências de notificação.
-    if current_hhmm == _SNAPSHOT_FIRE_TIME:
+    if _in_window(_SNAPSHOT_FIRE_TIME):
         try:
             daily_stats_service.reconcile(user_id, tz_name, now_local.date())
         except Exception as e:
@@ -156,7 +171,7 @@ def _process_user(user: dict, now_utc: datetime) -> None:
     # Relatórios narrativos: todo domingo 20h local (semana que está
     # terminando hoje) e todo último dia do mês 20h local (mês que está
     # terminando hoje). O próprio dia do disparo entra no período.
-    if current_hhmm == _REPORT_FIRE_TIME:
+    if _in_window(_REPORT_FIRE_TIME):
         if current_weekday == _SUNDAY:
             try:
                 report_service.generate_weekly_report(user_id, tz_name)
@@ -175,7 +190,7 @@ def _process_user(user: dict, now_utc: datetime) -> None:
     # exato das 20h. Se estava fora (deploy, queda, ambiente de dev desligado),
     # aquele relatório nunca seria gerado. Uma vez por dia verificamos se o
     # período encerrado ficou sem relatório e geramos com atraso.
-    if current_hhmm == _REPORT_CATCHUP_TIME:
+    if _in_window(_REPORT_CATCHUP_TIME):
         try:
             generated = report_service.catch_up(user_id, tz_name)
             if generated:
@@ -200,8 +215,8 @@ def _process_user(user: dict, now_utc: datetime) -> None:
     daily_fire_time  = _daily_fire_time(user)
 
     # Semanal: dispara no dia + horário específico para semanal
-    if weekly_enabled and current_weekday == weekly_day and current_hhmm == weekly_fire_time:
-        if not notification_service.has_planning_reminder_this_week(user_id):
+    if weekly_enabled and current_weekday == weekly_day and current_hhmm >= weekly_fire_time:
+        if not notification_service.has_planning_reminder_this_week(user_id, tz_name):
             body = _WEEKLY_BODY.get(curve_key, _WEEKLY_BODY["intermediate"])
             notification_service.create_notification(
                 user_id=user_id,
@@ -212,8 +227,8 @@ def _process_user(user: dict, now_utc: datetime) -> None:
             print(f"[planning_scheduler] planning_weekly → user={user_id}", flush=True)
 
     # Diário: dispara todo dia no horário específico para diário
-    if daily_enabled and current_hhmm == daily_fire_time:
-        if not notification_service.has_planning_reminder_today(user_id):
+    if daily_enabled and current_hhmm >= daily_fire_time:
+        if not notification_service.has_planning_reminder_today(user_id, tz_name):
             body = _DAILY_BODY.get(curve_key, _DAILY_BODY["intermediate"])
             notification_service.create_notification(
                 user_id=user_id,

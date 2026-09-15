@@ -79,6 +79,7 @@ export default function Login() {
     try {
       const res = await api.login(email, password);
       api.saveSession(res, rememberMe);
+      void api.syncChronotypeFromProfile();
 
       if (res.has_chronotype) {
         navigate("/app-loading");

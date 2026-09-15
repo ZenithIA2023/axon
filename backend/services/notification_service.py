@@ -302,30 +302,45 @@ def mark_expired(user_id: str, notif_id: str) -> dict:
     return res.data[0] if res.data else {}
 
 
-def has_planning_reminder_today(user_id: str) -> bool:
-    """Verifica se já foi enviado lembrete de planejamento diário hoje (UTC)."""
-    today = datetime.now(timezone.utc).date().isoformat()
+def _local_day_start_utc(tz_name: str | None, days_back: int = 0) -> str:
+    """Meia-noite LOCAL do usuário (hoje, ou `days_back` dias atrás) em ISO UTC.
+
+    O dedup precisa usar o dia do usuário, não o UTC: para quem está em UTC-3,
+    o dia UTC vira às 21h locais — com dedup em UTC o lembrete podia sair de
+    novo à noite. `created_at` no banco é UTC, então convertemos a meia-noite
+    local para UTC antes de comparar."""
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo(tz_name) if tz_name else timezone.utc
+    local_now = datetime.now(tz)
+    local_midnight = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    local_midnight -= timedelta(days=days_back)
+    return local_midnight.astimezone(timezone.utc).isoformat()
+
+
+def has_planning_reminder_today(user_id: str, tz_name: str | None = None) -> bool:
+    """Já saiu lembrete diário no dia LOCAL do usuário?"""
     res = (
         supabase.table("notifications")
         .select("id", count="exact")
         .eq("user_id", user_id)
         .eq("type", "planning_daily")
-        .gte("created_at", f"{today}T00:00:00+00:00")
+        .gte("created_at", _local_day_start_utc(tz_name))
         .execute()
     )
     return (res.count or 0) > 0
 
 
-def has_planning_reminder_this_week(user_id: str) -> bool:
-    """Verifica se já foi enviado lembrete de planejamento semanal esta semana (segunda-feira UTC)."""
-    today = datetime.now(timezone.utc).date()
-    week_start = today - timedelta(days=today.weekday())
+def has_planning_reminder_this_week(user_id: str, tz_name: str | None = None) -> bool:
+    """Já saiu lembrete semanal na semana LOCAL do usuário (desde segunda)?"""
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo(tz_name) if tz_name else timezone.utc
+    weekday = datetime.now(tz).weekday()
     res = (
         supabase.table("notifications")
         .select("id", count="exact")
         .eq("user_id", user_id)
         .eq("type", "planning_weekly")
-        .gte("created_at", f"{week_start.isoformat()}T00:00:00+00:00")
+        .gte("created_at", _local_day_start_utc(tz_name, days_back=weekday))
         .execute()
     )
     return (res.count or 0) > 0

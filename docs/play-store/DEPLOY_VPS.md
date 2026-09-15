@@ -128,7 +128,7 @@ User=axon
 Group=axon
 WorkingDirectory=/opt/axon-app/backend
 EnvironmentFile=/opt/axon-app/backend/.env
-ExecStart=/opt/axon-app/backend/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000
+ExecStart=/opt/axon-app/backend/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips=127.0.0.1
 Restart=always
 RestartSec=5
 

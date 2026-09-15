@@ -67,7 +67,7 @@ scripts/            deploy.sh, build-apk.sh, build-release.sh
 ## 5. Regras de componentes
 
 - Uma página por rota em `src/pages/`. Subcomponentes que só uma página usa podem ficar no mesmo arquivo; quando a página passa de ~800 linhas, extraia para `src/components/<domínio>/`.
-- Componentes compartilhados de auth (fundo, logo, campos) devem viver em `src/components/auth/`, não copiados em cada página (hoje `AuthGlow`, `PasswordField`, `InputField` estão duplicados; não crie uma quarta cópia).
+- Componentes compartilhados de auth vivem em `src/components/auth/`, não copiados em cada página. `AuthGlow` (fundo luminoso) e `InputField` (campo com ícone, rótulo para leitor de tela) já foram extraídos para lá — importe-os, não os recopie. O `InputField` do `Signup.tsx` é uma variante deliberada (rótulo visível), não duplicata. `PasswordField` ainda tem cópias por página com diferenças reais; ao unificá-lo, confirme que são idênticas antes.
 - Estado de servidor vive na página que o carrega; não crie store global sem necessidade demonstrada.
 - Toda página autenticada deve checar `api.isLoggedIn()` no primeiro `useEffect` e redirecionar para `/login`. O `request()` em `api.ts` também redireciona em 401, mas a checagem local evita flash de conteúdo.
 - Limpe todo `setInterval`, `addEventListener` e listener nativo no cleanup do `useEffect`.
@@ -77,7 +77,7 @@ scripts/            deploy.sh, build-apk.sh, build-release.sh
 - `strict` está ligado e `tsc --noEmit` passa limpo. Mantenha assim: rode `npx tsc --noEmit -p axonweb/tsconfig.json` antes de concluir.
 - Proibido `any`, `@ts-ignore`, `@ts-expect-error` e `as unknown as` para silenciar erro. Se o tipo está errado, corrija o tipo. Os poucos `as any` que existem em `Goals.tsx` e `Planning.tsx` são dívida, não padrão.
 - Tipos das respostas da API vivem em `src/lib/api.ts`, ao lado da função que as busca. Se o backend mudar um campo, mude o tipo no mesmo commit.
-- Arquivos novos em `.tsx`/`.ts`. Os `.jsx` restantes (landing, `Button.jsx`, `Card.jsx`) são legado.
+- Arquivos novos em `.tsx`/`.ts`. Os `.jsx` restantes são legado (a landing e alguns componentes dela); não crie novos `.jsx`. O design system em JSX (`Button.jsx`, `Card.jsx`) foi removido por não ser usado — o padrão real é escrever botões e cards com classes Tailwind na própria tela (ver seção 11).
 
 ## 7. Nomenclatura
 
@@ -114,9 +114,10 @@ scripts/            deploy.sh, build-apk.sh, build-release.sh
 6. Rate limit em todo endpoint que custa dinheiro (IA, voz) ou que sofre brute force (auth). Use `limiter` (por IP) ou `chat_limiter` (por usuário).
 7. Dados pessoais não vão para logs. `print` de diagnóstico não inclui conteúdo de mensagens, notas ou e-mail.
 8. Endpoints de debug não existem em produção. Se precisar de um, condicione a `ENV == "development"`.
-9. CORS em produção lista só as origens reais (`FRONTEND_URL`, `CORS_ORIGINS`). A regex do Codespace só entra em desenvolvimento.
+9. CORS em produção lista só as origens reais (`FRONTEND_URL`, `CORS_ORIGINS`). A regex do Codespace (`*.app.github.dev`) só é ativada quando `ENV=development` — está assim em `main.py`, não reative em produção.
 10. Mensagens de erro para o usuário nunca incluem stack trace nem detalhe interno. `str(e)` de exceção só vai ao usuário quando é um `ValueError` de validação nossa.
 11. Não coloque secrets em `docs/` nem em `.env.example` (só placeholders).
+12. Headers de segurança (`X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, e `Strict-Transport-Security` em produção) são adicionados por middleware em `main.py`. Não os remova. Sem CSP de propósito: a API só serve JSON.
 
 ## 11. Design System
 
@@ -149,8 +150,9 @@ Tokens em `axonweb/src/styles/index.css` (`:root` claro, `.dark` escuro):
 
 - Uma query ao Supabase custa ~105ms. Nunca faça query em loop por item; busque em lote com `in_()` e agrupe em memória (ver `routines_service.list_routines` como modelo).
 - Não chame o Claude no caminho de abertura de tela sem cache. Padrão: cache em tabela (`axon_insights`, `axon_discoveries`, `weekly_reports`) com TTL.
-- Novas rotas no frontend devem ser `React.lazy` (quando o code splitting for adotado; ver P2 do relatório).
-- Imagens: WebP, no tamanho de exibição. Nada acima de ~150 KB em `src/assets`.
+- **VPN/rede distante distorce QUALQUER medição no Codespace.** O dev server serve cada módulo como um arquivo separado; com VPN (ex.: saindo pelo Canadá) cada ida e volta custa centenas de ms, e uma tela com dezenas de módulos vira dezenas de segundos. Antes de concluir que algo "está lento", confirme se há VPN ligada e prefira medir com `npm run preview` (build de produção) ou no domínio real.
+- **Code splitting por rota foi TESTADO E REVERTIDO (15/09/2026).** Com `React.lazy`, o bundle inicial caía de 1,64 MB para ~257 KB — mas a primeira visita a cada tela passava a baixar o código na hora do clique, e o app ficava até 7s parado na tela anterior. Medido lado a lado contra a versão sem lazy: a navegação era claramente pior. As rotas em `src/app/App.tsx` voltaram a ser `import` estático. Se for tentar de novo, resolva ANTES o feedback visual do clique e o prefetch das telas prováveis, e meça a navegação, não só o tamanho do bundle. Ressalva importante: a medição que motivou a reversão foi feita com VPN ligada (Canadá), o que amplifica muito o custo por requisição no dev server — em produção, servida do domínio real, a conta pode ser bem diferente.
+- Imagens: WebP **sem perda** (`lossless=True`), nunca com perda — uma conversão com perda degradou o mascote e foi rejeitada. Os mascotes da landing já estão convertidos (pixel idêntico ao PNG original, 577→258 KB). Os SVGs decorativos têm rasters embutidos em base64: encolha o raster (eles são exibidos com 32–64px) mantendo o SVG e seus filtros, em vez de extrair a imagem — extrair perde os filtros e o fundo transparente. A landing saiu de 2 MB para 608 KB assim.
 - Polling: um único lugar por tipo de dado. Antes de adicionar um `setInterval`, procure o que já existe (`NotificationToastProvider`, Dashboard).
 
 ## 14. Tratamento de erros

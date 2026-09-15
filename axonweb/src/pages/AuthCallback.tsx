@@ -30,6 +30,7 @@ export default function AuthCallback() {
       .exchangeGoogleSession(sessionCode)
       .then((session) => {
         api.saveSession(session);
+        void api.syncChronotypeFromProfile();
 
         if (session.has_chronotype) {
           navigate("/app-loading");

@@ -21,7 +21,8 @@ def create_subtask(task_id: str, body: SubtaskCreate, user=Depends(get_current_u
     try:
         return subtasks_service.create_subtask(user["id"], task_id, body.model_dump())
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        code = 404 if "não encontrada" in str(e) else 400
+        raise HTTPException(status_code=code, detail=str(e))
 
 
 @router.patch("/{subtask_id}", response_model=SubtaskResponse)

@@ -229,6 +229,29 @@ def delete_conversation(
     supabase.table("conversations").delete().eq("id", conversation_id).eq("user_id", user_id).execute()
 
 
+@router.get("/{conversation_id}", response_model=ConversationResponse)
+def get_conversation(
+    conversation_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Uma conversa pelo id. A tela da conversa aberta usava a listagem (limitada
+    a 8) só para achar título/projeto — fora das 8 mais recentes, o título
+    virava "Conversa" e "Mover para projeto" quebrava em silêncio."""
+    user_id = current_user["id"]
+    res = (
+        supabase.table("conversations")
+        .select("*")
+        .eq("id", conversation_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada")
+    conv = res.data[0]
+    last_message, message_count = _load_messages_batch([conv["id"]]).get(conv["id"], (None, 0))
+    return _to_response(conv, last_message, message_count)
+
+
 @router.get("/{conversation_id}/messages")
 def get_messages(
     conversation_id: str,

@@ -259,7 +259,9 @@ def get_chronotype_context(chronotype: str, hour: int) -> dict:
     block_idx = (hour * 60) // 90
     blocks = CHRONOTYPE_BLOCKS.get(chronotype, CHRONOTYPE_BLOCKS["intermediate"])
     level, _ = blocks[block_idx]
-    level_data = BLOCK_LEVELS[level]
+    # Defensivo: `level` vem da tabela fixa acima; um typo lá derrubaria o
+    # dashboard inteiro. Cai para foco_leve em vez de KeyError.
+    level_data = BLOCK_LEVELS.get(level) or BLOCK_LEVELS["foco_leve"]
     meta = CHRONOTYPE_META.get(chronotype, CHRONOTYPE_META["intermediate"])
     return {
         "energy": level_data["energy"],

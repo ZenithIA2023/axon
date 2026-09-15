@@ -1,1 +1,3 @@
-web: uvicorn main:app --host 0.0.0.0 --port $PORT
+# --proxy-headers: atrás de um proxy, sem isso o rate limit vê o IP do proxy
+# para todo mundo e vira um balde único compartilhado (A3 do relatório).
+web: uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"

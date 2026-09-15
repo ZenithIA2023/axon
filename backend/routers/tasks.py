@@ -41,7 +41,9 @@ def create_task(
             now=datetime.now(user_tz.zone(tz_name)),
         )
     except ValueError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # ValueError aqui é validação nossa (mensagem em português para o
+        # usuário), não falha interna — 400, não 500.
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.patch("/{task_id}", response_model=TaskResponse)
@@ -51,8 +53,11 @@ def update_task(
     current_user: dict = Depends(get_current_user),
 ):
     try:
+        # exclude_unset (não exclude_none): campo enviado como null LIMPA o valor
+        # no banco; campo omitido não é tocado. Com exclude_none, apagar o
+        # horário/descrição no modal e salvar não fazia nada — o valor "voltava".
         return tasks_service.update_task(
-            current_user["id"], task_id, body.model_dump(exclude_none=True)
+            current_user["id"], task_id, body.model_dump(exclude_unset=True)
         )
     except ValueError as e:
         detail = str(e)

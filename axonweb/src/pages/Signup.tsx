@@ -149,6 +149,7 @@ export default function Signup() {
     try {
       const res = await api.register(name, email, password);
       api.saveSession(res);
+      void api.syncChronotypeFromProfile();
       navigate("/questionnaire-intro");
     } catch (err: unknown) {
       setError(

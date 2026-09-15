@@ -44,7 +44,7 @@ Após a aprovação da auditoria, uma rodada de correções foi aplicada por ond
 | SEC-006 (posse de conversa) | `assert_conversation_owned()` criado em `chat_context.py` e chamado em `stream_and_save` (texto + voz) e no `/chat` legado, antes de inserir mensagens. |
 | SEC-004 (headers) | Middleware adiciona `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options` em toda resposta; `Strict-Transport-Security` só em produção. Sem CSP (API JSON). |
 | PERF-004 (N+1 conversas) | Substituído por 1 query em lote. Medido: 1865 ms → 237 ms (~8x). Bug latente de desempate por `created_at` igual também corrigido. |
-| PERF-001 (bundle) | Lazy loading por rota com `React.lazy` + `Suspense`. Bundle inicial caiu de 1,64 MB para ~257 KB; telas pesadas viraram chunks sob demanda. Confirmado no uso real. |
+| PERF-001 (bundle) | Lazy loading aplicado e depois **revertido** em 15/09: o bundle inicial caía para ~257 KB, mas a primeira visita a cada tela travava a navegação por até 7s. Medido lado a lado contra a versão anterior. Em vez disso, o peso da landing caiu 71% (2 MB → 608 KB) otimizando as imagens sem perda de qualidade. |
 | DEP-001 (react-router) | Atualizado 7.15.0 → 7.18.3. Os 4 CVEs high saíram do `npm audit`. |
 | DEP-002 (transitivas) | `npm audit fix` (sem `--force`) aplicado: 12 → 3 vulnerabilidades. |
 | ESLint | Passa a ignorar `android/` e `dist`; globais de Node nos arquivos de config. Lint roda limpo. |

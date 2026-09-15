@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, Moon, Sun } from "lucide-react";
 
 import { useTheme } from "../components/theme/ThemeProvider";
-import axonHappyWave from "../assets/axon/axon-happy-wave.png";
+import axonHappyWave from "../assets/axon/axon-happy-wave.webp";
 
 // ===========================================================================
 // CONTEÚDO DOS SLIDES
