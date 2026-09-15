@@ -241,6 +241,8 @@ def stream_and_save(
         ]).execute()
     except Exception as e:
         import traceback
-        traceback.print_exc()  # aparece no log do servidor para debug
-        yield f"data: {json.dumps({'text': f'\\n\\n⚠️ Erro interno: {e}'})}\n\n"
+        traceback.print_exc()  # detalhe só no log do servidor
+        # Ao cliente vai uma frase genérica: `str(e)` de exceção de lib pode
+        # carregar URL, payload ou stack — nada disso é para o usuário ver.
+        yield f"data: {json.dumps({'text': '\\n\\n⚠️ Não consegui concluir a resposta agora. Tente de novo em instantes.'})}\n\n"
         yield "data: [DONE]\n\n"

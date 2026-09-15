@@ -1,5 +1,5 @@
-from pydantic import BaseModel, EmailStr, field_validator, model_validator
-from typing import Optional
+from pydantic import BaseModel, EmailStr, field_validator, model_validator, Field
+from typing import Optional, Literal
 from datetime import date, time
 # Alias: o campo `date` de DailyLogCreate sombreia o nome dentro do corpo da
 # classe — usar _date nos validators evita qualquer ambiguidade.
@@ -158,16 +158,21 @@ class TaskResponse(BaseModel):
 
 # --- Conversations ---
 
+# Mesmo conjunto do CHECK constraint em conversations.type. Validar aqui evita
+# que um valor inválido chegue ao banco e volte como erro interno do Postgres.
+ConversationType = Literal["general", "planning", "focus", "project"]
+
+
 class ConversationCreate(BaseModel):
-    title: str
-    type: str = "general"  # general | planning | focus | project
+    title: str = Field(max_length=200)
+    type: ConversationType = "general"
     project_id: Optional[str] = None
 
 
 class ConversationUpdate(BaseModel):
-    title: Optional[str] = None
+    title: Optional[str] = Field(default=None, max_length=200)
     archived: Optional[bool] = None
-    type: Optional[str] = None
+    type: Optional[ConversationType] = None
     project_id: Optional[str] = None
 
 
@@ -206,14 +211,23 @@ class ProjectResponse(BaseModel):
 
 # --- Chat ---
 
+# Limites de tamanho valem para a mensagem nova E para cada item do histórico:
+# sem o teto no `content`, itens de histórico sem limite viravam tokens
+# ilimitados na API da Anthropic (custo real).
+#
+# O histórico NÃO tem teto de quantidade aqui de propósito: o frontend manda a
+# conversa inteira e o router corta nos últimos 50 (`_MAX_HISTORY`) em silêncio.
+# Rejeitar acima de 50 travaria qualquer conversa longa. Pelo mesmo motivo o
+# `content` do histórico é mais folgado que a mensagem nova: uma resposta longa
+# do assistente já gravada não pode impedir a conversa de continuar.
 class ChatMessage(BaseModel):
-    role: str  # "user" | "assistant"
-    content: str
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=20_000)
 
 
 class ChatRequest(BaseModel):
-    message: str
-    history: list[ChatMessage] = []
+    message: str = Field(max_length=4_000)
+    history: list[ChatMessage] = Field(default_factory=list)
     conversation_id: Optional[str] = None
 
 

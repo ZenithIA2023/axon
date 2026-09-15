@@ -12,7 +12,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 
-import axonHappyWave from "../../assets/axon/axon-happy-wave.png";
+import axonHappyWave from "../../assets/axon/axon-happy-wave.webp";
 
 // ===========================================================================
 // SEÇÃO — O QUE O AXON FAZ

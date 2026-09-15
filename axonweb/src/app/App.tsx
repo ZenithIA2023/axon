@@ -1,7 +1,9 @@
+import { useEffect } from "react";
 import { BrowserRouter, HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 
 import ScrollToTop from "../components/layout/ScrollToTop";
+import * as api from "../lib/api";
 
 import LandingPage from "../pages/LandingPage";
 import NativeEntry from "../pages/NativeEntry";
@@ -46,6 +48,13 @@ import Settings from "../pages/Settings";
 const Router = Capacitor.isNativePlatform() ? HashRouter : BrowserRouter;
 
 export default function App() {
+  // Alinha o cronotipo local com o backend uma vez por carga da página (o
+  // storage é só cache; a fonte da verdade é o perfil). Cobre o auto-login e
+  // quem já estava logado. A função ignora chamadas sem sessão e simultâneas.
+  useEffect(() => {
+    void api.syncChronotypeFromProfile();
+  }, []);
+
   return (
     <Router>
       <ScrollToTop />

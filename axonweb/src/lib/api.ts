@@ -231,6 +231,44 @@ export function isLoggedIn(): boolean {
   return !!getToken();
 }
 
+/**
+ * Copia o cronotipo do perfil (backend) para o localStorage.
+ *
+ * `axon_chronotype` só era gravado ao terminar o questionário. Quem logava em
+ * outro aparelho pulava o questionário (já tem cronotipo) e nada gravava o
+ * valor local — Sidebar, Chat, Planning e Focus caíam no fallback "Misto"
+ * para sempre. O backend é a fonte da verdade; o storage é só cache.
+ */
+let chronotypeSyncing: Promise<void> | null = null;
+
+export async function syncChronotypeFromProfile(): Promise<void> {
+  // NUNCA chamar isto de dentro de saveSession: o request() chama saveSession
+  // ao renovar um token expirado, e a busca de perfil aqui dispararia outra
+  // renovação — cascata de requisições que travava a tela na primeira abertura
+  // do dia. Só o login e a montagem do App disparam esta sincronização.
+  if (!isLoggedIn()) return;
+
+  // Uma sincronização por vez: sem isto, duas montagens seguidas (StrictMode em
+  // dev, ou re-render) fariam duas buscas de perfil simultâneas.
+  if (chronotypeSyncing) return chronotypeSyncing;
+
+  chronotypeSyncing = (async () => {
+    try {
+      const profile = await getProfile();
+      if (profile.chronotype) {
+        localStorage.setItem("axon_chronotype", profile.chronotype);
+      }
+    } catch {
+      // Sem rede ou sessão expirada: o fallback local continua valendo. O
+      // request() já cuida do 401; aqui só não propagamos o erro.
+    } finally {
+      chronotypeSyncing = null;
+    }
+  })();
+
+  return chronotypeSyncing;
+}
+
 // Exposto para o módulo de push, que precisa do token em chamadas feitas fora
 // do fluxo normal (durante o logout, quando a sessão já saiu do storage).
 export function getAuthToken(): string | null {
@@ -656,10 +694,16 @@ export interface TaskCreateInput {
   objective_id?: string;
 }
 
+// `null` limpa o campo no banco; `undefined` (ou omitido) deixa como está. O
+// backend usa exclude_unset, então só o que for enviado é tocado.
 export type TaskUpdateInput = Partial<TaskCreateInput> & {
   status?: TaskStatus;
   progress?: number;
   is_key_task?: boolean;
+  start_time?: string | null;
+  end_time?: string | null;
+  description?: string | null;
+  location?: string | null;
 };
 
 // Usado no Planning, Dashboard e Focus com filtros opcionais de data/status/tipo.
@@ -846,8 +890,17 @@ export interface ConversationData {
   project_id?: string | null;
 }
 
-export function getConversations() {
-  return request<ConversationData[]>("/chat/conversations");
+// O backend pagina (padrão 8, máximo 50). A tela do Chat filtra, busca e
+// pagina no cliente, então pede o máximo — antes, sem parâmetro, a 9ª conversa
+// em diante sumia da lista e da busca.
+export function getConversations(limit = 50, offset = 0) {
+  return request<ConversationData[]>(
+    `/chat/conversations?limit=${limit}&offset=${offset}`
+  );
+}
+
+export function getConversation(id: string) {
+  return request<ConversationData>(`/chat/conversations/${id}`);
 }
 
 export async function createConversation(
@@ -991,31 +1044,50 @@ function streamSSE(
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
 
+      // Um evento `data: {...}` pode cair na fronteira entre dois reads da rede
+      // (comum em respostas longas). Sem buffer, a metade de cada lado era
+      // descartada como "linha malformada" e aquele pedaço de texto sumia da
+      // resposta. Guardamos o resto incompleto e só processamos linhas inteiras.
+      let buffer = "";
+
+      // true = recebeu [DONE]; o chamador não deve continuar lendo.
+      const handleLine = (line: string): boolean => {
+        if (!line.startsWith("data: ")) return false;
+
+        const payload = line.slice(6);
+
+        if (payload === "[DONE]") return true;
+
+        try {
+          onEvent(JSON.parse(payload));
+        } catch {
+          // Linha malformada de verdade (não só incompleta): ignora.
+        }
+        return false;
+      };
+
       const pump = async () => {
         const { done, value } = await reader.read();
 
         if (done) {
+          // Último pedaço sem quebra de linha final ainda pode ser um evento.
+          const rest = buffer + decoder.decode();
+          buffer = "";
+          if (rest.trim()) handleLine(rest);
           onDone();
           return;
         }
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n");
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        // A última fatia pode estar incompleta: volta para o buffer.
+        buffer = lines.pop() ?? "";
 
         for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-
-          const payload = line.slice(6);
-
-          if (payload === "[DONE]") {
+          if (handleLine(line)) {
             onDone();
             return;
-          }
-
-          try {
-            onEvent(JSON.parse(payload));
-          } catch {
-            // Linhas SSE incompletas/malformadas são ignoradas até o próximo chunk.
           }
         }
 

@@ -11,7 +11,7 @@ import LandingAxonEvolution from "../components/landing/LandingAxonEvolution";
 import LandingPersonalExperience from "../components/landing/LandingPersonalExperience";
 import LandingFinalCTA from "../components/landing/LandingFinalCTA";
 
-import axonHappy from "../assets/axon/axon-happy.png";
+import axonHappy from "../assets/axon/axon-happy.webp";
 import brainDecoration from "../assets/decorations/brain.svg";
 import starDecoration from "../assets/decorations/star.svg";
 
