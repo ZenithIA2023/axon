@@ -85,6 +85,46 @@ def _task_on_date(task: dict, day: date) -> bool:
     return iso == start
 
 
+def _planned_window(task: dict) -> tuple[int, int] | None:
+    """
+    Janela planejada da tarefa em minutos desde a meia-noite: (início, fim).
+
+    Só devolve algo quando a tarefa tem horário REAL. Ao contrário de
+    `_end_datetime` — que usa 23:59 como fallback para o anel de adesão do
+    Planning — aqui a ausência de horário precisa ser distinguível, porque um
+    23:59 inventado viraria horas poupadas inventadas (ver Migration 28).
+
+    Tarefa com só `start_time` conta como janela de duração zero: o horário é
+    real (serve de fim do plano), mas não há duração planejada para somar.
+    """
+    start = (task.get("start_time") or "")[:5]
+    end = (task.get("end_time") or "")[:5]
+    if not start and not end:
+        return None
+
+    def _mins(hhmm: str) -> int | None:
+        try:
+            hh, mm = map(int, hhmm.split(":"))
+            return hh * 60 + mm
+        except Exception:
+            return None
+
+    s_min = _mins(start) if start else None
+    e_min = _mins(end) if end else None
+    if s_min is None and e_min is None:
+        return None
+    if s_min is None:
+        s_min = e_min
+    if e_min is None:
+        e_min = s_min
+    # Fim antes do início = tarefa que atravessa a meia-noite. Para o fim do
+    # plano do DIA o que importa é o horário dentro do dia, então a janela é
+    # truncada no fim do dia em vez de virar duração negativa.
+    if e_min < s_min:
+        e_min = 24 * 60
+    return s_min, e_min
+
+
 def _day_stats(
     day: date,
     tasks: list[dict],
@@ -103,6 +143,13 @@ def _day_stats(
     # Insights ("dia mais produtivo"), diferente de completed_items — que
     # inclui eventos e alimenta o anel de adesão do Planning.
     completed_tasks = 0
+    # Plano do dia (ver Migration 28): fim planejado, minutos planejados e
+    # quantos deles foram concluídos. `planned_end_min` fica None quando NENHUM
+    # item do dia tem horário real — o dia sai da conta de horas poupadas em vez
+    # de herdar o fallback 23:59 de _end_datetime.
+    planned_end_min: int | None = None
+    planned_minutes = 0.0
+    completed_planned_minutes = 0.0
 
     for t in actionable:
         if (t.get("carry_count") or 0) > 0:
@@ -110,23 +157,45 @@ def _day_stats(
         if t.get("status") == "done":
             completed_tasks += 1
 
+        # Fração concluída desta tarefa, pela MESMA definição dos três ramos
+        # abaixo. É calculada aqui (e não numa função nova) para que os minutos
+        # planejados concluídos nunca divirjam de completed_score: as duas
+        # métricas têm de contar "concluído" do mesmo jeito.
+        fraction = 0.0
+
         if t.get("task_type") == "event":
             if _event_completed(t, ref_now, tz):
                 completed_score += 1
                 completed_items += 1
-            continue
-
-        subs = subs_by_task.get(t["id"])
-        if subs:
-            done = sum(1 for s in subs if s.get("done"))
-            completed_score += done / len(subs)
-            if done == len(subs):
+                fraction = 1.0
+        else:
+            subs = subs_by_task.get(t["id"])
+            if subs:
+                done = sum(1 for s in subs if s.get("done"))
+                fraction = done / len(subs)
+                completed_score += fraction
+                if done == len(subs):
+                    completed_items += 1
+            elif t.get("status") == "done":
+                completed_score += 1
                 completed_items += 1
-            continue
+                fraction = 1.0
 
-        if t.get("status") == "done":
-            completed_score += 1
-            completed_items += 1
+        window = _planned_window(t)
+        if window:
+            start_min, end_min = window
+            # O fim do plano é o maior horário de término do dia. Um evento
+            # multi-dia que termina num dia POSTERIOR não encerra este dia —
+            # ele ocupa o dia inteiro, então conta como fim do dia.
+            end_date = t.get("end_date")
+            if end_date and str(end_date) > str(day):
+                end_min = 24 * 60
+            planned_end_min = (
+                end_min if planned_end_min is None else max(planned_end_min, end_min)
+            )
+            duration = end_min - start_min
+            planned_minutes += duration
+            completed_planned_minutes += duration * fraction
 
     # Math.floor(x + 0.5) reproduz o Math.round do frontend (arredonda .5 para
     # cima). O round() do Python usa banker's rounding e faria a % pular 1
@@ -140,6 +209,17 @@ def _day_stats(
         "completed_score": round(completed_score, 4),
         "completion_rate": rate,
         "carried_forward": carried_forward,
+        # 24:00 (tarefa que atravessa a meia-noite ou evento multi-dia) vira
+        # 23:59: o campo é um `time` e 00:00 leria como "plano acabou à
+        # meia-noite do INÍCIO do dia", invertendo toda comparação.
+        "planned_day_end": (
+            f"{min(planned_end_min, 24 * 60 - 1) // 60:02d}:"
+            f"{min(planned_end_min, 24 * 60 - 1) % 60:02d}"
+            if planned_end_min is not None
+            else None
+        ),
+        "planned_minutes": int(round(planned_minutes)),
+        "completed_planned_minutes": int(round(completed_planned_minutes)),
     }
 
 
@@ -317,7 +397,8 @@ def get_range(user_id: str, start_iso: str, end_iso: str) -> list[dict]:
         supabase.table("daily_task_stats")
         .select(
             "date, total, completed_items, completed_tasks, "
-            "completion_rate, carried_forward"
+            "completion_rate, carried_forward, "
+            "planned_day_end, planned_minutes, completed_planned_minutes"
         )
         .eq("user_id", user_id)
         .gte("date", start_iso)

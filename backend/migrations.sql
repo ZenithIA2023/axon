@@ -814,3 +814,106 @@ alter table public.routines
 
 create index if not exists routines_objective_id_idx
   on public.routines(objective_id);
+
+-- =============================================
+-- Migration 28: horas poupadas — congelar o PLANO do dia
+-- ---------------------------------------------
+-- Primeira metade de "horas poupadas": a métrica compara o horário em que o
+-- dia estava PLANEJADO para acabar com o horário em que o usuário terminou o
+-- que planejou. Para isso o plano tem de ser congelado no fim do dia, junto
+-- com o resto do snapshot — depois disso o carry-forward reescreve
+-- scheduled_date das pendentes e o plano original fica irrecuperável.
+--
+-- Por que o plano NÃO pode ser recalculado depois: adiantar trabalho de
+-- amanhã é tempo poupado de verdade (o usuário estava livre às 20h), e isso
+-- só se sustenta se cada dia for comparado com o plano que ELE tinha no
+-- início. Recalcular o plano de amanhã depois do adiantamento zeraria o
+-- ganho que o usuário de fato sentiu.
+--
+--   planned_day_end            = fim da última tarefa COM horário real.
+--                                NULL quando nenhum item do dia tem horário —
+--                                daily_stats_service._end_datetime usa 23:59
+--                                como fallback para o anel de adesão, e contar
+--                                esse 23:59 como "fim do plano" inventaria
+--                                horas poupadas (dia terminado às 20h viraria
+--                                "3h59 poupadas"). NULL = dia fora da conta.
+--   planned_minutes            = soma das durações planejadas (end - start).
+--   completed_planned_minutes  = quanto desses minutos foi concluído, pela
+--                                MESMA definição de "concluído" do snapshot.
+--
+-- Os minutos são o que sustenta a regra "só há tempo poupado se o trabalho foi
+-- feito": medir por CONTAGEM de tarefas trataria pular uma tarefa de 10min
+-- igual a pular uma de 3h.
+-- =============================================
+
+alter table public.daily_task_stats
+  add column if not exists planned_day_end time,
+  add column if not exists planned_minutes integer default 0 not null,
+  add column if not exists completed_planned_minutes integer default 0 not null;
+
+-- =============================================
+-- Migration 29: horas poupadas — fechamento do dia (day_closures)
+-- ---------------------------------------------
+-- Segunda metade: uma linha por dia fechado, com o resultado do cálculo e o
+-- grau de confiança nele.
+--
+-- O PROBLEMA QUE ESTA TABELA RESOLVE. `tasks.completed_at` não registra quando
+-- o usuário terminou a tarefa, registra quando ele abriu o app e tocou no
+-- botão ("vou para a academia e marco quando volto"). Nos dados reais: 25%
+-- marcadas antes do fim planejado, 64% depois no mesmo dia, 11% em outro dia.
+-- Uma fórmula que trate completed_at como hora de término erra em 75% dos
+-- casos — foi por isso que a primeira tentativa desta feature (ago/2026) foi
+-- descartada.
+--
+-- A saída é não adivinhar: quando a marcação caiu DENTRO do horário planejado
+-- o dado já é confiável; quando caiu depois, o AXON PERGUNTA ao usuário a que
+-- horas ele terminou, e só soma o dia se tiver resposta.
+--
+--   reported_end      = o que o usuário respondeu; NULL se não respondeu.
+--   recorded_end      = a marcação mais tardia do dia (o sinal cru, guardado
+--                       para calibrar as opções da pergunta e para análise).
+--   saved_minutes     = o resultado; 0 quando não há economia comprovável.
+--   advanced_minutes  = parcela vinda de adiantar trabalho de outro dia. Linha
+--                       SEPARADA no detalhamento porque é informação útil, mas
+--                       SOMA no total (ver Migration 28 sobre o porquê).
+--   confidence        = 'high' entra no número mostrado ao usuário; 'medium' e
+--                       'low' ficam registrados e FORA da soma. O contador fica
+--                       menor e verdadeiro — é deliberado: é o que sustenta a
+--                       credibilidade quando o usuário clica para ver de onde
+--                       veio o número.
+--   asked_at          = quando a pergunta foi exibida (não repetir).
+--   dismissed         = usuário fechou a pergunta sem responder; não insistir.
+--
+-- PK composta (user_id, date): responder duas vezes o mesmo dia atualiza a
+-- mesma linha em vez de duplicar, e o upsert do fechamento é idempotente — o
+-- scheduler roda numa janela de 15 min e pode chamar o fechamento mais de uma
+-- vez na mesma virada.
+-- =============================================
+
+create table if not exists public.day_closures (
+  user_id          uuid references auth.users(id) on delete cascade not null,
+  date             date not null,
+  reported_end     time,
+  recorded_end     time,
+  saved_minutes    integer default 0 not null,
+  advanced_minutes integer default 0 not null,
+  confidence       text default 'low' not null,
+  asked_at         timestamp with time zone,
+  answered_at      timestamp with time zone,
+  dismissed        boolean default false not null,
+  created_at       timestamp with time zone default now(),
+  primary key (user_id, date)
+);
+
+-- A consulta quente é "somar os dias de confiança alta num intervalo" e
+-- "achar a pergunta pendente mais recente" — as duas varrem por usuário e
+-- data decrescente.
+create index if not exists day_closures_user_date_idx
+  on public.day_closures(user_id, date desc);
+
+alter table public.day_closures enable row level security;
+
+create policy "day_closures_select" on public.day_closures for select using (auth.uid() = user_id);
+create policy "day_closures_insert" on public.day_closures for insert with check (auth.uid() = user_id);
+create policy "day_closures_update" on public.day_closures for update using (auth.uid() = user_id);
+create policy "day_closures_delete" on public.day_closures for delete using (auth.uid() = user_id);

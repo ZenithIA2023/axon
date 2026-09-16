@@ -1531,6 +1531,69 @@ export function getPatternInsights(refresh = false) {
   );
 }
 
+// ===========================================================================
+// HORAS POUPADAS
+// ===========================================================================
+// Quanto tempo o AXON devolveu ao usuário em relação ao plano dele. O número
+// soma SÓ os dias em que o backend tem certeza do horário de término — por isso
+// pode ser menor do que o usuário sente. Ver saved_time_service.py.
+
+export interface SavedTimeSummary {
+  period: "week" | "month";
+  offset: number;
+  start: string;
+  end: string;
+  // Total exibido. early_minutes + advanced_minutes = saved_minutes.
+  saved_minutes: number;
+  early_minutes: number;
+  advanced_minutes: number;
+  counted_days: number;
+  // Dias que o AXON não conseguiu fechar com certeza e ficaram FORA do total.
+  discarded_days: number;
+}
+
+export function getSavedTime(
+  period: "week" | "month" = "week",
+  offset = 0
+) {
+  return request<SavedTimeSummary>(
+    `/insights/saved-time?period=${period}&offset=${offset}`
+  );
+}
+
+export interface SavedTimeQuestion {
+  date: string;
+  is_yesterday: boolean;
+  planned_day_end: string;
+  recorded_end: string;
+  // Horários sugeridos (até 3), calculados a partir do plano daquele dia.
+  options: string[];
+}
+
+// `question` é null quando não há nada a perguntar — o caso normal.
+export function getSavedTimePending() {
+  return request<{ question: SavedTimeQuestion | null }>(
+    "/insights/saved-time/pending"
+  );
+}
+
+export function answerSavedTime(
+  date: string,
+  answer: { reported_end?: string; not_finished?: boolean }
+) {
+  return request<{ ok: boolean; reason?: string }>(
+    "/insights/saved-time/answer",
+    { method: "POST", body: JSON.stringify({ date, ...answer }) }
+  );
+}
+
+export function dismissSavedTime(date: string) {
+  return request<{ ok: boolean }>("/insights/saved-time/dismiss", {
+    method: "POST",
+    body: JSON.stringify({ date }),
+  });
+}
+
 export interface FocusBlockItem {
   idx: number;
   level: "sono" | "recuperacao" | "foco_leve" | "foco_moderado" | "foco_profundo" | "pico";
