@@ -125,6 +125,34 @@ def _planned_window(task: dict) -> tuple[int, int] | None:
     return s_min, e_min
 
 
+def planned_day_end(tasks: list[dict], day: date) -> int | None:
+    """
+    Fim planejado de um dia, em minutos desde a meia-noite — ou None se nenhum
+    item daquele dia tem horário real.
+
+    É a MESMA regra que `_day_stats` aplica ao congelar o snapshot, extraída
+    para poder ser chamada sobre um conjunto hipotético de tarefas: a Fase 3
+    precisa calcular o fim do dia ANTES e DEPOIS de um movimento do AXON para
+    saber quanto tempo ele liberou (ver saved_time_service.freed_by_move).
+
+    Recebe a lista já com as tarefas do usuário; filtra as do dia aqui dentro
+    para que quem chama não precise repetir `_task_on_date`.
+    """
+    end_min: int | None = None
+    for t in tasks:
+        if not _task_on_date(t, day):
+            continue
+        window = _planned_window(t)
+        if not window:
+            continue
+        task_end = window[1]
+        end_date = t.get("end_date")
+        if end_date and str(end_date) > str(day):
+            task_end = 24 * 60
+        end_min = task_end if end_min is None else max(end_min, task_end)
+    return end_min
+
+
 def _day_stats(
     day: date,
     tasks: list[dict],

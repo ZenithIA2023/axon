@@ -12,6 +12,7 @@ from services import (
     tasks_service,
     user_tz,
     push_service,
+    saved_time_service,
 )
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -114,8 +115,17 @@ def accept_notification(
         old_time = task.get("start_time", "")[:5] if task else ""
         task_title = task["title"] if task else "tarefa"
     except Exception:
+        tasks = []
+        task = None
         old_time = ""
         task_title = "tarefa"
+
+    # O "antes" do movimento, para creditar ao AXON o tempo que ele liberar
+    # (Fase 3 das horas poupadas). Até aqui esses valores eram lidos só para o
+    # texto da notificação de mudança e descartados em seguida.
+    old_start = (task or {}).get("start_time")
+    old_end = (task or {}).get("end_time")
+    old_date = (task or {}).get("scheduled_date")
 
     # Executa a alteração
     update_data = {}
@@ -152,6 +162,41 @@ def accept_notification(
             tasks_service.update_task(user_id, task_id, update_data)
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e))
+
+        # Só chega aqui se a tarefa foi REALMENTE movida: as saídas por sugestão
+        # expirada (400) e conflito de horário (409) já levantaram acima, então
+        # nenhuma delas credita nada.
+        #
+        # O crédito é o quanto o fim do dia de ORIGEM adiantou — não o tamanho
+        # do movimento (ver saved_time_service.freed_by_move).
+        if old_date:
+            try:
+                from datetime import date as _date
+
+                origin_day = _date.fromisoformat(str(old_date))
+                freed = saved_time_service.freed_by_move(
+                    tasks,
+                    origin_day,
+                    task_id,
+                    update_data.get("start_time"),
+                    update_data.get("end_time"),
+                    update_data.get("scheduled_date"),
+                )
+                saved_time_service.record_optimization(
+                    user_id,
+                    task_id,
+                    origin_day,
+                    freed,
+                    notification_id=notification_id,
+                    old_start=old_start,
+                    old_end=old_end,
+                    new_start=update_data.get("start_time"),
+                    new_end=update_data.get("end_time"),
+                    source="improvement",
+                )
+            except Exception as e:
+                # Métrica não derruba o aceite: a tarefa já foi movida.
+                print(f"[notifications] otimização não creditada: {e}", flush=True)
 
     # Marca como aceita
     notification_service.mark_accepted(user_id, notification_id)

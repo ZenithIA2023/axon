@@ -27,6 +27,22 @@ As três regras inegociáveis
    registrados e fora da soma — o número fica menor e verdadeiro.
 3. Dia cujo plano não tem horário real fica fora (planned_day_end nulo).
 
+A exceção à Regra 2 (crédito de otimização)
+------------------------------------------
+Há UMA fonte que entra no total mesmo em dia de confiança baixa: o tempo que o
+próprio AXON liberou ao reorganizar uma tarefa (`optimization_minutes`, Fase 3).
+
+O motivo é que a Regra 2 existe para filtrar um sinal AMBÍGUO — o completed_at,
+que não diz a que horas o usuário terminou. O crédito de otimização não usa esse
+sinal: ele compara dois horários que o sistema conhece com certeza, o "antes" e o
+"depois" de um movimento que o usuário aceitou. Não há o que confirmar com o
+usuário, então exigir a confirmação dele descartaria um dado exato por causa de
+uma dúvida que não se aplica a ele.
+
+Na prática: um dia em que o usuário não respondeu a pergunta soma zero de
+execução e ainda assim soma o que o AXON liberou naquele dia.
+
+
 Por que adiantar trabalho de amanhã CONTA
 -----------------------------------------
 Segunda planejada até 22h, terminou 20h adiantando 2h de terça → +2h. Terça,
@@ -39,6 +55,7 @@ recalculado depois do adiantamento (ver Migration 28).
 from datetime import date, datetime, time, timedelta, timezone
 
 from database import supabase
+from services import daily_stats_service
 from services import user_tz as user_tz_service
 
 # Regra 1: abaixo desta fração dos minutos planejados, a economia é ZERO
@@ -205,6 +222,123 @@ def _advanced_minutes(user_id: str, day: date, tz) -> int:
     return total
 
 
+# ── Crédito por reorganização do AXON (Fase 3) ──────────────────────────────
+
+def freed_by_move(
+    tasks: list[dict],
+    day: date,
+    task_id: str,
+    new_start: str | None,
+    new_end: str | None,
+    new_date: str | None = None,
+) -> int:
+    """
+    Quantos minutos um movimento do AXON liberou no dia `day`.
+
+    NÃO é o tamanho do movimento. Mover uma tarefa 4h para trás não libera 4h —
+    só libera tempo o movimento que adianta o FIM DO DIA:
+
+        última tarefa 20:00–22:00 → 16:00–18:00, penúltima acaba 21:20
+        ⇒ o dia passa a acabar 21:20 em vez de 22:00 = 40 min liberados
+
+        tarefa do MEIO do dia 14:00–15:00 → 10:00–11:00, última ainda acaba 22:00
+        ⇒ 0 min: o dia acaba no mesmo horário
+
+    Por isso o cálculo é "fim do dia antes" menos "fim do dia depois", sobre
+    TODAS as tarefas do dia — e não sobre a tarefa movida isoladamente.
+
+    `new_date` diferente de `day` significa que a tarefa saiu deste dia: ela é
+    removida do conjunto "depois". Só o dia de ORIGEM é creditado; o de destino
+    recebeu trabalho, não liberou tempo.
+    """
+    before = daily_stats_service.planned_day_end(tasks, day)
+    if before is None:
+        return 0  # dia sem horário real: nada a comparar (Regra 3)
+
+    moved_out = bool(new_date) and str(new_date) != str(day)
+
+    after_tasks = []
+    for t in tasks:
+        if str(t.get("id")) != str(task_id):
+            after_tasks.append(t)
+            continue
+        if moved_out:
+            continue  # saiu do dia: não entra no "depois"
+        # Mesma tarefa com os horários novos. Cópia rasa para não mutar a lista
+        # que o chamador ainda vai usar.
+        updated = dict(t)
+        if new_start:
+            updated["start_time"] = new_start
+        if new_end:
+            updated["end_time"] = new_end
+        after_tasks.append(updated)
+
+    after = daily_stats_service.planned_day_end(after_tasks, day)
+    if after is None:
+        # O movimento tirou do dia o único item com horário. O dia deixou de ter
+        # fim planejado, e sem ponto de comparação não há crédito a dar.
+        return 0
+
+    return max(0, before - after)
+
+
+def record_optimization(
+    user_id: str,
+    task_id: str,
+    day: date,
+    freed: int,
+    *,
+    notification_id: str | None = None,
+    old_start: str | None = None,
+    old_end: str | None = None,
+    new_start: str | None = None,
+    new_end: str | None = None,
+    source: str = "improvement",
+) -> None:
+    """
+    Registra no ledger um movimento que o AXON fez e o usuário aceitou.
+
+    Falha em silêncio de propósito: esta gravação é uma MÉTRICA, e não pode
+    derrubar o aceite da sugestão — o usuário pediu para mover a tarefa, e a
+    tarefa já foi movida quando chegamos aqui. O índice único parcial em
+    notification_id faz o segundo aceite da mesma sugestão cair aqui como erro
+    de constraint, que é exatamente o comportamento desejado (sem crédito em
+    dobro).
+    """
+    try:
+        supabase.table("axon_optimizations").insert(
+            {
+                "user_id": user_id,
+                "task_id": task_id,
+                "notification_id": notification_id,
+                "day": str(day),
+                "old_start_time": old_start,
+                "old_end_time": old_end,
+                "new_start_time": new_start,
+                "new_end_time": new_end,
+                "freed_minutes": max(0, int(freed)),
+                "source": source,
+            }
+        ).execute()
+    except Exception as e:
+        print(f"[saved_time] otimização não registrada user={user_id}: {e}", flush=True)
+
+
+def _optimization_minutes(user_id: str, day: date) -> int:
+    """Total liberado pelo AXON num dia (soma do ledger)."""
+    try:
+        res = (
+            supabase.table("axon_optimizations")
+            .select("freed_minutes")
+            .eq("user_id", user_id)
+            .eq("day", str(day))
+            .execute()
+        )
+    except Exception:
+        return 0
+    return sum(int(r.get("freed_minutes") or 0) for r in res.data or [])
+
+
 # ── Fechamento do dia ───────────────────────────────────────────────────────
 
 def close_day(user_id: str, tz_name: str, day: date) -> dict | None:
@@ -230,6 +364,9 @@ def close_day(user_id: str, tz_name: str, day: date) -> dict | None:
     # linha de todo jeito (com 0) para o fechamento ser rastreável e para a
     # pergunta nunca ser feita sobre um dia que não tem o que comparar.
     if not snapshot or planned_end is None:
+        # Mesmo sem plano com horário, o crédito de otimização é gravado: ele
+        # não depende do fim planejado do dia — só da diferença entre o antes e
+        # o depois de um movimento, que já foi calculada no aceite.
         return _upsert(
             user_id,
             day,
@@ -237,6 +374,7 @@ def close_day(user_id: str, tz_name: str, day: date) -> dict | None:
                 "recorded_end": None,
                 "saved_minutes": 0,
                 "advanced_minutes": 0,
+                "optimization_minutes": _optimization_minutes(user_id, day),
                 "confidence": CONFIDENCE_LOW,
             },
         )
@@ -273,6 +411,9 @@ def close_day(user_id: str, tz_name: str, day: date) -> dict | None:
             # adiantamento num dia que o AXON não consegue fechar colocaria no
             # total um número que o detalhamento não sabe justificar.
             "advanced_minutes": advanced if confidence == CONFIDENCE_HIGH else 0,
+            # A ÚNICA parcela que não depende do selo: ver a exceção à Regra 2
+            # no cabeçalho do módulo.
+            "optimization_minutes": _optimization_minutes(user_id, day),
             "confidence": confidence,
         },
     )
@@ -301,6 +442,9 @@ def answer_closure(
                 "reported_end": None,
                 "saved_minutes": 0,
                 "advanced_minutes": 0,
+                # "Não terminei" zera a execução, mas não o que o AXON liberou:
+                # o movimento aconteceu independente de o usuário ter terminado.
+                "optimization_minutes": _optimization_minutes(user_id, day),
                 "confidence": CONFIDENCE_LOW,
                 "answered_at": now_iso,
             },
@@ -326,6 +470,7 @@ def answer_closure(
             "reported_end": _to_hhmm(reported),
             "saved_minutes": saved,
             "advanced_minutes": advanced,
+            "optimization_minutes": _optimization_minutes(user_id, day),
             # O usuário respondeu: é o melhor dado disponível sobre o fim do
             # dia dele, e é o que autoriza o dia a entrar no número.
             "confidence": CONFIDENCE_HIGH,
@@ -479,22 +624,37 @@ def summary(user_id: str, tz_name: str, period: str = "week", offset: int = 0) -
     try:
         res = (
             supabase.table("day_closures")
-            .select("date, saved_minutes, advanced_minutes, confidence")
+            .select(
+                "date, saved_minutes, advanced_minutes, "
+                "optimization_minutes, confidence"
+            )
             .eq("user_id", user_id)
             .gte("date", str(start))
             .lte("date", str(end))
             .execute()
         )
         rows = res.data or []
-    except Exception:
+    except Exception as e:
+        # NÃO silenciar: um erro aqui (coluna/tabela ausente, migration não
+        # aplicada) devolveria zeros que o card mostra como "nada poupado", e o
+        # número erraria sem ninguém notar. Foi assim que a calibração ficou
+        # quebrada por semanas atrás de um except vazio.
+        print(f"[saved_time] summary falhou user={user_id}: {e}", flush=True)
         rows = []
 
     total = 0
     advanced = 0
+    optimization = 0
     counted_days = 0
     discarded_days = 0
 
     for row in rows:
+        # O crédito de otimização soma SEMPRE — é a exceção à Regra 2 explicada
+        # no cabeçalho do módulo. Fica fora do if de propósito.
+        opt = int(row.get("optimization_minutes") or 0)
+        optimization += opt
+        total += opt
+
         if row.get("confidence") == CONFIDENCE_HIGH:
             saved = int(row.get("saved_minutes") or 0)
             adv = int(row.get("advanced_minutes") or 0)
@@ -506,7 +666,13 @@ def summary(user_id: str, tz_name: str, period: str = "week", offset: int = 0) -
             if saved + adv > 0:
                 counted_days += 1
         else:
-            discarded_days += 1
+            # Um dia de confiança baixa que ainda assim liberou tempo pelo AXON
+            # não é um dia "descartado": ele contribuiu para o número. Contá-lo
+            # na nota de dias fora da conta faria o card se contradizer.
+            if opt > 0:
+                counted_days += 1
+            else:
+                discarded_days += 1
 
     return {
         "period": period,
@@ -516,8 +682,12 @@ def summary(user_id: str, tz_name: str, period: str = "week", offset: int = 0) -
         # `saved_minutes` é o TOTAL mostrado; `early_minutes` e
         # `advanced_minutes` são as duas origens e somam nele.
         "saved_minutes": total,
-        "early_minutes": total - advanced,
+        # As três origens do total. early = execução do usuário dentro do plano;
+        # advanced = trabalho de outro dia adiantado; optimization = o que o
+        # AXON reorganizou.
+        "early_minutes": total - advanced - optimization,
         "advanced_minutes": advanced,
+        "optimization_minutes": optimization,
         "counted_days": counted_days,
         "discarded_days": discarded_days,
     }

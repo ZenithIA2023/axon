@@ -1547,6 +1547,10 @@ export interface SavedTimeSummary {
   saved_minutes: number;
   early_minutes: number;
   advanced_minutes: number;
+  // Tempo que o próprio AXON liberou ao reorganizar tarefas. Soma no total
+  // mesmo em dias de confiança baixa: o crédito é determinístico, não depende
+  // do usuário confirmar nada.
+  optimization_minutes: number;
   counted_days: number;
   // Dias que o AXON não conseguiu fechar com certeza e ficaram FORA do total.
   discarded_days: number;
