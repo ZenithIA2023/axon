@@ -257,21 +257,18 @@ def _objectives_progress(user_id: str, start: date, end: date) -> list[dict]:
     """
     Progresso dos objetivos ao FIM do período, e quanto avançou dentro dele.
 
-    `objectives.progress` guarda só o valor de agora, sem histórico — mas o
-    progresso é sempre (etapas concluídas / total), e cada etapa concluída tem
-    `completed_at`. Dá para reconstruir o valor em qualquer data contando
-    quantas etapas já estavam concluídas até lá:
-        progress(d) = concluídas até d / total de etapas
+    O avanço vem do LEDGER (`objective_step_entries`): cada lançamento registra
+    quantas etapas foram concluídas e quando. Antes do ledger, este bloco
+    reconstruía o passado contando tarefas por `completed_at` e assumindo que o
+    conjunto de etapas nunca mudara — uma aproximação que uma etapa criada no
+    meio do caminho já quebrava. Agora a consulta é direta: soma dos `steps`
+    com `occurred_at` dentro da janela.
 
-    Isso assume que o conjunto de etapas não mudou durante o período (etapa
-    criada depois dilui o passado). É aproximação aceitável — o alternativa
-    seria uma tabela de snapshot diário por objetivo, que não existe.
-
-    Objetivos sem etapa nenhuma ficam de fora: progresso 0/0 não diz nada.
+    Objetivos que não andaram e seguem em 0 ficam de fora: não dizem nada.
     """
     objectives = (
         supabase.table("objectives")
-        .select("id, title, progress, status")
+        .select("id, title, total_steps, completed_steps")
         .eq("user_id", user_id)
         .execute()
     ).data or []
@@ -281,58 +278,48 @@ def _objectives_progress(user_id: str, start: date, end: date) -> list[dict]:
 
     by_id = {o["id"]: o for o in objectives}
 
-    # Uma consulta para todas as etapas de todos os objetivos (evita N+1).
-    steps = (
-        supabase.table("tasks")
-        .select("objective_id, status, completed_at")
+    # Uma consulta para todos os lançamentos até o fim do período (evita N+1).
+    # O corte superior importa em catch-up: sem ele, um relatório de um período
+    # já encerrado mostraria o progresso de hoje como se fosse o daquela semana.
+    entries = (
+        supabase.table("objective_step_entries")
+        .select("objective_id, steps, occurred_at")
         .eq("user_id", user_id)
-        .in_("objective_id", list(by_id.keys()))
+        .lte("occurred_at", f"{end}T23:59:59+00:00")
         .execute()
     ).data or []
 
-    if not steps:
-        return []
-
     start_iso = str(start)
-    end_iso = str(end)
 
-    totals: dict[str, int] = {}
     done_by_end: dict[str, int] = {}
     done_before: dict[str, int] = {}
 
-    for step in steps:
-        oid = step.get("objective_id")
+    for entry in entries:
+        oid = entry.get("objective_id")
         if oid not in by_id:
             continue
-
-        totals[oid] = totals.get(oid, 0) + 1
-        if step.get("status") != "done":
-            continue
-
-        # Sem completed_at (concluída antes da coluna existir) conta como
-        # anterior ao período: não infla o avanço deste relatório.
-        stamp = str(step.get("completed_at") or "")[:10]
-        if not stamp or stamp < start_iso:
-            done_before[oid] = done_before.get(oid, 0) + 1
-            done_by_end[oid] = done_by_end.get(oid, 0) + 1
-        elif stamp <= end_iso:
-            done_by_end[oid] = done_by_end.get(oid, 0) + 1
+        steps = int(entry.get("steps") or 0)
+        done_by_end[oid] = done_by_end.get(oid, 0) + steps
+        if str(entry.get("occurred_at") or "")[:10] < start_iso:
+            done_before[oid] = done_before.get(oid, 0) + steps
 
     out = []
-    for oid, total in totals.items():
-        if total == 0:
+    for oid, objective in by_id.items():
+        total = int(objective.get("total_steps") or 0)
+        if total <= 0:
             continue
 
-        progress = round(done_by_end.get(oid, 0) / total * 100)
-        previous = round(done_before.get(oid, 0) / total * 100)
+        # Mesmo teto de recalculate_from_ledger: quem avançou além da meta
+        # aparece em 100%, não em 130%.
+        progress = round(min(done_by_end.get(oid, 0), total) / total * 100)
+        previous = round(min(done_before.get(oid, 0), total) / total * 100)
 
-        # Objetivo que não existia/não andou e segue em 0: não vale a linha.
         if progress == 0 and previous == 0:
             continue
 
         out.append({
             "id": oid,
-            "title": by_id[oid]["title"],
+            "title": objective["title"],
             "progress": progress,
             "delta": progress - previous,
         })

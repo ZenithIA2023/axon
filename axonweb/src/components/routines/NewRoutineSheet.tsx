@@ -48,6 +48,8 @@ export default function NewRoutineSheet({ isOpen, onClose, onCreated }: Props) {
   const [items, setItems] = useState<DraftItem[]>([blankItem()]);
   const [startDate, setStartDate] = useState(todayISO());
   const [endDate, setEndDate] = useState("");
+  // Término por objetivo: alternativa à data de término.
+  const [endObjectiveId, setEndObjectiveId] = useState("");
 
   // ---------------------------------------------------------------------------
   // Estados de confirmação, envio e erro
@@ -67,6 +69,7 @@ export default function NewRoutineSheet({ isOpen, onClose, onCreated }: Props) {
       setItems([blankItem()]);
       setStartDate(todayISO());
       setEndDate("");
+      setEndObjectiveId("");
       setShowNoEndConfirm(false);
       setSubmitting(false);
       setError(null);
@@ -126,7 +129,9 @@ export default function NewRoutineSheet({ isOpen, onClose, onCreated }: Props) {
   function handleCreateClick() {
     setError(null);
 
-    if (!endDate) {
+    // A rotina vinculada a um objetivo TEM término — só não por data. Avisar
+    // "vai gerar tarefas indefinidamente" nesse caso seria falso.
+    if (!endDate && !endObjectiveId) {
       setShowNoEndConfirm(true);
       return;
     }
@@ -144,6 +149,7 @@ export default function NewRoutineSheet({ isOpen, onClose, onCreated }: Props) {
         name: name.trim(),
         start_date: startDate || undefined,
         end_date: endDate || null,
+        objective_id: endObjectiveId || null,
         items: items.map(draftToCreateInput),
       };
 
@@ -202,8 +208,10 @@ export default function NewRoutineSheet({ isOpen, onClose, onCreated }: Props) {
           <RoutinePeriodStep
             startDate={startDate}
             endDate={endDate}
+            endObjectiveId={endObjectiveId}
             onStartDateChange={setStartDate}
             onEndDateChange={setEndDate}
+            onEndObjectiveChange={setEndObjectiveId}
           />
         )}
 
@@ -311,13 +319,17 @@ function RoutineItemsStep({
 function RoutinePeriodStep({
   startDate,
   endDate,
+  endObjectiveId,
   onStartDateChange,
   onEndDateChange,
+  onEndObjectiveChange,
 }: {
   startDate: string;
   endDate: string;
+  endObjectiveId: string;
   onStartDateChange: (value: string) => void;
   onEndDateChange: (value: string) => void;
+  onEndObjectiveChange: (value: string) => void;
 }) {
   return (
     <div className="space-y-4 py-2">
@@ -348,13 +360,88 @@ function RoutinePeriodStep({
           className="mt-2 w-full rounded-2xl border border-soft bg-surface-muted px-4 py-3 text-sm text-primary outline-none focus:border-accent-soft"
         />
 
-        {!endDate && (
+        {!endDate && !endObjectiveId && (
           <p className="mt-2 text-xs leading-5 text-muted">
             Sem data de término, o Axon continua gerando tarefas
             indefinidamente.
           </p>
         )}
       </div>
+
+      <RoutineEndObjectiveField
+        value={endObjectiveId}
+        onChange={onEndObjectiveChange}
+      />
+    </div>
+  );
+}
+
+// Término por OBJETIVO — o par da data de término. Fica aqui, e não nas opções
+// avançadas do item, porque quem termina é a ROTINA inteira: configurar isso
+// abrindo um item seria pedir uma coisa da rotina no lugar errado.
+export function RoutineEndObjectiveField({
+  value,
+  onChange,
+  disabled = false,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  const [objectives, setObjectives] = useState<api.Objective[]>([]);
+
+  useEffect(() => {
+    let active = true;
+
+    api
+      .getObjectives()
+      .then((data) => {
+        if (!active) return;
+        // Mantém o objetivo já vinculado na lista mesmo concluído, para não
+        // perder a seleção atual ao reabrir a tela.
+        setObjectives(data.filter((o) => o.status !== "done" || o.id === value));
+      })
+      .catch(() => {
+        if (active) setObjectives([]);
+      });
+
+    return () => {
+      active = false;
+    };
+    // `value` só alimenta o filtro da carga inicial; recarregar a cada troca
+    // de seleção seria uma requisição por clique no select.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (objectives.length === 0) return null;
+
+  return (
+    <div>
+      <label className="text-sm font-medium text-secondary">
+        Terminar quando um objetivo for concluído{" "}
+        <span className="text-muted">(opcional)</span>
+      </label>
+
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        className="mt-2 w-full rounded-2xl border border-soft bg-surface-muted px-4 py-3 text-sm text-primary outline-none focus:border-accent-soft disabled:opacity-50"
+      >
+        <option value="">Nenhum</option>
+        {objectives.map((objective) => (
+          <option key={objective.id} value={objective.id}>
+            {objective.title}
+          </option>
+        ))}
+      </select>
+
+      {value && (
+        <p className="mt-2 text-xs leading-5 text-muted">
+          Ao atingir o total do objetivo, a rotina é encerrada e as tarefas
+          futuras já geradas na agenda são removidas.
+        </p>
+      )}
     </div>
   );
 }

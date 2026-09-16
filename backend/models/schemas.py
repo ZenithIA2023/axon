@@ -108,6 +108,8 @@ class TaskCreate(BaseModel):
     axon_pick_time: bool = False        # true = Axon escolhe o melhor horário pelo cronotipo
     duration_minutes: Optional[int] = None  # necessário quando axon_pick_time=True
     objective_id: Optional[str] = None  # UUID do objetivo ao qual esta tarefa pertence
+    # Quantas etapas do objetivo esta tarefa vale ao ser concluída.
+    objective_steps: Optional[int] = None
 
 
 class TaskUpdate(BaseModel):
@@ -127,6 +129,7 @@ class TaskUpdate(BaseModel):
     deadline: Optional[date] = None
     is_key_task: Optional[bool] = None
     objective_id: Optional[str] = None
+    objective_steps: Optional[int] = None
 
 
 class TaskResponse(BaseModel):
@@ -147,6 +150,7 @@ class TaskResponse(BaseModel):
     routine_item_id: Optional[str] = None
     objective_id: Optional[str] = None
     objective_title: Optional[str] = None
+    objective_steps: int = 1
     group_name: Optional[str] = None
     deadline: Optional[str] = None
     created_by: str
@@ -449,6 +453,14 @@ class RoutineItemCreate(BaseModel):
     start_time:       Optional[str] = None   # "HH:MM"
     end_time:         Optional[str] = None    # "HH:MM"
     duration_minutes: Optional[int] = None
+    # Janela do item flexível. Já chegavam pelo caminho do agente, mas sem
+    # estarem declaradas aqui o router as descartava em silêncio.
+    not_before:       Optional[str] = None   # "HH:MM"
+    not_after:        Optional[str] = None   # "HH:MM"
+    # Vínculo com objetivo (por item, não pela rotina inteira). Quantas etapas
+    # cada conclusão vale; o TÉRMINO da rotina por objetivo mora em RoutineCreate.
+    objective_id:         Optional[str] = None
+    steps_per_completion: int  = 1
 
     @field_validator("days_of_week")
     @classmethod
@@ -478,6 +490,11 @@ class RoutineItemUpdate(BaseModel):
     start_time:       Optional[str]       = None
     end_time:         Optional[str]       = None
     duration_minutes: Optional[int]       = None
+    not_before:       Optional[str]       = None
+    not_after:        Optional[str]       = None
+    # String vazia = desvincular do objetivo (o service normaliza para NULL).
+    objective_id:         Optional[str] = None
+    steps_per_completion: Optional[int] = None
 
     @field_validator("days_of_week")
     @classmethod
@@ -503,6 +520,10 @@ class RoutineItemResponse(BaseModel):
     start_time:       Optional[str] = None
     end_time:         Optional[str] = None
     duration_minutes: Optional[int] = None
+    not_before:       Optional[str] = None
+    not_after:        Optional[str] = None
+    objective_id:         Optional[str] = None
+    steps_per_completion: int = 1
     created_at:       str
     updated_at:       str
 
@@ -511,6 +532,10 @@ class RoutineCreate(BaseModel):
     name:       str
     start_date: Optional[date] = None   # default: hoje (definido no service)
     end_date:   Optional[date] = None   # null = rotina sem término
+    # Término por OBJETIVO, o par de end_date: concluir o objetivo encerra a
+    # rotina e limpa a agenda futura. Quem para é a rotina inteira, por isso o
+    # campo vive aqui e não no item.
+    objective_id: Optional[str] = None
     # Itens inline: o backend cria a rotina + os itens e já gera as tarefas no
     # calendário numa única chamada. Vazio = cria só o container.
     items:      list[RoutineItemCreate] = []
@@ -520,6 +545,8 @@ class RoutineUpdate(BaseModel):
     name:     Optional[str]  = None
     end_date: Optional[date] = None
     status:   Optional[str]  = None     # 'active' | 'paused'
+    # String vazia / null desvincula o término por objetivo.
+    objective_id: Optional[str] = None
 
     @field_validator("status")
     @classmethod
@@ -541,6 +568,7 @@ class RoutineResponse(BaseModel):
     end_date:        Optional[str] = None
     paused_until:    Optional[str] = None
     generated_until: str
+    objective_id:    Optional[str] = None
     created_at:      str
     updated_at:      str
     streak:          int = 0
@@ -556,6 +584,7 @@ class RoutineListItem(BaseModel):
     end_date:        Optional[str] = None
     paused_until:    Optional[str] = None
     generated_until: str
+    objective_id:    Optional[str] = None
     created_at:      str
     updated_at:      str
     streak:          int = 0
@@ -567,11 +596,17 @@ class RoutineListItem(BaseModel):
 
 class SubtaskCreate(BaseModel):
     title: str
+    # Vínculo próprio: marcar esta subtarefa avança o objetivo sozinha, sem
+    # esperar a tarefa mãe fechar.
+    objective_id: Optional[str] = None
+    objective_steps: Optional[int] = None
 
 
 class SubtaskUpdate(BaseModel):
     title: Optional[str] = None
     done: Optional[bool] = None
+    objective_id: Optional[str] = None
+    objective_steps: Optional[int] = None
 
 
 class SubtaskResponse(BaseModel):
@@ -580,6 +615,8 @@ class SubtaskResponse(BaseModel):
     title: str
     done: bool
     position: int
+    objective_id: Optional[str] = None
+    objective_steps: int = 1
     created_at: str
 
 
@@ -590,6 +627,10 @@ class ObjectiveCreate(BaseModel):
     description: Optional[str] = None
     deadline: Optional[date] = None
     priority: Optional[str] = None
+    # A meta é um CONTADOR ("257 aulas"), não uma lista de tarefas: criar um
+    # objetivo não cria nada na agenda.
+    total_steps: int = 1
+    step_label: Optional[str] = None   # "aulas", "páginas"; default "etapas"
 
 
 class ObjectiveUpdate(BaseModel):
@@ -598,6 +639,8 @@ class ObjectiveUpdate(BaseModel):
     deadline: Optional[date] = None
     status: Optional[str] = None
     priority: Optional[str] = None
+    total_steps: Optional[int] = None
+    step_label: Optional[str] = None
 
 
 class ObjectiveResponse(BaseModel):
@@ -608,10 +651,28 @@ class ObjectiveResponse(BaseModel):
     status: str
     priority: Optional[str] = None
     progress: int
-    subtask_count: int = 0
-    done_count: int = 0
+    total_steps: int = 1
+    completed_steps: int = 0
+    step_label: str = "etapas"
+    # Ritmo e data provável de conclusão. `pace_per_day` vem None enquanto não
+    # houver histórico — a tela deve OMITIR a previsão, nunca inventar número.
+    projection: Optional[dict] = None
     created_at: str
     updated_at: str
+
+
+class StepEntryCreate(BaseModel):
+    """Lançamento manual: o usuário avançou etapas fora de qualquer tarefa."""
+    steps: int = 1
+
+
+class StepEntryResponse(BaseModel):
+    id: str
+    steps: int
+    occurred_at: str
+    source_task_id: Optional[str] = None
+    source_subtask_id: Optional[str] = None
+    source_routine_item_id: Optional[str] = None
 
 
 class DeviceTokenRegister(BaseModel):

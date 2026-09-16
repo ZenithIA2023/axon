@@ -655,3 +655,162 @@ create table if not exists public.voice_stt_usage (
   updated_at   timestamptz not null default now(),
   primary key (user_id, year_month)
 );
+
+-- =============================================
+-- Migration 26: objetivos como contador de etapas
+-- ---------------------------------------------
+-- Antes desta migração, um objetivo só tinha progresso se existissem TAREFAS
+-- reais vinculadas a ele: o cálculo era `tarefas concluídas / tarefas totais`,
+-- contando linhas em `tasks`. Isso obrigava a criar um compromisso na agenda
+-- para cada unidade de progresso — um curso com 257 aulas virava 257 tarefas
+-- sem horário, poluindo a agenda a ponto da funcionalidade ser abandonada.
+--
+-- O modelo novo separa "o que eu preciso fazer" (a meta, um número) de "quando
+-- eu vou fazer" (a agenda). O objetivo passa a ser um CONTADOR; tarefas e
+-- itens de rotina viram FONTES DE AVANÇO desse contador. Criar um objetivo não
+-- cria nada na agenda.
+--
+-- Por que uma tabela de lançamentos (`objective_step_entries`) e não uma
+-- coluna que é incrementada: sem rastro de QUEM causou cada avanço, desmarcar
+-- uma tarefa concluída não teria como saber quanto subtrair, e o contador
+-- dessincronizaria em silêncio. Com o lançamento, desmarcar apaga a linha e o
+-- total (que é sempre a SOMA dos lançamentos) volta sozinho ao valor correto.
+-- De brinde, o histórico passa a ser real: report_service deixa de reconstruir
+-- o progresso passado por aproximação (ver o comentário em _objectives_progress).
+--
+-- `completed_steps` em `objectives` é apenas um CACHE dessa soma, para leitura
+-- rápida na listagem. A verdade é o ledger.
+-- =============================================
+
+-- Limpeza: o modelo antigo sai inteiro. O cascade de `tasks.objective_id`
+-- apaga junto as tarefas-etapa que poluíam a agenda (decisão do Bernardo —
+-- nenhum usuário ativo usava a funcionalidade).
+delete from public.objectives;
+
+alter table public.objectives
+  add column if not exists total_steps     integer not null default 1,
+  add column if not exists completed_steps integer not null default 0,
+  add column if not exists step_label      text    not null default 'etapas';
+
+-- A meta precisa ser positiva: total_steps = 0 tornaria o progresso indefinido.
+alter table public.objectives
+  drop constraint if exists objectives_total_steps_positive;
+alter table public.objectives
+  add constraint objectives_total_steps_positive check (total_steps > 0);
+
+-- Quanto esta tarefa vale quando concluída (só se tiver objective_id).
+alter table public.tasks
+  add column if not exists objective_steps integer not null default 1;
+
+-- Vínculo item de rotina → objetivo. É por ITEM, não pela rotina inteira: uma
+-- rotina "Manhã" pode ter só o item "Alemão" contando para o objetivo.
+-- (O TÉRMINO da rotina por objetivo é outra coisa, e mora em
+-- `routines.objective_id` — ver Migration 27.)
+-- ON DELETE SET NULL: apagar o objetivo não pode derrubar a rotina do usuário.
+alter table public.routine_items
+  add column if not exists objective_id uuid
+    references public.objectives(id) on delete set null,
+  add column if not exists steps_per_completion integer not null default 1;
+
+create index if not exists routine_items_objective_id_idx
+  on public.routine_items(objective_id);
+
+-- O ledger.
+create table if not exists public.objective_step_entries (
+  id                     uuid primary key default gen_random_uuid(),
+  user_id                uuid not null references auth.users(id) on delete cascade,
+  objective_id           uuid not null references public.objectives(id) on delete cascade,
+  -- A tarefa que causou o avanço. CASCADE: apagar a tarefa desfaz o lançamento,
+  -- que é exatamente o comportamento esperado (o avanço deixa de existir).
+  source_task_id         uuid references public.tasks(id) on delete cascade,
+  -- Só para relatório ("quanto veio da rotina X"). SET NULL para não perder o
+  -- lançamento quando o item de rotina é editado/removido — o avanço aconteceu.
+  source_routine_item_id uuid references public.routine_items(id) on delete set null,
+  steps                  integer not null check (steps > 0),
+  occurred_at            timestamptz not null default now(),
+  created_at             timestamptz not null default now()
+);
+
+-- Um lançamento por tarefa: sem isto, um duplo clique em "concluir" (ou uma
+-- corrida entre dois caminhos que marcam a tarefa) lançaria duas vezes. Parcial
+-- porque lançamentos manuais não têm tarefa de origem e podem repetir.
+create unique index if not exists objective_step_entries_source_task_uniq
+  on public.objective_step_entries(source_task_id)
+  where source_task_id is not null;
+
+-- Leitura por objetivo (soma do total) e por janela de datas (relatórios).
+create index if not exists objective_step_entries_objective_idx
+  on public.objective_step_entries(objective_id, occurred_at desc);
+
+create index if not exists objective_step_entries_user_occurred_idx
+  on public.objective_step_entries(user_id, occurred_at desc);
+
+alter table public.objective_step_entries enable row level security;
+
+create policy "objective_step_entries_select" on public.objective_step_entries
+  for select using (auth.uid() = user_id);
+create policy "objective_step_entries_insert" on public.objective_step_entries
+  for insert with check (auth.uid() = user_id);
+create policy "objective_step_entries_update" on public.objective_step_entries
+  for update using (auth.uid() = user_id);
+create policy "objective_step_entries_delete" on public.objective_step_entries
+  for delete using (auth.uid() = user_id);
+
+-- =============================================
+-- Migration 27: subtarefa como fonte de avanço + rotina que termina com o objetivo
+-- ---------------------------------------------
+-- Duas mudanças que nasceram do uso real da Migration 26.
+--
+-- (1) VÍNCULO POR SUBTAREFA. Até aqui só a tarefa mãe avançava o objetivo: um
+-- "Estudar alemão" com 3 aulas como subtarefas só lançava quando as TRÊS
+-- fechassem. Mas a unidade de progresso real do usuário é a aula, não o bloco
+-- de estudo. Agora a subtarefa pode ter o próprio `objective_id`, e marcá-la
+-- lança sozinha — independente da tarefa mãe.
+--
+-- Os dois vínculos coexistem de propósito e NÃO se somam por acidente: quem
+-- vincula só a mãe continua lançando na conclusão dela; quem vincula as
+-- subtarefas lança uma a uma. Vincular os dois ao mesmo objetivo é escolha do
+-- usuário (o ledger registra ambos como lançamentos distintos, cada um com sua
+-- origem), e o índice único é por LINHA de origem — um por tarefa e um por
+-- subtarefa —, então nada duplica dentro de cada caminho.
+--
+-- (2) `routines.objective_id`. Antes, "pausar a rotina quando o objetivo
+-- terminar" era opção de ITEM, escondida em opções avançadas. Mas quem para é
+-- a ROTINA inteira, não o item — a opção estava no nível errado, e o usuário
+-- tinha de abrir um item para configurar algo da rotina. Ela sobe para o lado
+-- da data de término, que é exatamente o que ela é: um término por objetivo em
+-- vez de por data.
+-- =============================================
+
+-- (1) A subtarefa como fonte de avanço.
+-- ON DELETE SET NULL no objetivo: apagar o objetivo não pode apagar o
+-- checklist do usuário.
+alter table public.subtasks
+  add column if not exists objective_id uuid
+    references public.objectives(id) on delete set null,
+  add column if not exists objective_steps integer not null default 1;
+
+create index if not exists subtasks_objective_id_idx
+  on public.subtasks(objective_id);
+
+-- A origem do lançamento no ledger. CASCADE como em source_task_id: apagar a
+-- subtarefa desfaz o avanço que ela causou.
+alter table public.objective_step_entries
+  add column if not exists source_subtask_id uuid
+    references public.subtasks(id) on delete cascade;
+
+-- Um lançamento por subtarefa, no mesmo espírito do índice de source_task_id:
+-- sem ele, um duplo clique em "concluir" lançaria duas vezes. Índice separado
+-- (e não um composto) porque cada origem é independente da outra.
+create unique index if not exists objective_step_entries_source_subtask_uniq
+  on public.objective_step_entries(source_subtask_id)
+  where source_subtask_id is not null;
+
+-- (2) Rotina que termina quando o objetivo é concluído.
+-- É o par da coluna `end_date`: término por objetivo em vez de por data.
+alter table public.routines
+  add column if not exists objective_id uuid
+    references public.objectives(id) on delete set null;
+
+create index if not exists routines_objective_id_idx
+  on public.routines(objective_id);

@@ -673,6 +673,8 @@ export interface Task {
   carry_count: number;
   objective_id?: string | null;
   objective_title?: string | null;
+  // Quantas etapas do objetivo esta tarefa vale ao ser concluída.
+  objective_steps?: number;
   created_by: "user" | "agent";
   created_at: string;
 }
@@ -692,6 +694,7 @@ export interface TaskCreateInput {
   axon_pick_time?: boolean;
   duration_minutes?: number;
   objective_id?: string;
+  objective_steps?: number;
 }
 
 // `null` limpa o campo no banco; `undefined` (ou omitido) deixa como está. O
@@ -770,6 +773,10 @@ export interface Subtask {
   title: string;
   done: boolean;
   position: number;
+  // Vínculo próprio com um objetivo: marcar esta subtarefa avança o contador
+  // sozinha, sem esperar a tarefa mãe fechar.
+  objective_id?: string | null;
+  objective_steps?: number;
   created_at: string;
 }
 
@@ -787,6 +794,8 @@ export function createSubtask(
   body: {
     title: string;
     position?: number;
+    objective_id?: string | null;
+    objective_steps?: number;
   }
 ) {
   return request<Subtask>(`/subtasks/task/${taskId}`, {
@@ -801,6 +810,9 @@ export function updateSubtask(
     done?: boolean;
     title?: string;
     position?: number;
+    // `null` desvincula do objetivo.
+    objective_id?: string | null;
+    objective_steps?: number;
   }
 ) {
   return request<Subtask>(`/subtasks/${subtaskId}`, {
@@ -1558,6 +1570,13 @@ export interface RoutineItem {
   start_time?: string | null; // "HH:MM" para item fixo
   end_time?: string | null; // "HH:MM" para item fixo
   duration_minutes?: number | null; // duração usada em item flexível
+  not_before?: string | null; // "HH:MM" — piso da janela do item flexível
+  not_after?: string | null; // "HH:MM" — teto da janela do item flexível
+  // Vínculo com objetivo: concluir a tarefa gerada por este item avança o
+  // contador do objetivo em `steps_per_completion` etapas. O TÉRMINO da rotina
+  // por objetivo mora em `Routine.objective_id`, não aqui.
+  objective_id?: string | null;
+  steps_per_completion: number;
   created_at: string;
   updated_at: string;
 }
@@ -1570,6 +1589,9 @@ export interface Routine {
   end_date?: string | null;
   paused_until?: string | null;
   generated_until: string;
+  // Término por OBJETIVO, o par de end_date: concluir o objetivo encerra a
+  // rotina e limpa a agenda futura.
+  objective_id?: string | null;
   created_at: string;
   updated_at: string;
   streak: number;
@@ -1588,12 +1610,18 @@ export interface RoutineItemCreateInput {
   start_time?: string; // "HH:MM"
   end_time?: string; // "HH:MM"
   duration_minutes?: number;
+  not_before?: string;
+  not_after?: string;
+  objective_id?: string | null;
+  steps_per_completion?: number;
 }
 
 export interface RoutineCreateInput {
   name: string;
   start_date?: string; // "YYYY-MM-DD" — backend usa hoje quando omitido
   end_date?: string | null;
+  // Término por objetivo, alternativa a end_date.
+  objective_id?: string | null;
   items: RoutineItemCreateInput[];
 }
 
@@ -1627,7 +1655,12 @@ export function resumeRoutine(id: string) {
 
 export function updateRoutine(
   id: string,
-  body: { name?: string; end_date?: string | null; status?: RoutineStatus }
+  body: {
+    name?: string;
+    end_date?: string | null;
+    status?: RoutineStatus;
+    objective_id?: string | null;
+  }
 ) {
   return request<RoutineDetail>(`/routines/${id}`, {
     method: "PATCH",
@@ -1646,6 +1679,11 @@ export interface RoutineItemUpdateInput {
   start_time?: string | null;
   end_time?: string | null;
   duration_minutes?: number | null;
+  not_before?: string | null;
+  not_after?: string | null;
+  // `null` desvincula do objetivo (o backend zera o multiplicador junto).
+  objective_id?: string | null;
+  steps_per_completion?: number;
 }
 
 export function addRoutineItem(routineId: string, body: RoutineItemCreateInput) {
@@ -1696,6 +1734,16 @@ export function deleteMemory(id: string) {
  * Objetivos de longo prazo que podem agrupar tarefas/subtarefas.
  * ========================================================================== */
 
+// Ritmo e data provável de conclusão, calculados no backend a partir do
+// ledger. `pace_per_day` vem null enquanto não houver histórico suficiente — a
+// tela deve OMITIR a previsão nesse caso, nunca mostrar um número inventado.
+export interface ObjectiveProjection {
+  pace_per_day: number | null;
+  projected_date: string | null; // "YYYY-MM-DD"
+  days_late: number | null;
+  on_track: boolean | null;
+}
+
 export interface Objective {
   id: string;
   title: string;
@@ -1704,19 +1752,36 @@ export interface Objective {
   status: "active" | "done";
   priority?: "low" | "medium" | "high" | null;
   progress: number;
-  subtask_count: number;
-  done_count: number;
+  // O objetivo é um CONTADOR: total_steps é a meta, completed_steps é a soma
+  // dos lançamentos e step_label é como chamar a unidade ("aulas", "páginas").
+  total_steps: number;
+  completed_steps: number;
+  step_label: string;
+  projection?: ObjectiveProjection | null;
   created_at: string;
   updated_at: string;
-  subtasks?: Task[];
+}
+
+// Um lançamento do ledger: de onde veio cada avanço do contador.
+export interface StepEntry {
+  id: string;
+  steps: number;
+  occurred_at: string;
+  source_task_id?: string | null;
+  source_subtask_id?: string | null;
+  source_routine_item_id?: string | null;
 }
 
 export function getObjectives() {
   return request<Objective[]>("/objectives");
 }
 
+// `linked_tasks` são as tarefas que o usuário escolheu colocar na agenda para
+// este objetivo. São opcionais e NÃO definem o progresso — o ledger define.
 export function getObjective(id: string) {
-  return request<Objective & { subtasks: Task[] }>(`/objectives/${id}`);
+  return request<Objective & { entries: StepEntry[]; linked_tasks: Task[] }>(
+    `/objectives/${id}`
+  );
 }
 
 export function createObjective(payload: {
@@ -1724,6 +1789,8 @@ export function createObjective(payload: {
   description?: string;
   deadline?: string;
   priority?: "low" | "medium" | "high";
+  total_steps?: number;
+  step_label?: string;
 }) {
   return request<Objective>("/objectives", {
     method: "POST",
@@ -1738,11 +1805,27 @@ export function updateObjective(
     description?: string;
     deadline?: string | null;
     priority?: "low" | "medium" | "high";
+    total_steps?: number;
+    step_label?: string;
   }
 ) {
   return request<Objective>(`/objectives/${id}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
+  });
+}
+
+// Lançamento avulso: avanço que não veio de nenhuma tarefa da agenda.
+export function addObjectiveEntry(id: string, steps: number) {
+  return request<Objective>(`/objectives/${id}/entries`, {
+    method: "POST",
+    body: JSON.stringify({ steps }),
+  });
+}
+
+export function deleteObjectiveEntry(id: string, entryId: string) {
+  return request<Objective>(`/objectives/${id}/entries/${entryId}`, {
+    method: "DELETE",
   });
 }
 

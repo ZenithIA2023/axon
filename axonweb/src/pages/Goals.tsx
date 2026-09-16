@@ -42,19 +42,22 @@ const STATUS_TASK: Record<string, string> = {
   scheduled: "Agendada",
 };
 
+// "Com/sem etapas" perdeu o sentido quando o objetivo virou contador: todo
+// objetivo tem etapas agora. O que interessa é o estágio do contador e se a
+// projeção de ritmo indica que o prazo não será cumprido.
 type DesktopGoalFilter =
   | "all"
-  | "with_steps"
-  | "without_steps"
+  | "in_progress"
+  | "not_started"
   | "with_deadline"
-  | "overdue";
+  | "late";
 
 const DESKTOP_GOAL_FILTERS: { key: DesktopGoalFilter; label: string }[] = [
   { key: "all", label: "Todas" },
-  { key: "with_steps", label: "Com etapas" },
-  { key: "without_steps", label: "Sem etapas" },
+  { key: "in_progress", label: "Em andamento" },
+  { key: "not_started", label: "Não iniciadas" },
   { key: "with_deadline", label: "Com prazo" },
-  { key: "overdue", label: "Atrasadas" },
+  { key: "late", label: "Atrasadas" },
 ];
 
 type PlanningDesktopView = "rotinas" | "agenda" | "objetivos";
@@ -101,16 +104,16 @@ export default function Goals({
   const [objectives, setObjectives] = useState<Objective[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [subtasks, setSubtasks] = useState<Record<string, api.Task[]>>({});
-  const [loadingSubtasks, setLoadingSubtasks] = useState<string | null>(null);
+  // Detalhe carregado sob demanda: lançamentos do ledger + tarefas agendadas.
+  const [details, setDetails] = useState<Record<string, ObjectiveDetail>>({});
+  const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingObjective, setEditingObjective] = useState<Objective | null>(null);
-  const [addingStepTo, setAddingStepTo] = useState<Objective | null>(null);
+  const [addingProgressTo, setAddingProgressTo] = useState<Objective | null>(null);
   const [editingStep, setEditingStep] = useState<{
     task: api.Task;
     objectiveId: string;
   } | null>(null);
-  const [togglingStepId, setTogglingStepId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Cronotipo usado para alimentar a sidebar quando a página não está embutida.
@@ -144,7 +147,7 @@ export default function Goals({
     loadObjectives();
   }, [navigate]);
 
-  // Expande o objetivo e carrega suas etapas sob demanda.
+  // Expande o objetivo e carrega o detalhe (lançamentos + tarefas) sob demanda.
   async function toggleExpand(id: string) {
     if (expandedId === id) {
       setExpandedId(null);
@@ -153,46 +156,30 @@ export default function Goals({
 
     setExpandedId(id);
 
-    if (!subtasks[id]) {
-      setLoadingSubtasks(id);
+    if (!details[id]) {
+      setLoadingDetailId(id);
       try {
-        const { subtasks: objectiveSteps } = await getObjectiveWithAllSteps(id);
-        setSubtasks((prev) => ({ ...prev, [id]: objectiveSteps }));
+        const { detail } = await loadObjectiveDetail(id);
+        setDetails((prev) => ({ ...prev, [id]: detail }));
       } catch {
-        // Se falhar, mantém o objetivo aberto sem etapas.
+        // Se falhar, mantém o objetivo aberto sem o detalhe.
       } finally {
-        setLoadingSubtasks(null);
+        setLoadingDetailId(null);
       }
     }
   }
 
-  // Atualiza etapas e progresso do objetivo depois de criar/editar/concluir etapas.
-  async function refreshSubtasks(objectiveId: string) {
+  // Recarrega contador e detalhe depois de um lançamento ou de mexer numa
+  // tarefa vinculada. O objeto vem inteiro do backend — nada é recalculado
+  // aqui, senão a tela e o ledger divergiriam.
+  async function refreshObjective(objectiveId: string) {
     try {
-      const { objective: obj, subtasks: objectiveSteps } =
-        await getObjectiveWithAllSteps(objectiveId);
+      const { objective: fresh, detail } = await loadObjectiveDetail(objectiveId);
 
-      setSubtasks((prev) => ({ ...prev, [objectiveId]: objectiveSteps }));
+      setDetails((prev) => ({ ...prev, [objectiveId]: detail }));
       setObjectives((prev) =>
         prev.map((objective) =>
-          objective.id === objectiveId
-            ? {
-                ...objective,
-                subtask_count: obj.subtask_count ?? objectiveSteps.length,
-                done_count:
-                  obj.done_count ??
-                  objectiveSteps.filter((task) => task.status === "done").length,
-                progress:
-                  obj.progress ??
-                  calculateObjectiveProgressFromSteps(objectiveSteps),
-                status:
-                  obj.status ??
-                  (objectiveSteps.length > 0 &&
-                  objectiveSteps.every((task) => task.status === "done")
-                    ? "done"
-                    : objective.status),
-              }
-            : objective
+          objective.id === objectiveId ? { ...objective, ...fresh } : objective
         )
       );
     } catch {
@@ -214,31 +201,20 @@ export default function Goals({
     }
   }
 
-  // Marca/desmarca uma etapa e recalcula o progresso do objetivo.
-  async function handleToggleStep(objectiveId: string, task: api.Task) {
-    setTogglingStepId(task.id);
-    const next =
-      task.status === "done"
-        ? { status: "todo" as api.TaskStatus, progress: 0 }
-        : { status: "done" as api.TaskStatus, progress: 100 };
-    try {
-      await api.updateTask(task.id, next);
-      await refreshSubtasks(objectiveId);
-    } catch {
-      // Mantém a etapa no estado atual em caso de erro.
-    } finally {
-      setTogglingStepId(null);
-    }
-  }
-
   const completedObjectives = objectives.filter(isObjectiveCompleted);
   const activeObjectiveList = objectives.filter(
     (objective) => !isObjectiveCompleted(objective)
   );
   const doneObjectives = completedObjectives.length;
   const activeObjectives = activeObjectiveList.length;
-  const totalSteps = objectives.reduce((total, objective) => total + (objective.subtask_count ?? 0), 0);
-  const doneSteps = objectives.reduce((total, objective) => total + (objective.done_count ?? 0), 0);
+  const totalSteps = objectives.reduce(
+    (total, objective) => total + (objective.total_steps ?? 0),
+    0
+  );
+  const doneSteps = objectives.reduce(
+    (total, objective) => total + (objective.completed_steps ?? 0),
+    0
+  );
   const averageProgress =
     objectives.length === 0
       ? 0
@@ -284,7 +260,7 @@ export default function Goals({
             </div>
             <p className="text-base font-semibold text-white">Nenhum objetivo ainda</p>
             <p className="mt-2 max-w-[260px] text-sm leading-6 text-slate-500 dark:text-white/42">
-              Crie seu primeiro objetivo e adicione as etapas que vão te levar até ele.
+              Defina uma meta com um total de etapas e acompanhe o contador avançar.
             </p>
             <button
               onClick={() => setIsCreateOpen(true)}
@@ -301,15 +277,13 @@ export default function Goals({
                 key={obj.id}
                 objective={obj}
                 isExpanded={expandedId === obj.id}
-                isLoadingSubtasks={loadingSubtasks === obj.id}
-                subtasks={subtasks[obj.id] ?? []}
+                isLoadingDetail={loadingDetailId === obj.id}
+                detail={details[obj.id]}
                 isDeleting={deletingId === obj.id}
-                togglingStepId={togglingStepId}
                 onToggle={() => toggleExpand(obj.id)}
                 onEdit={() => setEditingObjective(obj)}
-                onAddStep={() => setAddingStepTo(obj)}
-                onToggleStep={(task) => handleToggleStep(obj.id, task)}
-                onEditStep={(task) => setEditingStep({ task, objectiveId: obj.id })}
+                onAddProgress={() => setAddingProgressTo(obj)}
+                onEditTask={(task) => setEditingStep({ task, objectiveId: obj.id })}
                 onDelete={() => handleDelete(obj.id)}
               />
             ))}
@@ -322,10 +296,9 @@ export default function Goals({
           objectives={objectives}
           loading={loading}
           expandedId={expandedId}
-          subtasks={subtasks}
-          loadingSubtasks={loadingSubtasks}
+          details={details}
+          loadingDetailId={loadingDetailId}
           deletingId={deletingId}
-          togglingStepId={togglingStepId}
           doneObjectives={doneObjectives}
           completedObjectives={completedObjectives}
           activeObjectives={activeObjectives}
@@ -340,9 +313,8 @@ export default function Goals({
           onCreate={() => setIsCreateOpen(true)}
           onToggleExpand={toggleExpand}
           onEditObjective={setEditingObjective}
-          onAddStep={setAddingStepTo}
-          onToggleStep={handleToggleStep}
-          onEditStep={(task, objectiveId) => setEditingStep({ task, objectiveId })}
+          onAddProgress={setAddingProgressTo}
+          onEditTask={(task, objectiveId) => setEditingStep({ task, objectiveId })}
           onDelete={handleDelete}
         />
       )}
@@ -355,20 +327,11 @@ export default function Goals({
       {isCreateOpen && (
         <CreateObjectiveModal
           onClose={() => setIsCreateOpen(false)}
-          onCreated={async (newId) => {
+          onCreated={async () => {
+            // Nada é criado na agenda, então não há o que expandir: só a lista
+            // precisa refletir o objetivo novo.
             setIsCreateOpen(false);
             await loadObjectives();
-            // Expande o novo objetivo para mostrar as etapas criadas
-            if (newId) {
-              setExpandedId(newId);
-              const loaded = await getObjectiveWithAllSteps(newId).catch(() => null);
-              if (loaded) {
-                setSubtasks((prev) => ({
-                  ...prev,
-                  [newId]: loaded.subtasks,
-                }));
-              }
-            }
           }}
         />
       )}
@@ -378,19 +341,22 @@ export default function Goals({
           objective={editingObjective}
           onClose={() => setEditingObjective(null)}
           onUpdated={async (updated) => {
-            setObjectives((prev) => prev.map((o) => o.id === updated.id ? { ...o, ...updated } : o));
+            setObjectives((prev) =>
+              prev.map((o) => (o.id === updated.id ? { ...o, ...updated } : o))
+            );
             setEditingObjective(null);
           }}
         />
       )}
 
-      {addingStepTo && (
-        <AddStepModal
-          objective={addingStepTo}
-          onClose={() => setAddingStepTo(null)}
-          onCreated={async () => {
-            setAddingStepTo(null);
-            await refreshSubtasks(addingStepTo.id);
+      {addingProgressTo && (
+        <AddProgressModal
+          objective={addingProgressTo}
+          onClose={() => setAddingProgressTo(null)}
+          onRegistered={async () => {
+            const objId = addingProgressTo.id;
+            setAddingProgressTo(null);
+            await refreshObjective(objId);
           }}
         />
       )}
@@ -402,7 +368,7 @@ export default function Goals({
           onUpdated={async () => {
             const objId = editingStep.objectiveId;
             setEditingStep(null);
-            await refreshSubtasks(objId);
+            await refreshObjective(objId);
           }}
         />
       )}
@@ -499,19 +465,25 @@ function matchesDesktopGoalFilter(
   objective: Objective,
   filter: DesktopGoalFilter
 ) {
-  const subtaskCount = objective.subtask_count ?? 0;
+  const done = objective.completed_steps ?? 0;
   const deadline = objective.deadline?.slice(0, 10) ?? "";
   const today = new Date().toLocaleDateString("en-CA");
 
   switch (filter) {
-    case "with_steps":
-      return subtaskCount > 0;
-    case "without_steps":
-      return subtaskCount === 0;
+    case "in_progress":
+      return done > 0;
+    case "not_started":
+      return done === 0;
     case "with_deadline":
       return Boolean(deadline);
-    case "overdue":
-      return Boolean(deadline) && deadline < today;
+    case "late":
+      // Atrasado é o prazo já vencido OU a projeção do backend apontando que o
+      // ritmo atual não chega a tempo — este segundo caso avisa ANTES de dar
+      // ruim, que é o ponto da projeção.
+      return (
+        (Boolean(deadline) && deadline < today) ||
+        objective.projection?.on_track === false
+      );
     case "all":
     default:
       return true;
@@ -521,112 +493,247 @@ function matchesDesktopGoalFilter(
 type ObjectiveWithFallbackStatus = Objective & { status?: string | null };
 
 function isObjectiveCompleted(objective: ObjectiveWithFallbackStatus) {
-  const progress = objective.progress ?? 0;
-  const subtaskCount = objective.subtask_count ?? 0;
-  const doneCount = objective.done_count ?? 0;
+  const total = objective.total_steps ?? 0;
+  const done = objective.completed_steps ?? 0;
 
   return (
     objective.status === "done" ||
-    progress >= 100 ||
-    (subtaskCount > 0 && doneCount >= subtaskCount)
+    (objective.progress ?? 0) >= 100 ||
+    (total > 0 && done >= total)
   );
 }
 
-async function getObjectiveWithAllSteps(objectiveId: string) {
+// O backend é a fonte única do progresso — o frontend não recalcula nada. O
+// que ele carrega sob demanda é o DETALHE: os lançamentos do ledger (de onde
+// veio cada avanço) e as tarefas que o usuário agendou para este objetivo.
+type ObjectiveDetail = {
+  entries: api.StepEntry[];
+  linkedTasks: api.Task[];
+};
+
+async function loadObjectiveDetail(objectiveId: string): Promise<{
+  objective: Objective;
+  detail: ObjectiveDetail;
+}> {
   const objective = await api.getObjective(objectiveId);
-  const objectiveSteps = objective.subtasks ?? [];
 
-  try {
-    const allTasks = await api.getTasks();
-    const linkedSteps = allTasks.filter((task) =>
-      taskBelongsToObjective(task, objectiveId)
-    );
-
-    return {
-      objective,
-      subtasks: sortObjectiveSteps(
-        mergeObjectiveSteps([...objectiveSteps, ...linkedSteps])
-      ),
-    };
-  } catch {
-    return {
-      objective,
-      subtasks: sortObjectiveSteps(objectiveSteps),
-    };
-  }
+  return {
+    objective,
+    detail: {
+      entries: objective.entries ?? [],
+      linkedTasks: sortLinkedTasks(objective.linked_tasks ?? []),
+    },
+  };
 }
 
-function taskBelongsToObjective(task: api.Task, objectiveId: string) {
-  const record = task as api.Task &
-    Record<string, unknown> & {
-      objective_id?: string | null;
-      objectiveId?: string | null;
-      objective?: { id?: string | null } | string | null;
-    };
-
-  if (record.objective_id === objectiveId || record.objectiveId === objectiveId) {
-    return true;
-  }
-
-  if (typeof record.objective === "string") {
-    return record.objective === objectiveId;
-  }
-
-  if (
-    record.objective &&
-    typeof record.objective === "object" &&
-    record.objective.id === objectiveId
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
-function mergeObjectiveSteps(steps: api.Task[]) {
-  const map = new Map<string, api.Task>();
-
-  steps.forEach((step) => {
-    const existing = map.get(step.id);
-    map.set(step.id, existing ? { ...existing, ...step } : step);
-  });
-
-  return Array.from(map.values());
-}
-
-function sortObjectiveSteps(steps: api.Task[]) {
-  return [...steps].sort((a, b) => {
+function sortLinkedTasks(tasks: api.Task[]) {
+  return [...tasks].sort((a, b) => {
     const aDone = a.status === "done";
     const bDone = b.status === "done";
 
-    if (aDone !== bDone) {
-      return aDone ? 1 : -1;
-    }
+    if (aDone !== bDone) return aDone ? 1 : -1;
 
-    const byDate = (a.scheduled_date ?? "").localeCompare(
-      b.scheduled_date ?? ""
-    );
-
-    if (byDate !== 0) {
-      return byDate;
-    }
+    const byDate = (a.scheduled_date ?? "").localeCompare(b.scheduled_date ?? "");
+    if (byDate !== 0) return byDate;
 
     const byTime = (a.start_time ?? "").localeCompare(b.start_time ?? "");
-
-    if (byTime !== 0) {
-      return byTime;
-    }
+    if (byTime !== 0) return byTime;
 
     return a.title.localeCompare(b.title);
   });
 }
 
-function calculateObjectiveProgressFromSteps(steps: api.Task[]) {
-  if (steps.length === 0) return 0;
+// De onde veio o lançamento. Um item de rotina materializa uma tarefa, então
+// rotina e tarefa chegam ambos com source_task_id — o source_routine_item_id é
+// o que distingue os dois casos. Subtarefa tem coluna própria e é checada
+// antes, senão um avanço de checklist apareceria como "Manual".
+function entryOrigin(entry: api.StepEntry) {
+  if (entry.source_routine_item_id) return "Rotina";
+  if (entry.source_subtask_id) return "Subtarefa";
+  if (entry.source_task_id) return "Tarefa";
+  return "Manual";
+}
 
-  return Math.round(
-    (steps.filter((step) => step.status === "done").length / steps.length) *
-      100
+function formatEntryDate(occurredAt: string) {
+  const parsed = new Date(occurredAt);
+
+  if (Number.isNaN(parsed.getTime())) return occurredAt.slice(0, 10);
+
+  return parsed.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+}
+
+function formatProjectedDate(isoDate: string) {
+  // "YYYY-MM-DD" precisa virar data LOCAL: `new Date("2027-02-03")` seria
+  // interpretada como UTC e viraria o dia anterior em fusos negativos.
+  const [year, month, day] = isoDate.slice(0, 10).split("-").map(Number);
+
+  if (!year || !month || !day) return isoDate;
+
+  return new Date(year, month - 1, day).toLocaleDateString("pt-BR", {
+    day: "numeric",
+    month: "long",
+  });
+}
+
+// Rótulo do contador: "11/257 aulas". O step_label já vem no plural do backend.
+function stepCountLabel(objective: Objective) {
+  return `${objective.completed_steps ?? 0}/${objective.total_steps ?? 0} ${
+    objective.step_label ?? "etapas"
+  }`;
+}
+
+// Linha de ritmo + previsão. Devolve null quando o backend não tem histórico
+// suficiente: a tela OMITE a previsão em vez de inventar um número.
+function ObjectiveProjectionLine({
+  objective,
+  compact = false,
+}: {
+  objective: Objective;
+  compact?: boolean;
+}) {
+  const projection = objective.projection;
+
+  if (!projection || projection.pace_per_day == null) return null;
+
+  const late = projection.on_track === false && (projection.days_late ?? 0) > 0;
+  const unit = objective.step_label ?? "etapas";
+
+  return (
+    <div
+      className={`mt-2 space-y-0.5 ${
+        compact ? "text-[0.64rem]" : "text-[0.68rem]"
+      } text-slate-500 dark:text-white/38`}
+    >
+      <p>
+        Ritmo: {projection.pace_per_day.toLocaleString("pt-BR")} {unit}/dia
+      </p>
+      {projection.projected_date && (
+        <p className="flex flex-wrap items-center gap-x-1.5">
+          <span>Previsão: {formatProjectedDate(projection.projected_date)}</span>
+          {late && (
+            <span className="font-semibold text-rose-500 dark:text-rose-300">
+              ⚠ {projection.days_late} {projection.days_late === 1 ? "dia" : "dias"} depois
+              do prazo
+            </span>
+          )}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Extrato do ledger: data, origem e quantidade de cada avanço.
+function ObjectiveEntriesList({
+  entries,
+  unit,
+}: {
+  entries: api.StepEntry[];
+  unit: string;
+}) {
+  if (entries.length === 0) {
+    return (
+      <p className="py-2 text-xs text-slate-500 dark:text-white/38">
+        Nenhum avanço registrado ainda.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {entries.map((entry) => (
+        <div
+          key={entry.id}
+          className="flex items-center gap-2.5 rounded-xl border border-slate-200/80 bg-white/70 px-3 py-1.5 dark:border-white/8 dark:bg-white/[0.03]"
+        >
+          <span className="w-10 shrink-0 text-[0.65rem] font-semibold text-slate-500 dark:text-white/32">
+            {formatEntryDate(entry.occurred_at)}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-xs text-slate-700 dark:text-white/70">
+            {entryOrigin(entry)}
+          </span>
+          <span className="shrink-0 text-xs font-bold text-[#7e22ce] dark:text-[#e9d5ff]">
+            +{entry.steps}
+          </span>
+        </div>
+      ))}
+      <p className="pt-0.5 text-[0.62rem] text-slate-400 dark:text-white/25">
+        Unidade: {unit}
+      </p>
+    </div>
+  );
+}
+
+// As tarefas agendadas para o objetivo. Aparecem como CONTEXTO da agenda — não
+// definem o progresso, que vem só do ledger. Deixar isso explícito evita o
+// engano do modelo antigo, em que a lista de tarefas ERA o progresso.
+function ObjectiveLinkedTasks({
+  tasks,
+  onEditTask,
+}: {
+  tasks: api.Task[];
+  onEditTask: (task: api.Task) => void;
+}) {
+  if (tasks.length === 0) return null;
+
+  return (
+    <div className="mt-3">
+      <p className="mb-1.5 text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-slate-400 dark:text-white/28">
+        Tarefas agendadas · não definem o progresso
+      </p>
+      <div className="space-y-1.5">
+        {tasks.map((task) => {
+          const done = task.status === "done";
+          const steps = task.objective_steps ?? 1;
+
+          return (
+            <div
+              key={task.id}
+              className="flex items-center gap-2.5 rounded-xl border border-slate-200/80 bg-white/70 px-3 py-1.5 dark:border-white/8 dark:bg-white/[0.03]"
+            >
+              <span
+                className={`h-2 w-2 shrink-0 rounded-full ${
+                  done
+                    ? "bg-emerald-400"
+                    : task.status === "progress"
+                    ? "bg-purple-300"
+                    : "bg-slate-300 dark:bg-white/25"
+                }`}
+              />
+              <div className="min-w-0 flex-1">
+                <p
+                  className={`truncate text-xs font-semibold ${
+                    done
+                      ? "text-slate-500 line-through dark:text-white/40"
+                      : "text-slate-700 dark:text-white/75"
+                  }`}
+                >
+                  {task.title}
+                </p>
+                {task.scheduled_date && (
+                  <p className="mt-0.5 text-[0.65rem] text-slate-500 dark:text-white/30">
+                    {task.scheduled_date}
+                    {task.start_time ? ` · ${task.start_time.slice(0, 5)}` : ""}
+                  </p>
+                )}
+              </div>
+              {steps > 1 && (
+                <span className="shrink-0 text-[0.65rem] font-bold text-[#7e22ce] dark:text-[#e9d5ff]">
+                  +{steps}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => onEditTask(task)}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/[0.82] text-slate-500 active:scale-[0.94] dark:bg-white/[0.055] dark:text-white/40"
+                aria-label="Editar tarefa"
+              >
+                <Edit3 className="h-3 w-3" />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -634,10 +741,9 @@ function DesktopGoalsPanel({
   objectives,
   loading,
   expandedId,
-  subtasks,
-  loadingSubtasks,
+  details,
+  loadingDetailId,
   deletingId,
-  togglingStepId,
   doneObjectives,
   completedObjectives,
   activeObjectives,
@@ -652,18 +758,16 @@ function DesktopGoalsPanel({
   onCreate,
   onToggleExpand,
   onEditObjective,
-  onAddStep,
-  onToggleStep,
-  onEditStep,
+  onAddProgress,
+  onEditTask,
   onDelete,
 }: {
   objectives: Objective[];
   loading: boolean;
   expandedId: string | null;
-  subtasks: Record<string, api.Task[]>;
-  loadingSubtasks: string | null;
+  details: Record<string, ObjectiveDetail>;
+  loadingDetailId: string | null;
   deletingId: string | null;
-  togglingStepId: string | null;
   doneObjectives: number;
   completedObjectives: Objective[];
   activeObjectives: number;
@@ -678,9 +782,8 @@ function DesktopGoalsPanel({
   onCreate: () => void;
   onToggleExpand: (id: string) => void;
   onEditObjective: (objective: Objective) => void;
-  onAddStep: (objective: Objective) => void;
-  onToggleStep: (objectiveId: string, task: api.Task) => void;
-  onEditStep: (task: api.Task, objectiveId: string) => void;
+  onAddProgress: (objective: Objective) => void;
+  onEditTask: (task: api.Task, objectiveId: string) => void;
   onDelete: (id: string) => void;
 }) {
   const [searchTerm, setSearchTerm] = useState("");
@@ -760,7 +863,7 @@ function DesktopGoalsPanel({
                     }
                     description={
                       objectives.length === 0
-                        ? "Crie um objetivo e transforme a meta em etapas claras para acompanhar no calendário."
+                        ? "Crie um objetivo com um total de etapas e acompanhe o contador avançar — sem poluir a agenda."
                         : "Seus objetivos concluídos foram movidos para o histórico da barra lateral."
                     }
                     actionLabel={
@@ -784,15 +887,13 @@ function DesktopGoalsPanel({
                       key={objective.id}
                       objective={objective}
                       isExpanded={expandedId === objective.id}
-                      isLoadingSubtasks={loadingSubtasks === objective.id}
-                      subtasks={subtasks[objective.id] ?? []}
+                      isLoadingDetail={loadingDetailId === objective.id}
+                      detail={details[objective.id]}
                       isDeleting={deletingId === objective.id}
-                      togglingStepId={togglingStepId}
                       onToggle={() => onToggleExpand(objective.id)}
                       onEdit={() => onEditObjective(objective)}
-                      onAddStep={() => onAddStep(objective)}
-                      onToggleStep={(task) => onToggleStep(objective.id, task)}
-                      onEditStep={(task) => onEditStep(task, objective.id)}
+                      onAddProgress={() => onAddProgress(objective)}
+                      onEditTask={(task) => onEditTask(task, objective.id)}
                       onDelete={() => onDelete(objective.id)}
                     />
                   ))}
@@ -1049,7 +1150,7 @@ function DesktopGoalsProgressCard({
         <DesktopGoalStat label="Ativos" value={activeObjectives} />
         <DesktopGoalStat label="Concluídos" value={doneObjectives} />
         <DesktopGoalStat label="Etapas" value={totalSteps} />
-        <DesktopGoalStat label="Feitas" value={doneSteps} />
+        <DesktopGoalStat label="Concluídas" value={doneSteps} />
       </div>
     </div>
   );
@@ -1063,9 +1164,10 @@ function DesktopCompletedObjectivesCard({
   const [expandedObjectiveId, setExpandedObjectiveId] = useState<string | null>(
     null
   );
-  const [loadingStepsId, setLoadingStepsId] = useState<string | null>(null);
-  const [stepsByObjective, setStepsByObjective] = useState<
-    Record<string, api.Task[]>
+  const [loadingEntriesId, setLoadingEntriesId] = useState<string | null>(null);
+  // Histórico do ledger do objetivo concluído: como ele foi cumprido.
+  const [entriesByObjective, setEntriesByObjective] = useState<
+    Record<string, api.StepEntry[]>
   >({});
 
   const visibleObjectives = [...objectives].sort((a, b) => {
@@ -1083,25 +1185,25 @@ function DesktopCompletedObjectivesCard({
 
     setExpandedObjectiveId(objective.id);
 
-    if (stepsByObjective[objective.id]) {
+    if (entriesByObjective[objective.id]) {
       return;
     }
 
-    setLoadingStepsId(objective.id);
+    setLoadingEntriesId(objective.id);
 
     try {
-      const { subtasks } = await getObjectiveWithAllSteps(objective.id);
-      setStepsByObjective((current) => ({
+      const { detail } = await loadObjectiveDetail(objective.id);
+      setEntriesByObjective((current) => ({
         ...current,
-        [objective.id]: subtasks,
+        [objective.id]: detail.entries,
       }));
     } catch {
-      setStepsByObjective((current) => ({
+      setEntriesByObjective((current) => ({
         ...current,
         [objective.id]: [],
       }));
     } finally {
-      setLoadingStepsId(null);
+      setLoadingEntriesId(null);
     }
   }
 
@@ -1133,8 +1235,8 @@ function DesktopCompletedObjectivesCard({
         <div className="max-h-full space-y-2 overflow-y-auto pr-1">
           {visibleObjectives.map((objective) => {
             const expanded = expandedObjectiveId === objective.id;
-            const loading = loadingStepsId === objective.id;
-            const steps = stepsByObjective[objective.id] ?? [];
+            const loading = loadingEntriesId === objective.id;
+            const entries = entriesByObjective[objective.id] ?? [];
 
             return (
               <div
@@ -1158,8 +1260,8 @@ function DesktopCompletedObjectivesCard({
                         className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-[#c084fc]/28 bg-[#f3e8ff]/70 text-[#7e22ce] transition hover:border-[#a855f7]/45 hover:bg-[#e9d5ff] active:scale-[0.94] dark:border-[#a855f7]/18 dark:bg-white/[0.045] dark:text-[#d8b4fe]"
                         aria-label={
                           expanded
-                            ? "Ocultar etapas do objetivo concluído"
-                            : "Ver etapas do objetivo concluído"
+                            ? "Ocultar histórico do objetivo concluído"
+                            : "Ver histórico do objetivo concluído"
                         }
                       >
                         {expanded ? (
@@ -1171,7 +1273,7 @@ function DesktopCompletedObjectivesCard({
                     </div>
 
                     <p className="mt-1 text-[0.64rem] font-semibold text-[#7e22ce]/80 dark:text-[#d8b4fe]/52">
-                      {objective.done_count ?? 0} de {objective.subtask_count ?? 0} etapas
+                      {stepCountLabel(objective)}
                       {objective.deadline ? ` · prazo ${objective.deadline}` : ""}
                     </p>
                   </div>
@@ -1182,65 +1284,30 @@ function DesktopCompletedObjectivesCard({
                     {loading ? (
                       <div className="flex items-center gap-2 px-1 py-1.5 text-[0.66rem] font-semibold text-[#7e22ce]/70 dark:text-[#d8b4fe]/50">
                         <Loader2 className="h-3 w-3 animate-spin" />
-                        Carregando etapas…
+                        Carregando histórico…
                       </div>
-                    ) : steps.length === 0 ? (
+                    ) : entries.length === 0 ? (
                       <p className="px-1 py-1.5 text-[0.66rem] font-semibold text-slate-500 dark:text-white/34">
-                        Nenhuma etapa encontrada para este objetivo.
+                        Nenhum lançamento registrado para este objetivo.
                       </p>
                     ) : (
                       <div className="space-y-1.5">
-                        {steps.map((step) => {
-                          const done = step.status === "done";
-
-                          return (
-                            <div
-                              key={step.id}
-                              className="flex min-w-0 items-center gap-2 rounded-xl border border-[#c084fc]/18 bg-white/72 px-2 py-1.5 dark:border-white/7 dark:bg-white/[0.035]"
-                            >
-                              <span
-                                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${
-                                  done
-                                    ? "bg-[#a855f7] text-white"
-                                    : "border border-[#c084fc]/45 bg-transparent text-transparent"
-                                }`}
-                              >
-                                <CheckCircle2 className="h-2.5 w-2.5" />
-                              </span>
-
-                              <div className="min-w-0 flex-1">
-                                <p
-                                  className={`truncate text-[0.68rem] font-bold ${
-                                    done
-                                      ? "text-slate-600 line-through decoration-[#a855f7]/40 dark:text-white/42"
-                                      : "text-slate-800 dark:text-white/66"
-                                  }`}
-                                >
-                                  {step.title}
-                                </p>
-
-                                {(step.scheduled_date || step.start_time) && (
-                                  <p className="mt-0.5 truncate text-[0.58rem] font-semibold text-slate-400 dark:text-white/25">
-                                    {step.scheduled_date}
-                                    {step.start_time
-                                      ? ` · ${step.start_time.slice(0, 5)}`
-                                      : ""}
-                                  </p>
-                                )}
-                              </div>
-
-                              <span
-                                className={`shrink-0 rounded-full px-2 py-0.5 text-[0.56rem] font-black ${
-                                  done
-                                    ? "bg-[#f3e8ff] text-[#7e22ce] dark:bg-[#7b2cbf]/16 dark:text-[#d8b4fe]/70"
-                                    : "bg-slate-100 text-slate-500 dark:bg-white/[0.045] dark:text-white/34"
-                                }`}
-                              >
-                                {done ? "Feita" : "A fazer"}
-                              </span>
-                            </div>
-                          );
-                        })}
+                        {entries.map((entry) => (
+                          <div
+                            key={entry.id}
+                            className="flex min-w-0 items-center gap-2 rounded-xl border border-[#c084fc]/18 bg-white/72 px-2 py-1.5 dark:border-white/7 dark:bg-white/[0.035]"
+                          >
+                            <span className="w-9 shrink-0 text-[0.6rem] font-bold text-slate-500 dark:text-white/32">
+                              {formatEntryDate(entry.occurred_at)}
+                            </span>
+                            <p className="min-w-0 flex-1 truncate text-[0.68rem] font-bold text-slate-800 dark:text-white/66">
+                              {entryOrigin(entry)}
+                            </p>
+                            <span className="shrink-0 rounded-full bg-[#f3e8ff] px-2 py-0.5 text-[0.56rem] font-black text-[#7e22ce] dark:bg-[#7b2cbf]/16 dark:text-[#d8b4fe]/70">
+                              +{entry.steps}
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -1276,28 +1343,24 @@ function DesktopGoalStat({
 function DesktopObjectiveCard({
   objective,
   isExpanded,
-  isLoadingSubtasks,
-  subtasks,
+  isLoadingDetail,
+  detail,
   isDeleting,
-  togglingStepId,
   onToggle,
   onEdit,
-  onAddStep,
-  onToggleStep,
-  onEditStep,
+  onAddProgress,
+  onEditTask,
   onDelete,
 }: {
   objective: Objective;
   isExpanded: boolean;
-  isLoadingSubtasks: boolean;
-  subtasks: api.Task[];
+  isLoadingDetail: boolean;
+  detail?: ObjectiveDetail;
   isDeleting: boolean;
-  togglingStepId: string | null;
   onToggle: () => void;
   onEdit: () => void;
-  onAddStep: () => void;
-  onToggleStep: (task: api.Task) => void;
-  onEditStep: (task: api.Task) => void;
+  onAddProgress: () => void;
+  onEditTask: (task: api.Task) => void;
   onDelete: () => void;
 }) {
   const isDone = objective.status === "done";
@@ -1371,9 +1434,10 @@ function DesktopObjectiveCard({
         </div>
       </div>
 
+      {/* O contador: é ele o progresso, não a contagem de tarefas. */}
       <div className="mt-3">
         <div className="mb-1.5 flex items-center justify-between text-[0.68rem] text-slate-500 dark:text-white/36">
-          <span>{objective.done_count ?? 0} de {objective.subtask_count ?? 0} etapas</span>
+          <span>{stepCountLabel(objective)}</span>
           <span>{progress}%</span>
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
@@ -1384,6 +1448,7 @@ function DesktopObjectiveCard({
             style={{ width: `${progress}%` }}
           />
         </div>
+        <ObjectiveProjectionLine objective={objective} compact />
       </div>
 
       <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
@@ -1393,7 +1458,7 @@ function DesktopObjectiveCard({
           className="flex min-h-9 min-w-0 items-center justify-between rounded-2xl border border-slate-200/80 dark:border-white/8 bg-slate-100/80 dark:bg-black/12 px-3 text-xs font-bold text-slate-500 dark:text-white/45 transition active:scale-[0.98]"
         >
           <span className="truncate">
-            {isExpanded ? "Ocultar etapas" : `Etapas (${objective.subtask_count ?? 0})`}
+            {isExpanded ? "Ocultar histórico" : "Ver histórico"}
           </span>
           {isExpanded ? (
             <ChevronUp className="h-4 w-4 shrink-0" />
@@ -1404,36 +1469,30 @@ function DesktopObjectiveCard({
 
         <button
           type="button"
-          onClick={onAddStep}
+          onClick={onAddProgress}
           className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-2xl border border-[#a855f7]/20 bg-[#7b2cbf]/10 px-3 text-xs font-black text-[#7e22ce] dark:text-[#e9d5ff] transition active:scale-[0.98]"
         >
           <Plus className="h-3.5 w-3.5" />
-          Etapa
+          Avanço
         </button>
       </div>
 
       {isExpanded && (
         <div className="mt-3 border-t border-slate-200/80 dark:border-white/8 pt-3">
-          {isLoadingSubtasks ? (
+          {isLoadingDetail ? (
             <div className="flex items-center gap-2 py-3 text-xs text-slate-500 dark:text-white/38">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando etapas…
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando histórico…
             </div>
-          ) : subtasks.length === 0 ? (
-            <p className="py-2 text-xs text-slate-500 dark:text-white/38">
-              Nenhuma etapa adicionada ainda.
-            </p>
           ) : (
-            <div className="max-h-[14rem] space-y-2 overflow-y-auto pr-1">
-              {subtasks.map((task, index) => (
-                <DesktopGoalStepRow
-                  key={task.id}
-                  task={task}
-                  index={index}
-                  toggling={togglingStepId === task.id}
-                  onToggle={() => onToggleStep(task)}
-                  onEdit={() => onEditStep(task)}
-                />
-              ))}
+            <div className="max-h-[16rem] overflow-y-auto pr-1">
+              <ObjectiveEntriesList
+                entries={detail?.entries ?? []}
+                unit={objective.step_label ?? "etapas"}
+              />
+              <ObjectiveLinkedTasks
+                tasks={detail?.linkedTasks ?? []}
+                onEditTask={onEditTask}
+              />
             </div>
           )}
         </div>
@@ -1443,101 +1502,10 @@ function DesktopObjectiveCard({
 }
 
 
-function DesktopGoalStepRow({
-  task,
-  index,
-  toggling,
-  onToggle,
-  onEdit,
-}: {
-  task: api.Task;
-  index: number;
-  toggling: boolean;
-  onToggle: () => void;
-  onEdit: () => void;
-}) {
-  const done = task.status === "done";
-
-  return (
-    <div
-      className={`group flex min-w-0 items-center gap-2.5 rounded-2xl border px-3 py-2.5 transition ${
-        done
-          ? "border-emerald-200/80 bg-emerald-50/80 dark:border-emerald-300/16 dark:bg-emerald-400/[0.055]"
-          : "border-[#c084fc]/26 bg-[#f3e8ff]/42 shadow-[0_8px_22px_rgba(123,44,191,0.055)] hover:border-[#a855f7]/38 hover:bg-[#f3e8ff]/62 dark:border-[#a855f7]/14 dark:bg-[#7b2cbf]/10 dark:hover:bg-[#7b2cbf]/14"
-      }`}
-    >
-      <button
-        type="button"
-        onClick={onToggle}
-        disabled={toggling}
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border transition active:scale-[0.92] ${
-          done
-            ? "border-emerald-300 bg-emerald-400 text-white shadow-[0_8px_18px_rgba(16,185,129,0.16)]"
-            : "border-[#a855f7]/30 bg-white/70 text-[#7e22ce] hover:bg-[#7b2cbf] hover:text-white dark:bg-white/[0.04] dark:text-[#d8b4fe]"
-        } disabled:opacity-60`}
-        aria-label={done ? "Desmarcar etapa" : "Marcar etapa como concluída"}
-      >
-        {toggling ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : done ? (
-          <CheckCircle2 className="h-4 w-4" />
-        ) : (
-          <span className="text-[0.66rem] font-black">{index + 1}</span>
-        )}
-      </button>
-
-      <div className="min-w-0 flex-1">
-        <button
-          type="button"
-          onClick={onEdit}
-          className={`block w-full min-w-0 text-left text-xs font-black leading-4 ${
-            done
-              ? "text-emerald-800 line-through decoration-emerald-500/60 dark:text-emerald-100/64"
-              : "text-slate-950 dark:text-white/78"
-          }`}
-        >
-          <span className="line-clamp-1">{task.title}</span>
-        </button>
-
-        {(task.scheduled_date || task.start_time) && (
-          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 text-[0.62rem] font-semibold text-slate-500 dark:text-white/34">
-            <CalendarDays className="h-3 w-3 shrink-0 text-[#7e22ce]/60 dark:text-[#d8b4fe]/50" />
-            <span className="truncate">
-              {task.scheduled_date || "Sem data"}
-              {task.start_time ? ` · ${task.start_time.slice(0, 5)}` : ""}
-            </span>
-          </div>
-        )}
-      </div>
-
-      <div className="flex shrink-0 items-center gap-1.5">
-        <span
-          className={`rounded-full px-2.5 py-1 text-[0.58rem] font-black ${
-            done
-              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-300/10 dark:text-emerald-100/72"
-              : "bg-white/80 text-[#7e22ce] dark:bg-white/[0.045] dark:text-[#d8b4fe]/70"
-          }`}
-        >
-          {done ? "Feita" : "A fazer"}
-        </span>
-
-        <button
-          type="button"
-          onClick={onEdit}
-          className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200/80 bg-white/80 text-slate-500 opacity-100 transition hover:border-[#a855f7]/26 hover:text-[#7e22ce] active:scale-[0.94] dark:border-white/8 dark:bg-white/[0.045] dark:text-white/35 dark:group-hover:text-white/58"
-          aria-label="Editar etapa"
-        >
-          <Edit3 className="h-3.5 w-3.5" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function DesktopGoalsEmptyState({
   onCreate,
   title = "Nenhum objetivo ainda",
-  description = "Crie um objetivo e transforme a meta em etapas claras para acompanhar no calendário.",
+  description = "Crie um objetivo com um total de etapas e acompanhe o contador avançar — sem poluir a agenda.",
   actionLabel = "Criar objetivo",
 }: {
   onCreate: () => void;
@@ -1572,35 +1540,32 @@ function DesktopGoalsEmptyState({
 // ===========================================================================
 // CARD DE OBJETIVO
 // ===========================================================================
-// Exibe progresso, prazo, ações rápidas e etapas vinculadas ao objetivo.
+// Mostra o contador, o ritmo e, ao expandir, o extrato de lançamentos.
 function ObjectiveCard({
   objective,
   isExpanded,
-  isLoadingSubtasks,
-  subtasks,
+  isLoadingDetail,
+  detail,
   isDeleting,
-  togglingStepId,
   onToggle,
   onEdit,
-  onAddStep,
-  onToggleStep,
-  onEditStep,
+  onAddProgress,
+  onEditTask,
   onDelete,
 }: {
   objective: Objective;
   isExpanded: boolean;
-  isLoadingSubtasks: boolean;
-  subtasks: api.Task[];
+  isLoadingDetail: boolean;
+  detail?: ObjectiveDetail;
   isDeleting: boolean;
-  togglingStepId: string | null;
   onToggle: () => void;
   onEdit: () => void;
-  onAddStep: () => void;
-  onToggleStep: (task: api.Task) => void;
-  onEditStep: (task: api.Task) => void;
+  onAddProgress: () => void;
+  onEditTask: (task: api.Task) => void;
   onDelete: () => void;
 }) {
   const isDone = objective.status === "done";
+  const progress = Math.min(Math.max(objective.progress ?? 0, 0), 100);
 
   return (
     <div className={`overflow-hidden rounded-[1.7rem] border shadow-xl shadow-black/20 backdrop-blur-2xl ${
@@ -1643,18 +1608,19 @@ function ObjectiveCard({
           </div>
         </div>
 
-        {/* Barra de progresso */}
+        {/* Contador + barra + ritmo/previsão */}
         <div className="mb-3">
           <div className="mb-1.5 flex items-center justify-between text-[0.68rem] text-slate-500 dark:text-white/35">
-            <span>{objective.done_count} de {objective.subtask_count} etapas</span>
-            <span>{objective.progress}%</span>
+            <span>{stepCountLabel(objective)}</span>
+            <span>{progress}%</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
             <div
               className={`h-full rounded-full transition-all ${isDone ? "bg-emerald-400" : "bg-gradient-to-r from-purple-400 to-fuchsia-300"}`}
-              style={{ width: `${objective.progress}%` }}
+              style={{ width: `${progress}%` }}
             />
           </div>
+          <ObjectiveProjectionLine objective={objective} />
         </div>
 
         {/* Botão expandir */}
@@ -1663,78 +1629,36 @@ function ObjectiveCard({
           onClick={onToggle}
           className="flex w-full items-center justify-between rounded-2xl border border-slate-200/80 dark:border-white/10 bg-slate-100/80 dark:bg-black/14 px-3 py-2 text-xs font-semibold text-slate-500 dark:text-white/45 active:scale-[0.98]"
         >
-          <span>{isExpanded ? "Ocultar etapas" : `Ver etapas (${objective.subtask_count})`}</span>
+          <span>{isExpanded ? "Ocultar histórico" : "Ver histórico de avanços"}</span>
           {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>
       </div>
 
-      {/* Etapas expandidas */}
+      {/* Extrato de lançamentos + tarefas agendadas */}
       {isExpanded && (
         <div className="border-t border-slate-200/80 dark:border-white/8 px-4 pb-4 pt-3">
-          {isLoadingSubtasks ? (
+          {isLoadingDetail ? (
             <div className="flex items-center gap-2 py-4 text-xs text-slate-500 dark:text-white/38">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando etapas…
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando histórico…
             </div>
           ) : (
             <>
-              {subtasks.length === 0 ? (
-                <p className="pb-3 pt-1 text-xs text-slate-500 dark:text-white/38">Nenhuma etapa adicionada ainda.</p>
-              ) : (
-                <div className="mb-3 space-y-2">
-                  {subtasks.map((task) => {
-                    const done = task.status === "done";
-                    const toggling = togglingStepId === task.id;
-                    return (
-                      <div key={task.id} className="flex items-center gap-2.5 rounded-xl border border-slate-200/80 dark:border-white/8 bg-white/70 dark:bg-white/[0.03] px-3 py-2">
-                        <button
-                          type="button"
-                          onClick={() => onToggleStep(task)}
-                          disabled={toggling}
-                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition active:scale-[0.9] ${
-                            done
-                              ? "border-emerald-400 bg-emerald-400 text-[#11111a]"
-                              : "border-white/25 bg-transparent text-transparent hover:border-purple-300/60"
-                          }`}
-                          aria-label={done ? "Desmarcar etapa" : "Marcar etapa como concluída"}
-                        >
-                          {toggling
-                            ? <Loader2 className="h-3 w-3 animate-spin text-slate-700 dark:text-white/60" />
-                            : <CheckCircle2 className="h-3.5 w-3.5" />}
-                        </button>
-
-                        <div className="min-w-0 flex-1">
-                          <p className={`truncate text-xs font-semibold ${done ? "text-slate-500 dark:text-white/40 line-through" : "text-slate-700 dark:text-white/80"}`}>
-                            {task.title}
-                          </p>
-                          {(task.scheduled_date || task.start_time) && (
-                            <p className="mt-0.5 text-[0.65rem] text-slate-500 dark:text-white/30">
-                              {task.scheduled_date}
-                              {task.start_time ? ` · ${task.start_time.slice(0, 5)}` : ""}
-                            </p>
-                          )}
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => onEditStep(task)}
-                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/[0.82] dark:bg-white/[0.055] text-slate-500 dark:text-white/40 active:scale-[0.94]"
-                          aria-label="Editar etapa"
-                        >
-                          <Edit3 className="h-3 w-3" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              <ObjectiveEntriesList
+                entries={detail?.entries ?? []}
+                unit={objective.step_label ?? "etapas"}
+              />
+              <ObjectiveLinkedTasks
+                tasks={detail?.linkedTasks ?? []}
+                onEditTask={onEditTask}
+              />
 
               <button
                 type="button"
-                onClick={onAddStep}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-purple-300/25 bg-purple-500/[0.06] py-2.5 text-xs font-semibold text-purple-200/70 active:scale-[0.98]"
+                onClick={onAddProgress}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-purple-300/25 bg-purple-500/[0.06] py-2.5 text-xs font-semibold text-purple-200/70 active:scale-[0.98]"
               >
                 <Plus className="h-3.5 w-3.5" />
-                Adicionar etapa
+                Registrar avanço
               </button>
             </>
           )}
@@ -1747,9 +1671,11 @@ function ObjectiveCard({
 // ===========================================================================
 // MODAL DE CRIAÇÃO DE OBJETIVO
 // ===========================================================================
-// Passo 1 cria o objetivo; passo 2 permite adicionar etapas iniciais.
-type DraftStep = { key: string; title: string; date: string; time: string };
-
+// Passo 1: o que é o objetivo. Passo 2: o TAMANHO da meta — quantas etapas e
+// como chamá-las. O passo 2 antigo montava uma lista de tarefas e disparava um
+// Promise.all de createTask; foi exatamente isso que encheu a agenda de 40
+// compromissos sem horário e fez a funcionalidade ser abandonada. Agora ele
+// pede dois números e NÃO cria nada na agenda.
 function CreateObjectiveModal({
   onClose,
   onCreated,
@@ -1763,30 +1689,14 @@ function CreateObjectiveModal({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [deadline, setDeadline] = useState("");
+  const [priority, setPriority] = useState<"low" | "medium" | "high">("medium");
   const [step1Error, setStep1Error] = useState<string | null>(null);
 
-  // Passo 2
-  const [steps, setSteps] = useState<DraftStep[]>([]);
+  // Passo 2 — o contador.
+  const [totalSteps, setTotalSteps] = useState("1");
+  const [stepLabel, setStepLabel] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-
-  function addStep() {
-    setSteps((prev) => [
-      ...prev,
-      { key: Math.random().toString(36).slice(2), title: "", date: "", time: "" },
-    ]);
-  }
-
-  function updateStep(key: string, patch: Partial<DraftStep>) {
-    setSteps((prev) =>
-      prev.map((stepItem) =>
-        stepItem.key === key ? { ...stepItem, ...patch } : stepItem
-      )
-    );
-  }
-  function removeStep(key: string) {
-    setSteps((prev) => prev.filter((s) => s.key !== key));
-  }
 
   function handleNextStep() {
     if (!title.trim()) {
@@ -1799,6 +1709,13 @@ function CreateObjectiveModal({
   }
 
   async function handleSubmit() {
+    const total = Number.parseInt(totalSteps, 10);
+
+    if (!Number.isFinite(total) || total < 1) {
+      setSubmitError("O objetivo precisa ter pelo menos 1 etapa.");
+      return;
+    }
+
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -1806,21 +1723,10 @@ function CreateObjectiveModal({
         title: title.trim(),
         description: description.trim() || undefined,
         deadline: deadline || undefined,
+        priority,
+        total_steps: total,
+        step_label: stepLabel.trim() || undefined,
       });
-
-      const validSteps = steps.filter((s) => s.title.trim());
-      if (validSteps.length > 0) {
-        await Promise.all(
-          validSteps.map((s) =>
-            api.createTask({
-              title: s.title.trim(),
-              objective_id: obj.id,
-              scheduled_date: s.date || undefined,
-              start_time: s.time || undefined,
-            } as any)
-          )
-        );
-      }
 
       onCreated(obj.id);
     } catch (e) {
@@ -1847,7 +1753,7 @@ function CreateObjectiveModal({
             <div className="h-px w-6 bg-slate-200 dark:bg-white/15" />
             <div className="flex items-center gap-1.5">
               <div className={`flex h-6 w-6 items-center justify-center rounded-full text-[0.65rem] font-bold ${step === 2 ? "bg-purple-500 text-white" : "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/28"}`}>2</div>
-              <span className={`text-[0.65rem] font-semibold ${step === 2 ? "text-slate-700 dark:text-white/70" : "text-slate-500 dark:text-white/28"}`}>Etapas</span>
+              <span className={`text-[0.65rem] font-semibold ${step === 2 ? "text-slate-700 dark:text-white/70" : "text-slate-500 dark:text-white/28"}`}>Tamanho</span>
             </div>
           </div>
 
@@ -1858,10 +1764,12 @@ function CreateObjectiveModal({
                 {step === 1 ? "Novo objetivo" : title}
               </div>
               <h2 className="text-[1.35rem] font-semibold leading-[1.05] tracking-[-0.05em] text-slate-950 dark:text-white">
-                {step === 1 ? "Sobre o objetivo" : "Adicionar etapas"}
+                {step === 1 ? "Sobre o objetivo" : "Tamanho da meta"}
               </h2>
               <p className="mt-1 text-xs text-slate-500 dark:text-white/38">
-                {step === 1 ? "Nome, prazo e descrição." : "Quais são os passos para chegar lá?"}
+                {step === 1
+                  ? "Nome, prazo e descrição."
+                  : "Quantas unidades até concluir?"}
               </p>
             </div>
             <button onClick={onClose} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white/[0.84] dark:bg-white/[0.06] text-slate-500 dark:text-white/45 active:scale-[0.96]">
@@ -1879,7 +1787,7 @@ function CreateObjectiveModal({
                 <input
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Ex: Fazer o TCC da faculdade"
+                  placeholder="Ex: Aprender alemão"
                   className={INPUT_CLS}
                 />
               </label>
@@ -1905,35 +1813,61 @@ function CreateObjectiveModal({
                 />
               </label>
 
+              <label className="block">
+                <span className="mb-2 block text-xs font-medium text-slate-500 dark:text-white/42">Prioridade</span>
+                <select
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value as "low" | "medium" | "high")}
+                  className="min-h-[52px] w-full rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white px-4 text-sm text-slate-950 outline-none focus:border-[#a855f7]/40 dark:bg-[#222230] dark:text-white dark:focus:border-purple-300/35"
+                >
+                  <option value="low">Baixa</option>
+                  <option value="medium">Média</option>
+                  <option value="high">Alta</option>
+                </select>
+              </label>
+
               {step1Error && <p className="text-xs font-medium text-rose-300">{step1Error}</p>}
             </div>
           ) : (
-            <div>
-              {steps.length > 0 && (
-                <div className="mb-3 space-y-3">
-                  {steps.map((s, idx) => (
-                    <StepInput
-                      key={s.key}
-                      step={s}
-                      index={idx}
-                      autoFocus={idx === steps.length - 1}
-                      onChange={(patch) => updateStep(s.key, patch)}
-                      onRemove={() => removeStep(s.key)}
-                    />
-                  ))}
-                </div>
-              )}
+            <div className="space-y-3">
+              <label className="block">
+                <span className="mb-2 block text-xs font-medium text-slate-500 dark:text-white/42">
+                  Quantas etapas?
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  inputMode="numeric"
+                  value={totalSteps}
+                  onChange={(e) => setTotalSteps(e.target.value)}
+                  placeholder="Ex: 257"
+                  autoFocus
+                  className={INPUT_CLS}
+                />
+              </label>
 
-              <button
-                type="button"
-                onClick={addStep}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-purple-300/20 bg-purple-500/[0.05] py-2.5 text-xs font-semibold text-purple-200/60 active:scale-[0.98]"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Adicionar etapa
-              </button>
+              <label className="block">
+                <span className="mb-2 block text-xs font-medium text-slate-500 dark:text-white/42">
+                  Como chamar cada uma?
+                </span>
+                <input
+                  value={stepLabel}
+                  onChange={(e) => setStepLabel(e.target.value)}
+                  placeholder="etapas"
+                  className={INPUT_CLS}
+                />
+                <span className="mt-1.5 block text-[0.68rem] text-slate-500 dark:text-white/32">
+                  No plural: aulas, páginas, capítulos. Em branco vira “etapas”.
+                </span>
+              </label>
 
-              {submitError && <p className="mt-3 text-xs font-medium text-rose-300">{submitError}</p>}
+              <p className="rounded-2xl border border-slate-200/80 bg-slate-100/70 px-4 py-3 text-[0.72rem] leading-5 text-slate-500 dark:border-white/8 dark:bg-black/14 dark:text-white/40">
+                O objetivo é só um contador — nada é criado na sua agenda. Ele
+                avança quando você conclui uma tarefa ou uma rotina vinculada,
+                ou quando registra um avanço manualmente.
+              </p>
+
+              {submitError && <p className="text-xs font-medium text-rose-300">{submitError}</p>}
             </div>
           )}
         </div>
@@ -1946,7 +1880,7 @@ function CreateObjectiveModal({
                 onClick={handleNextStep}
                 className="inline-flex min-h-14 w-full items-center justify-center rounded-2xl bg-purple-500 px-6 text-sm font-semibold text-white shadow-xl shadow-purple-950/35 active:scale-[0.98]"
               >
-                Próximo — Adicionar etapas →
+                Próximo — Tamanho da meta →
               </button>
               <button onClick={onClose} className="mt-3 inline-flex min-h-12 w-full items-center justify-center rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white/[0.82] dark:bg-white/[0.055] px-6 text-sm font-semibold text-slate-700 dark:text-white/55 active:scale-[0.98]">
                 Cancelar
@@ -1978,14 +1912,12 @@ function CreateObjectiveModal({
   );
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// MODAL DE EDIÇÃO (com etapas existentes + adicionar novas)
-// ──────────────────────────────────────────────────────────────────────────────
-
 // ===========================================================================
 // MODAL DE EDIÇÃO DE OBJETIVO
 // ===========================================================================
-// Edita dados principais e permite revisar/criar etapas do objetivo.
+// Edita os dados e o TAMANHO da meta. Mexer em total_steps muda o denominador
+// do progresso — o backend reconcilia o cache e a barra acompanha. O histórico
+// aparece só para leitura: correção de lançamento é feita no card.
 function EditObjectiveModal({
   objective,
   onClose,
@@ -1998,68 +1930,51 @@ function EditObjectiveModal({
   const [title, setTitle] = useState(objective.title);
   const [description, setDescription] = useState(objective.description ?? "");
   const [deadline, setDeadline] = useState(objective.deadline ?? "");
-  // Etapas existentes carregadas da API.
-  const [existingSteps, setExistingSteps] = useState<api.Task[]>([]);
-  const [loadingSteps, setLoadingSteps] = useState(true);
+  const [priority, setPriority] = useState<"low" | "medium" | "high">(
+    (objective.priority as "low" | "medium" | "high") ?? "medium"
+  );
+  const [totalSteps, setTotalSteps] = useState(String(objective.total_steps ?? 1));
+  const [stepLabel, setStepLabel] = useState(objective.step_label ?? "etapas");
 
-  // Novas etapas digitadas nesta sessão, ainda não salvas.
-  const [newSteps, setNewSteps] = useState<DraftStep[]>([]);
+  const [entries, setEntries] = useState<api.StepEntry[]>([]);
+  const [loadingEntries, setLoadingEntries] = useState(true);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Carrega as etapas ao abrir o modal.
+  // Carrega o extrato ao abrir, só para o usuário conferir de onde veio o
+  // progresso enquanto decide se o total está certo.
   useEffect(() => {
-    api.getObjective(objective.id)
-      .then((obj) => setExistingSteps(obj.subtasks ?? []))
-      .catch(() => setExistingSteps([]))
-      .finally(() => setLoadingSteps(false));
+    api
+      .getObjective(objective.id)
+      .then((obj) => setEntries(obj.entries ?? []))
+      .catch(() => setEntries([]))
+      .finally(() => setLoadingEntries(false));
   }, [objective.id]);
 
-  function addNewStep() {
-    setNewSteps((prev) => [
-      ...prev,
-      { key: Math.random().toString(36).slice(2), title: "", date: "", time: "" },
-    ]);
-  }
-
-  function updateNewStep(key: string, patch: Partial<DraftStep>) {
-    setNewSteps((prev) =>
-      prev.map((stepItem) =>
-        stepItem.key === key ? { ...stepItem, ...patch } : stepItem
-      )
-    );
-  }
-  function removeNewStep(key: string) {
-    setNewSteps((prev) => prev.filter((s) => s.key !== key));
-  }
-
   async function handleSubmit() {
-    if (!title.trim()) { setError("O nome não pode ser vazio."); return; }
+    if (!title.trim()) {
+      setError("O nome não pode ser vazio.");
+      return;
+    }
+
+    const total = Number.parseInt(totalSteps, 10);
+    if (!Number.isFinite(total) || total < 1) {
+      setError("O objetivo precisa ter pelo menos 1 etapa.");
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
     try {
-      // Atualiza o objetivo
       const updated = await api.updateObjective(objective.id, {
         title: title.trim(),
         description: description.trim() || undefined,
         deadline: deadline || null,
+        priority,
+        total_steps: total,
+        step_label: stepLabel.trim() || undefined,
       });
-
-      // Cria as novas etapas
-      const validNew = newSteps.filter((s) => s.title.trim());
-      if (validNew.length > 0) {
-        await Promise.all(
-          validNew.map((s) =>
-            api.createTask({
-              title: s.title.trim(),
-              objective_id: objective.id,
-              scheduled_date: s.date || undefined,
-              start_time: s.time || undefined,
-            } as any)
-          )
-        );
-      }
 
       onUpdated(updated);
     } catch (e) {
@@ -2093,7 +2008,6 @@ function EditObjectiveModal({
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
           <div className="space-y-3">
-            {/* Campos do objetivo */}
             <label className="block">
               <span className="mb-2 block text-xs font-medium text-slate-500 dark:text-white/42">Nome do objetivo</span>
               <input value={title} onChange={(e) => setTitle(e.target.value)} className={INPUT_CLS} />
@@ -2120,61 +2034,59 @@ function EditObjectiveModal({
               />
             </label>
 
-            {/* Divisor */}
-            <div className="!mt-5 border-t border-slate-200/80 dark:border-white/8 pt-4">
-              <p className="mb-3 text-xs font-semibold text-slate-500 dark:text-white/42">Etapas</p>
+            <label className="block">
+              <span className="mb-2 block text-xs font-medium text-slate-500 dark:text-white/42">Prioridade</span>
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as "low" | "medium" | "high")}
+                className="min-h-[52px] w-full rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white px-4 text-sm text-slate-950 outline-none focus:border-[#a855f7]/40 dark:bg-[#222230] dark:text-white dark:focus:border-purple-300/35"
+              >
+                <option value="low">Baixa</option>
+                <option value="medium">Média</option>
+                <option value="high">Alta</option>
+              </select>
+            </label>
 
-              {loadingSteps ? (
+            {/* Tamanho da meta */}
+            <div className="!mt-5 grid grid-cols-2 gap-3 border-t border-slate-200/80 pt-4 dark:border-white/8">
+              <label className="block">
+                <span className="mb-2 block text-xs font-medium text-slate-500 dark:text-white/42">Total de etapas</span>
+                <input
+                  type="number"
+                  min={1}
+                  inputMode="numeric"
+                  value={totalSteps}
+                  onChange={(e) => setTotalSteps(e.target.value)}
+                  className={INPUT_CLS}
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-2 block text-xs font-medium text-slate-500 dark:text-white/42">Unidade</span>
+                <input
+                  value={stepLabel}
+                  onChange={(e) => setStepLabel(e.target.value)}
+                  placeholder="etapas"
+                  className={INPUT_CLS}
+                />
+              </label>
+            </div>
+
+            {/* Histórico (somente leitura) */}
+            <div className="!mt-5 border-t border-slate-200/80 dark:border-white/8 pt-4">
+              <p className="mb-3 text-xs font-semibold text-slate-500 dark:text-white/42">
+                Histórico de avanços
+              </p>
+
+              {loadingEntries ? (
                 <div className="flex items-center gap-2 py-3 text-xs text-slate-500 dark:text-white/35">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando etapas…
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando histórico…
                 </div>
               ) : (
-                <>
-                  {/* Etapas existentes */}
-                  {existingSteps.length > 0 && (
-                    <div className="mb-3 space-y-2">
-                      {existingSteps.map((task) => (
-                        <div key={task.id} className="flex items-center gap-2.5 rounded-xl border border-slate-200/80 dark:border-white/8 bg-white/70 dark:bg-white/[0.03] px-3 py-2">
-                          <div className={`h-2 w-2 shrink-0 rounded-full ${
-                            task.status === "done" ? "bg-emerald-400" :
-                            task.status === "progress" ? "bg-purple-300" : "bg-white/25"
-                          }`} />
-                          <p className={`flex-1 truncate text-xs font-semibold ${task.status === "done" ? "text-slate-500 dark:text-white/40 line-through" : "text-white/75"}`}>
-                            {task.title}
-                          </p>
-                          <span className="shrink-0 text-[0.65rem] text-slate-500 dark:text-white/28">
-                            {STATUS_TASK[task.status] ?? task.status}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Novas etapas (inputs) */}
-                  {newSteps.length > 0 && (
-                    <div className="mb-3 space-y-3">
-                      {newSteps.map((s, idx) => (
-                        <StepInput
-                          key={s.key}
-                          step={s}
-                          index={existingSteps.length + idx}
-                          autoFocus={idx === newSteps.length - 1}
-                          onChange={(patch) => updateNewStep(s.key, patch)}
-                          onRemove={() => removeNewStep(s.key)}
-                        />
-                      ))}
-                    </div>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={addNewStep}
-                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-purple-300/20 bg-purple-500/[0.05] py-2.5 text-xs font-semibold text-purple-200/60 active:scale-[0.98]"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Adicionar etapa
-                  </button>
-                </>
+                <ObjectiveEntriesList
+                  entries={entries}
+                  unit={stepLabel.trim() || "etapas"}
+                />
               )}
             </div>
 
@@ -2199,47 +2111,46 @@ function EditObjectiveModal({
   );
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// MODAL DE ADICIONAR ETAPA
-// ──────────────────────────────────────────────────────────────────────────────
-
 // ===========================================================================
-// MODAL DE NOVA ETAPA
+// MODAL DE REGISTRAR AVANÇO
 // ===========================================================================
-
-function AddStepModal({
+// Lançamento manual no ledger. Antes este modal criava uma TAREFA com
+// objective_id — era o caminho que transformava cada unidade de progresso num
+// compromisso na agenda. Agora ele só grava quantas etapas foram cumpridas.
+function AddProgressModal({
   objective,
   onClose,
-  onCreated,
+  onRegistered,
 }: {
   objective: Objective;
   onClose: () => void;
-  onCreated: () => void;
+  onRegistered: () => void;
 }) {
-  const [title, setTitle] = useState("");
-  const [date, setDate] = useState("");
-  const [priority, setPriority] =
-    useState<"low" | "medium" | "high">("medium");
+  const [steps, setSteps] = useState("1");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const unit = objective.step_label ?? "etapas";
+  const remaining = Math.max(
+    (objective.total_steps ?? 0) - (objective.completed_steps ?? 0),
+    0
+  );
+
   async function handleSubmit() {
-    if (!title.trim()) {
-      setError("Dê um nome à etapa.");
+    const amount = Number.parseInt(steps, 10);
+
+    if (!Number.isFinite(amount) || amount < 1) {
+      setError("Informe quantas etapas você avançou.");
       return;
     }
+
     setSubmitting(true);
     setError(null);
     try {
-      await api.createTask({
-        title: title.trim(),
-        scheduled_date: date || undefined,
-        priority,
-        objective_id: objective.id,
-      } as any);
-      onCreated();
+      await api.addObjectiveEntry(objective.id, amount);
+      onRegistered();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro ao criar etapa");
+      setError(e instanceof Error ? e.message : "Erro ao registrar avanço");
     } finally {
       setSubmitting(false);
     }
@@ -2254,13 +2165,15 @@ function AddStepModal({
           <div>
             <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-purple-300/20 bg-purple-500/10 px-3 py-1.5 text-xs font-medium text-[#7e22ce] dark:text-purple-100">
               <Plus className="h-3.5 w-3.5" />
-              Nova etapa
+              Novo avanço
             </div>
             <h2 className="text-[1.45rem] font-semibold leading-[1.05] tracking-[-0.05em] text-slate-950 dark:text-white">
-              Adicionar etapa
+              Registrar avanço
             </h2>
             <p className="mt-1.5 text-xs text-slate-500 dark:text-white/38">
               em <span className="font-semibold text-slate-700 dark:text-white/60">{objective.title}</span>
+              {" · "}
+              {stepCountLabel(objective)}
             </p>
           </div>
           <button onClick={onClose} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white/[0.84] dark:bg-white/[0.06] text-slate-500 dark:text-white/45 active:scale-[0.96]">
@@ -2270,36 +2183,23 @@ function AddStepModal({
 
         <div className="space-y-3">
           <label className="block">
-            <span className="mb-2 block text-xs font-medium text-slate-500 dark:text-white/42">Nome da etapa</span>
+            <span className="mb-2 block text-xs font-medium text-slate-500 dark:text-white/42">
+              Quantas {unit} você avançou?
+            </span>
             <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Ex: Pesquisar referências bibliográficas"
+              type="number"
+              min={1}
+              inputMode="numeric"
+              value={steps}
+              onChange={(e) => setSteps(e.target.value)}
+              autoFocus
               className={INPUT_CLS}
             />
-          </label>
-
-          <label className="block">
-            <span className="mb-2 block text-xs font-medium text-slate-500 dark:text-white/42">Data (opcional)</span>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className={INPUT_CLS}
-            />
-          </label>
-
-          <label className="block">
-            <span className="mb-2 block text-xs font-medium text-slate-500 dark:text-white/42">Prioridade</span>
-            <select
-              value={priority}
-              onChange={(e) => setPriority(e.target.value as "low" | "medium" | "high")}
-              className="min-h-[52px] w-full rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white px-4 text-sm text-slate-950 outline-none focus:border-[#a855f7]/40 dark:bg-[#222230] dark:text-white dark:focus:border-purple-300/35"
-            >
-              <option value="low">Baixa</option>
-              <option value="medium">Média</option>
-              <option value="high">Alta</option>
-            </select>
+            {remaining > 0 && (
+              <span className="mt-1.5 block text-[0.68rem] text-slate-500 dark:text-white/32">
+                Faltam {remaining} {unit} para concluir.
+              </span>
+            )}
           </label>
 
           {error && <p className="text-xs font-medium text-rose-300">{error}</p>}
@@ -2310,7 +2210,7 @@ function AddStepModal({
           disabled={submitting}
           className="mt-5 inline-flex min-h-14 w-full items-center justify-center rounded-2xl bg-purple-500 px-6 text-sm font-semibold text-white shadow-xl shadow-purple-950/35 active:scale-[0.98] disabled:opacity-60"
         >
-          {submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Criando…</> : <>Criar etapa <Plus className="ml-2 h-4 w-4" /></>}
+          {submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Registrando…</> : <>Registrar avanço <Plus className="ml-2 h-4 w-4" /></>}
         </button>
 
         <button onClick={onClose} className="mt-3 inline-flex min-h-12 w-full items-center justify-center rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white/[0.82] dark:bg-white/[0.055] px-6 text-sm font-semibold text-slate-700 dark:text-white/55 active:scale-[0.98]">
@@ -2450,73 +2350,6 @@ function EditStepModal({
         <button onClick={onClose} className="mt-3 inline-flex min-h-12 w-full items-center justify-center rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white/[0.82] dark:bg-white/[0.055] px-6 text-sm font-semibold text-slate-700 dark:text-white/55 active:scale-[0.98]">
           Cancelar
         </button>
-      </div>
-    </div>
-  );
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// INPUT DE ETAPA (título + data opcional + hora opcional)
-// ──────────────────────────────────────────────────────────────────────────────
-
-// ===========================================================================
-// INPUT REUTILIZÁVEL DE ETAPA
-// ===========================================================================
-
-function StepInput({
-  step,
-  index,
-  autoFocus,
-  onChange,
-  onRemove,
-}: {
-  step: DraftStep;
-  index: number;
-  autoFocus?: boolean;
-  onChange: (patch: Partial<DraftStep>) => void;
-  onRemove: () => void;
-}) {
-  return (
-    <div className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white/70 dark:bg-white/[0.03] p-3">
-      <div className="mb-2 flex items-center gap-2">
-        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[0.6rem] font-bold text-slate-500 dark:text-white/40">
-          {index + 1}
-        </span>
-        <input
-          value={step.title}
-          onChange={(e) => onChange({ title: e.target.value })}
-          placeholder={`Etapa ${index + 1}`}
-          autoFocus={autoFocus}
-          className="min-h-[38px] flex-1 rounded-xl border border-slate-200/80 dark:border-white/10 bg-white/[0.82] dark:bg-white/[0.055] px-3 text-sm text-white outline-none placeholder:text-white/25 focus:border-purple-300/35"
-        />
-        <button
-          type="button"
-          onClick={onRemove}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/[0.82] dark:bg-white/[0.055] text-slate-500 dark:text-white/35 active:scale-[0.94]"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 pl-7">
-        <div>
-          <label className="mb-1 block text-[0.65rem] text-slate-500 dark:text-white/30">Data (opcional)</label>
-          <input
-            type="date"
-            value={step.date}
-            onChange={(e) => onChange({ date: e.target.value })}
-            className="h-9 w-full rounded-xl border border-slate-200/80 dark:border-white/10 bg-white/[0.78] dark:bg-white/[0.04] px-2.5 text-xs text-slate-700 dark:text-white/70 outline-none focus:border-purple-300/30 [color-scheme:dark]"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-[0.65rem] text-slate-500 dark:text-white/30">Hora (opcional)</label>
-          <input
-            type="time"
-            value={step.time}
-            onChange={(e) => onChange({ time: e.target.value })}
-            className="h-9 w-full rounded-xl border border-slate-200/80 dark:border-white/10 bg-white/[0.78] dark:bg-white/[0.04] px-2.5 text-xs text-slate-700 dark:text-white/70 outline-none focus:border-purple-300/30 [color-scheme:dark]"
-          />
-        </div>
       </div>
     </div>
   );

@@ -18,7 +18,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 
 from database import supabase
-from services import calendar_sync, chronotype, calibration_service
+from services import calendar_sync, chronotype, calibration_service, user_tz
 
 # Quantos dias para trás olhamos ao calcular o streak.
 _STREAK_LOOKBACK_DAYS = 90
@@ -55,6 +55,20 @@ def _serialize_item(row: dict) -> dict:
             row[field] = str(row[field])[:5]
     row["days_of_week"] = row.get("days_of_week") or []
     return row
+
+
+# Campos de vínculo item de rotina → objetivo. O vínculo é por ITEM: uma rotina
+# "Manhã" pode ter só o item "Alemão" contando para o objetivo, enquanto corrida
+# e leitura seguem sem contar nada.
+def _objective_link_fields(data: dict) -> dict:
+    objective_id = data.get("objective_id") or None
+    return {
+        "objective_id": objective_id,
+        # Sem objetivo o multiplicador volta ao default: guardá-lo num item
+        # desvinculado só criaria um valor fantasma para reaparecer errado se o
+        # usuário revincular depois.
+        "steps_per_completion": int(data.get("steps_per_completion") or 1) if objective_id else 1,
+    }
 
 
 # --- Posse ---------------------------------------------------------------
@@ -645,6 +659,12 @@ def _materialize(
                 "end_time": end_s,
                 "routine_item_id": it["id"],
                 "created_by": "agent",
+                # Vínculo com o objetivo: a tarefa gerada carrega quanto vale,
+                # para que concluí-la lance a etapa sem o ledger precisar voltar
+                # ao item de rotina. `objective_steps` só faz sentido com
+                # objective_id, mas o default 1 da coluna é inofensivo sem ele.
+                "objective_id": it.get("objective_id"),
+                "objective_steps": int(it.get("steps_per_completion") or 1),
             })
         day += timedelta(days=1)
 
@@ -813,6 +833,8 @@ def create_routine(user_id: str, data: dict, today: date, now: datetime | None =
         # Nada gerado ainda (Fase 3): generated_until no dia anterior ao início
         # indica que nenhum dia foi materializado no calendário.
         "generated_until": str(start - timedelta(days=1)),
+        # Término por objetivo: o par de end_date.
+        "objective_id": data.get("objective_id") or None,
     }
     res = supabase.table("routines").insert(payload).execute()
     if not res.data:
@@ -833,6 +855,7 @@ def create_routine(user_id: str, data: dict, today: date, now: datetime | None =
             "duration_minutes": it.get("duration_minutes"),
             "not_before": it.get("not_before"),
             "not_after": it.get("not_after"),
+            **_objective_link_fields(it),
         } for it in items_in]
         supabase.table("routine_items").insert(rows).execute()
 
@@ -855,6 +878,8 @@ def update_routine(user_id: str, routine_id: str, data: dict, today: date) -> di
         payload["end_date"] = str(data["end_date"]) if data["end_date"] else None
     if "status" in data:
         payload["status"] = data["status"]
+    if "objective_id" in data:
+        payload["objective_id"] = data["objective_id"] or None
 
     if not payload:
         raise ValueError("Nenhum campo para atualizar")
@@ -907,6 +932,55 @@ def pause_routine(
     return get_routine(user_id, routine_id, today)
 
 
+def pause_for_completed_objective(objective_id: str) -> None:
+    """
+    Encerra as rotinas que o usuário marcou para terminar com este objetivo.
+
+    Sem isso o usuário continuaria vendo "Estudar alemão" na agenda por dois
+    meses depois de terminar o curso: as rotinas materializam tarefas com 60
+    dias de antecedência, então concluir o objetivo não limpa nada sozinho.
+
+    Chamada por `objectives_service.recalculate_from_ledger` quando o contador
+    bate a meta. Silenciosa: pausar a rotina é efeito colateral de concluir uma
+    tarefa e não pode derrubar a operação que o usuário pediu.
+    """
+    try:
+        # O vínculo de término é da ROTINA (`routines.objective_id`), não do
+        # item: quem para é a rotina inteira, então a pergunta certa é "quais
+        # rotinas terminam com este objetivo".
+        routines = (
+            supabase.table("routines")
+            .select("id, user_id, status")
+            .eq("objective_id", objective_id)
+            .neq("status", "paused")
+            .execute()
+        ).data or []
+        if not routines:
+            return
+
+        for routine in routines:
+            routine_id = routine["id"]
+            user_id = routine["user_id"]
+            # "Hoje" no fuso do usuário, não do servidor (UTC): perto da
+            # virada do dia, um dia a mais ou a menos decidiria errado quais
+            # tarefas são "futuras" e seriam apagadas.
+            today = datetime.now(user_tz.zone(user_tz.stored_tz(user_id))).date()
+
+            all_items = _get_items(routine_id)
+            _delete_future_tasks(user_id, [it["id"] for it in all_items], today)
+
+            supabase.table("routines").update({
+                "status": "paused",
+                "paused_until": None,
+                # Mesmo rewind de pause_routine: sem ele, retomar a rotina
+                # geraria só a partir de generated_until e deixaria um buraco
+                # entre hoje e aquela data.
+                "generated_until": str(today - timedelta(days=1)),
+            }).eq("id", routine_id).eq("user_id", user_id).execute()
+    except Exception:
+        pass
+
+
 def resume_routine(user_id: str, routine_id: str, today: date, now: datetime | None = None) -> dict:
     routine = _get_owned_routine(user_id, routine_id)
     if routine["status"] == "active":
@@ -940,6 +1014,7 @@ def add_item(user_id: str, routine_id: str, data: dict, today: date,
         "duration_minutes": data.get("duration_minutes"),
         "not_before": data.get("not_before"),
         "not_after": data.get("not_after"),
+        **_objective_link_fields(data),
     }
     res = supabase.table("routine_items").insert(payload).execute()
     if not res.data:
@@ -975,8 +1050,17 @@ def update_item(user_id: str, routine_id: str, item_id: str, data: dict, today: 
 
     payload = {k: v for k, v in data.items() if k in (
         "title", "days_of_week", "start_time", "end_time", "duration_minutes",
-        "not_before", "not_after",
+        "not_before", "not_after", "steps_per_completion",
     )}
+
+    # Desvincular ("" do formulário) tem que zerar o multiplicador junto, senão
+    # o item guarda "vale 3 etapas" de um objetivo que não existe mais e o valor
+    # reaparece se ele for revinculado.
+    if "objective_id" in data:
+        payload["objective_id"] = data["objective_id"] or None
+        if payload["objective_id"] is None:
+            payload["steps_per_completion"] = 1
+
     if not payload:
         raise ValueError("Nenhum campo para atualizar")
 
