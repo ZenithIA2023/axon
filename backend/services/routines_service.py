@@ -536,6 +536,7 @@ def _busy_intervals(user_id: str, day: date) -> list[tuple[int, int]]:
 def pick_best_slot(
     user_id: str, day: date, duration_minutes: int, now: datetime | None = None,
     priority: str | None = None, is_key_task: bool = False,
+    complexity: str | None = None,
 ) -> tuple[str, str] | None:
     """
     Melhor horário para uma tarefa flexível de `duration_minutes` em `day`.
@@ -546,8 +547,10 @@ def pick_best_slot(
     num horário que já passou.
 
     `priority`/`is_key_task` aplicam a matriz de prioridade: o Axon não coloca
-    tarefa chave em bloco fraco. Como aqui é o AXON que escolhe o horário, a
-    mesma regra das sugestões vale (ver chronotype.allowed_blocks).
+    tarefa chave em bloco fraco. `complexity` (opcional, ver Migration 31) soma
+    a carga cognitiva à conta — uma tarefa de foco profundo não cai em bloco
+    fraco mesmo sendo de prioridade baixa. Como aqui é o AXON que escolhe o
+    horário, a mesma regra das sugestões vale (ver chronotype.allowed_blocks).
     """
     curve_key, chronotype_label = _user_curve(user_id)
     personal, calibrated, _ = calibration_service.get_block_scores(user_id, chronotype_label)
@@ -560,7 +563,7 @@ def pick_best_slot(
         _busy_intervals(user_id, day),
         personal_scores=personal if calibrated else None,
         floor_min=floor_min,
-        allowed_levels=chronotype.allowed_blocks(priority, is_key_task),
+        allowed_levels=chronotype.allowed_blocks(priority, is_key_task, complexity),
     )
 
 

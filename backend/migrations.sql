@@ -994,3 +994,94 @@ create policy "axon_optimizations_delete" on public.axon_optimizations for delet
 -- conseguiu fechar com certeza. Ver saved_time_service.py.
 alter table public.day_closures
   add column if not exists optimization_minutes integer default 0 not null;
+
+-- =============================================
+-- Migration 31: complexidade e tags nas tarefas
+-- ---------------------------------------------
+-- Base para a análise de rotina (agrupar tarefas parecidas, tirar trabalho
+-- complexo de bloco fraco, compactar buracos). Hoje o Axon não consegue fazer
+-- nada disso porque não sabe duas coisas sobre uma tarefa.
+--
+-- (1) COMPLEXIDADE NÃO É PRIORIDADE. O que existe é `priority` (low/medium/
+-- high), que mede URGÊNCIA — não carga cognitiva. "Pagar a conta de luz" é
+-- prioridade alta e mentalmente leve; "escrever o capítulo da tese" pode ser
+-- prioridade média e exigir o melhor da energia do dia. Com um só campo o Axon
+-- colocaria a conta de luz no pico e a tese no foco leve, achando que acertou.
+-- São dois eixos independentes e precisam de duas colunas.
+--
+-- NULL é um valor legítimo e significa "não informado": a tarefa fica FORA de
+-- qualquer análise de complexidade, e `allowed_blocks` se comporta exatamente
+-- como antes desta migration. Nada de default implícito — assumir 'moderate'
+-- para quem não preencheu faria o Axon agendar com base num palpite nosso.
+--
+-- (2) TAG É TABELA, NÃO TEXTO LIVRE. Já existe `tasks.group_name` (text livre,
+-- coluna morta: declarada e nunca escrita por nenhum service). Não serve aqui
+-- justamente por ser livre — "Estudos", "estudos" e "Estudo" seriam três
+-- categorias diferentes, e agrupar exige vocabulário controlado. Daí
+-- `task_tags` com índice único em (user_id, slug): o slug normalizado é quem
+-- impede o duplicado, e o label preserva como o usuário escreveu.
+--
+-- O vínculo é N:N (`task_tag_links`) porque uma tarefa pode pertencer a mais de
+-- uma categoria — um curso profissional é "estudo" e "trabalho" ao mesmo tempo.
+-- PK composta (task_id, tag_id) torna o vínculo idempotente: vincular duas
+-- vezes não duplica.
+-- =============================================
+
+create table if not exists public.task_tags (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid references auth.users(id) on delete cascade not null,
+  label      text not null,
+  slug       text not null,
+  color      text,
+  -- Veio da lista semeada. O usuário pode renomear/excluir do mesmo jeito; a
+  -- flag existe só para a ordenação (padrão primeiro) e para não semear duas
+  -- vezes.
+  is_default boolean default false not null,
+  created_at timestamp with time zone default now()
+);
+
+create unique index if not exists task_tags_user_slug_uniq
+  on public.task_tags(user_id, slug);
+
+alter table public.task_tags enable row level security;
+
+create policy "task_tags_select" on public.task_tags for select using (auth.uid() = user_id);
+create policy "task_tags_insert" on public.task_tags for insert with check (auth.uid() = user_id);
+create policy "task_tags_update" on public.task_tags for update using (auth.uid() = user_id);
+create policy "task_tags_delete" on public.task_tags for delete using (auth.uid() = user_id);
+
+create table if not exists public.task_tag_links (
+  task_id    uuid references public.tasks(id) on delete cascade not null,
+  tag_id     uuid references public.task_tags(id) on delete cascade not null,
+  user_id    uuid references auth.users(id) on delete cascade not null,
+  created_at timestamp with time zone default now(),
+  primary key (task_id, tag_id)
+);
+
+-- A busca "todas as tarefas desta tag", que a análise de rotina vai usar para
+-- agrupar. A direção oposta (tags de uma tarefa) já é servida pela PK.
+create index if not exists task_tag_links_user_tag_idx
+  on public.task_tag_links(user_id, tag_id);
+
+alter table public.task_tag_links enable row level security;
+
+create policy "task_tag_links_select" on public.task_tag_links for select using (auth.uid() = user_id);
+create policy "task_tag_links_insert" on public.task_tag_links for insert with check (auth.uid() = user_id);
+create policy "task_tag_links_update" on public.task_tag_links for update using (auth.uid() = user_id);
+create policy "task_tag_links_delete" on public.task_tag_links for delete using (auth.uid() = user_id);
+
+-- Os quatro níveis, do mais leve ao mais exigente. O check protege contra valor
+-- inventado pelo cliente ou pelo agente; NULL continua permitido.
+alter table public.tasks
+  add column if not exists complexity text;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'tasks_complexity_check'
+  ) then
+    alter table public.tasks
+      add constraint tasks_complexity_check
+      check (complexity in ('light', 'moderate', 'focus', 'deep_focus'));
+  end if;
+end $$;

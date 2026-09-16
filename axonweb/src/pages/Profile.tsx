@@ -27,6 +27,7 @@ import {
   RefreshCcw,
   Sparkles,
   Tag,
+  Tags,
   Trash2,
   User,
   Workflow,
@@ -36,6 +37,7 @@ import {
 import { results, type ChronotypeResultKey } from "../data/results";
 import Sidebar from "../components/layout/Sidebar";
 import TagEditorSheet from "../components/settings/TagEditorSheet";
+import TaskTagsSheet from "../components/settings/TaskTagsSheet";
 import * as api from "../lib/api";
 import type { ProfileData } from "../lib/api";
 import AppBackground from "../components/layout/AppBackground";
@@ -84,6 +86,7 @@ export default function Profile() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [tagEditorOpen, setTagEditorOpen] = useState(false);
+  const [taskTagsOpen, setTaskTagsOpen] = useState(false);
 
   useEffect(() => {
     if (!api.isLoggedIn()) {
@@ -190,6 +193,7 @@ export default function Profile() {
                 scheduleLabel={scheduleLabel}
                 onEditSchedule={() => setScheduleModalOpen(true)}
                 onEditTags={() => setTagEditorOpen(true)}
+                onEditTaskTags={() => setTaskTagsOpen(true)}
               />
             </ProfileSection>
           </div>
@@ -232,6 +236,11 @@ export default function Profile() {
       <TagEditorSheet
         isOpen={tagEditorOpen}
         onClose={() => setTagEditorOpen(false)}
+      />
+
+      <TaskTagsSheet
+        isOpen={taskTagsOpen}
+        onClose={() => setTaskTagsOpen(false)}
       />
     </main>
   );
@@ -429,10 +438,12 @@ function PreferencesCard({
   scheduleLabel,
   onEditSchedule,
   onEditTags,
+  onEditTaskTags,
 }: {
   scheduleLabel: string;
   onEditSchedule: () => void;
   onEditTags: () => void;
+  onEditTaskTags: () => void;
 }) {
   return (
     <div className="grid min-w-0 gap-2">
@@ -457,6 +468,16 @@ function PreferencesCard({
         description="Categorias usadas para registrar seu dia."
         value="Editar"
         onClick={onEditTags}
+      />
+
+      {/* Conjunto SEPARADO do de cima: aquele é do registro diário, este é das
+          tarefas e serve para o Axon agrupar trabalho parecido. */}
+      <PreferenceRow
+        icon={Tags}
+        title="Categorias das tarefas"
+        description="Usadas para agrupar tarefas parecidas."
+        value="Editar"
+        onClick={onEditTaskTags}
       />
     </div>
   );
