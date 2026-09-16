@@ -707,3 +707,22 @@ class VoiceTextRequest(BaseModel):
     conversation_id: str
     history: str = "[]"
     language: str = "pt-BR"
+
+
+class SavedTimeAnswer(BaseModel):
+    """
+    Resposta do usuário à pergunta de fechamento do dia ("que horas você
+    terminou o que estava planejado?").
+
+    `reported_end` é 'HH:MM' local; `not_finished` é a saída honesta para quem
+    não terminou o que planejou — fecha o dia com zero em vez de deixar a
+    pergunta voltando.
+    """
+    date: str
+    reported_end: Optional[str] = None
+    not_finished: bool = False
+
+
+class SavedTimeDismiss(BaseModel):
+    """Usuário fechou a pergunta sem responder — não insistir naquele dia."""
+    date: str

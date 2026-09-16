@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, date
 
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from auth_helper import get_current_user
 from database import supabase
 from services import user_tz, insights_service
@@ -8,6 +8,8 @@ from services.chronotype import CHRONOTYPE_BLOCKS, BLOCK_LEVELS
 from services import calibration_service
 from services import daily_stats_service
 from services import correlations_service
+from services import saved_time_service
+from models.schemas import SavedTimeAnswer, SavedTimeDismiss
 
 router = APIRouter(prefix="/insights", tags=["insights"])
 
@@ -732,3 +734,85 @@ def get_focus_blocks(current_user: dict = Depends(get_current_user)):
         "min_data_points": calibration_service.MIN_DATA_POINTS,
         "blocks":          blocks,
     }
+
+
+# ===========================================================================
+# HORAS POUPADAS
+# ===========================================================================
+# Quanto tempo o AXON devolveu ao usuário em relação ao plano dele. A regra que
+# sustenta o número está em services/saved_time_service.py — em especial por que
+# só dias de confiança alta somam.
+
+@router.get("/saved-time")
+def get_saved_time(
+    period: str = Query(default="week", pattern="^(week|month)$"),
+    offset: int = Query(default=0, ge=0, le=520),
+    x_timezone: str | None = Header(default=None),
+    current_user: dict = Depends(get_current_user),
+):
+    tz_name = user_tz.resolve(current_user["id"], x_timezone)
+    return saved_time_service.summary(current_user["id"], tz_name, period, offset)
+
+
+@router.get("/saved-time/pending")
+def get_saved_time_pending(
+    x_timezone: str | None = Header(default=None),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    A pergunta pendente do fechamento do dia, ou `{"question": null}`.
+
+    Chamado na abertura do app. Marcar como "já perguntada" é efeito colateral
+    desta chamada (dentro do service), para a mesma pergunta não reaparecer a
+    cada navegação entre telas.
+    """
+    tz_name = user_tz.resolve(current_user["id"], x_timezone)
+    return {
+        "question": saved_time_service.pending_question(current_user["id"], tz_name)
+    }
+
+
+@router.post("/saved-time/answer")
+def post_saved_time_answer(
+    payload: SavedTimeAnswer,
+    x_timezone: str | None = Header(default=None),
+    current_user: dict = Depends(get_current_user),
+):
+    try:
+        day = date.fromisoformat(payload.date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="date inválida (esperado YYYY-MM-DD)")
+
+    if not payload.not_finished and not payload.reported_end:
+        raise HTTPException(
+            status_code=400, detail="informe reported_end ou not_finished"
+        )
+
+    tz_name = user_tz.resolve(current_user["id"], x_timezone)
+    result = saved_time_service.answer_closure(
+        current_user["id"],
+        day,
+        tz_name,
+        reported_end=payload.reported_end,
+        not_finished=payload.not_finished,
+    )
+    if result is None:
+        # Dia sem plano com horário real (Regra 3) ou horário mal formado: não
+        # há como transformar a resposta em número. 200 com ok=false porque não
+        # é erro do cliente — o dia simplesmente não é elegível.
+        return {"ok": False, "reason": "dia sem plano com horário definido"}
+    return {"ok": True, "closure": result}
+
+
+@router.post("/saved-time/dismiss")
+def post_saved_time_dismiss(
+    payload: SavedTimeDismiss,
+    current_user: dict = Depends(get_current_user),
+):
+    try:
+        day = date.fromisoformat(payload.date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="date inválida (esperado YYYY-MM-DD)")
+
+    saved_time_service.dismiss(current_user["id"], day)
+    return {"ok": True}

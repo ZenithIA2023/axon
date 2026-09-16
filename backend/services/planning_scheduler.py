@@ -21,6 +21,7 @@ from zoneinfo import ZoneInfo
 from database import supabase
 from services import notification_service
 from services import daily_stats_service
+from services import saved_time_service
 from services import report_service
 from services import user_tz as user_tz_service
 
@@ -167,6 +168,18 @@ def _process_user(user: dict, now_utc: datetime) -> None:
             daily_stats_service.reconcile(user_id, tz_name, now_local.date())
         except Exception as e:
             print(f"[planning_scheduler] reconcile falhou user={user_id}: {e}", flush=True)
+
+        # Horas poupadas: fecha o dia que acabou, usando o plano que o
+        # reconcile ACABOU de congelar — a ordem importa, sem o snapshot não há
+        # planned_day_end com que comparar. Em try/except próprio de propósito:
+        # o fechamento é uma métrica, e falhar nele não pode impedir o
+        # carry-forward das pendentes (que roda dentro do reconcile).
+        try:
+            saved_time_service.close_day(
+                user_id, tz_name, now_local.date() - timedelta(days=1)
+            )
+        except Exception as e:
+            print(f"[planning_scheduler] close_day falhou user={user_id}: {e}", flush=True)
 
     # Relatórios narrativos: todo domingo 20h local (semana que está
     # terminando hoje) e todo último dia do mês 20h local (mês que está

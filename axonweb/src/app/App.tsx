@@ -26,6 +26,7 @@ import Result from "../pages/Result";
 import DashboardLoading from "../pages/DashboardLoading";
 import AppLoading from "../pages/AppLoading";
 import NotificationToastProvider from "../components/notifications/NotificationToastProvider";
+import DayClosureQuestion from "../components/notifications/DayClosureQuestion";
 
 // App
 import Dashboard from "../pages/Dashboard";
@@ -64,6 +65,10 @@ export default function App() {
       <NativeShell />
 
       <NotificationToastProvider />
+
+      {/* Pergunta de fechamento do dia (horas poupadas). Só aparece quando o
+          backend não consegue saber a que horas o dia terminou. */}
+      <DayClosureQuestion />
 
       {/* Navegação do app instalado. Na web fica a Sidebar de cada página. */}
       <BottomNavGate />

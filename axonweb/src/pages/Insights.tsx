@@ -12,6 +12,7 @@ import {
   Smile,
   Sparkles,
   Target,
+  Zap,
 } from "lucide-react";
 
 import {
@@ -200,6 +201,15 @@ export default function Insights() {
   // semana/mês — alterar um não deve afetar o outro.
   const [taskPeriod, setTaskPeriod] = useState<"week" | "month">("week");
   const [comparePeriod, setComparePeriod] = useState<"week" | "month">("week");
+  // Horas poupadas: período PRÓPRIO do card, independente dos outros. Começa em
+  // "month" (e não "week", como os vizinhos) porque a métrica só soma dias de
+  // confiança alta — numa semana isolada o número fica pequeno demais para
+  // dizer algo, e é no acumulado do mês que o ganho aparece.
+  const [savedTimePeriod, setSavedTimePeriod] = useState<"week" | "month">(
+    "month"
+  );
+  const [savedTime, setSavedTime] = useState<api.SavedTimeSummary | null>(null);
+  const [loadingSavedTime, setLoadingSavedTime] = useState(true);
   // Dados do card de tarefas concluídas.
   const [taskInsights, setTaskInsights] = useState<TaskInsights | null>(null);
   const [loadingTasks, setLoadingTasks] = useState(true);
@@ -298,6 +308,17 @@ export default function Insights() {
       .catch(() => setPatterns(null))
       .finally(() => setLoadingPatterns(false));
   }, []);
+
+  // Horas poupadas do período selecionado no card.
+  useEffect(() => {
+    setLoadingSavedTime(true);
+
+    api
+      .getSavedTime(savedTimePeriod)
+      .then(setSavedTime)
+      .catch(() => setSavedTime(null))
+      .finally(() => setLoadingSavedTime(false));
+  }, [savedTimePeriod]);
 
   // Busca a semana exibida no card de tarefas (offset 0 = semana atual).
   useEffect(() => {
@@ -1589,6 +1610,98 @@ export default function Insights() {
                 </div>
                 )}
             </section>
+
+            {/* ============================================================
+                HORAS POUPADAS
+                ============================================================ */}
+            <section className={`${CARD} order-7`}>
+              <div className="mb-4 flex items-start justify-between gap-3 px-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-primary">
+                    Horas poupadas
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    {savedTimePeriod === "week" ? "Nesta semana" : "Neste mês"}
+                  </p>
+                </div>
+                <PeriodToggle
+                  value={savedTimePeriod}
+                  onChange={setSavedTimePeriod}
+                />
+              </div>
+
+              {loadingSavedTime ? (
+                <div className="px-2 pb-2">
+                  <div className="h-20 animate-pulse rounded-[1.4rem] bg-surface-muted" />
+                </div>
+              ) : !savedTime || savedTime.saved_minutes === 0 ? (
+                /* Estado vazio: NUNCA mostrar "0h poupadas" como se fosse um
+                   resultado. Sem dias fechados com certeza, o honesto é dizer
+                   que o AXON ainda não tem como provar o ganho. */
+                <div className={`${CHART_BOX} mx-2 mb-2`}>
+                  <p className="text-xs leading-5 text-muted">
+                    O AXON ainda está aprendendo seu ritmo. Conforme você planeja
+                    horários e conclui o que planejou, ele passa a medir quanto
+                    tempo seu dia terminou antes do previsto.
+                  </p>
+                </div>
+              ) : (
+                <div className={`${CHART_BOX} mx-2 mb-2`}>
+                  <div className="flex items-baseline gap-2">
+                    <Zap className="h-5 w-5 shrink-0 text-accent" />
+                    <p className="text-2xl font-semibold text-primary">
+                      {formatSavedDuration(savedTime.saved_minutes)}
+                    </p>
+                    <p className="text-xs text-muted">
+                      {savedTimePeriod === "week" ? "esta semana" : "este mês"}
+                    </p>
+                  </div>
+
+                  {/* As duas origens do total. Aparecem só quando existem, para
+                      um card de uma linha não virar uma lista de zeros. */}
+                  <div className="mt-4 space-y-2">
+                    {savedTime.early_minutes > 0 && (
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-sm font-semibold text-primary">
+                          {formatSavedDuration(savedTime.early_minutes)}
+                        </span>
+                        <span className="text-xs text-muted">
+                          dias terminados antes do previsto
+                        </span>
+                      </div>
+                    )}
+                    {savedTime.advanced_minutes > 0 && (
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-sm font-semibold text-primary">
+                          {formatSavedDuration(savedTime.advanced_minutes)}
+                        </span>
+                        <span className="text-xs text-muted">
+                          capacidade adiantada
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Esta frase não é decoração: é o que torna o número
+                      defensável quando o usuário desconfia dele. */}
+                  <p className="mt-4 border-t border-soft pt-3 text-[0.68rem] leading-5 text-muted">
+                    O AXON nunca conta como economia o tempo de tarefas que você
+                    simplesmente não fez.
+                  </p>
+
+                  {/* Nota discreta, não alerta: explica um número menor do que o
+                      usuário esperava em vez de deixá-lo achar que faltou dado. */}
+                  {savedTime.discarded_days > 0 && (
+                    <p className="mt-2 text-[0.68rem] leading-5 text-muted">
+                      {savedTime.discarded_days}{" "}
+                      {savedTime.discarded_days === 1 ? "dia" : "dias"} fora da
+                      conta: o AXON não conseguiu confirmar a que horas você
+                      terminou.
+                    </p>
+                  )}
+                </div>
+              )}
+            </section>
           </div>
         </div>
       </div>
@@ -1620,6 +1733,16 @@ export default function Insights() {
       />
     </main>
   );
+}
+
+// Minutos → "4h15" / "45min" / "3h". Sem zero à esquerda nos minutos porque o
+// número é lido como duração ("4h15"), não como horário.
+function formatSavedDuration(minutes: number) {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m}min`;
+  if (m === 0) return `${h}h`;
+  return `${h}h${String(m).padStart(2, "0")}`;
 }
 
 // ===========================================================================
