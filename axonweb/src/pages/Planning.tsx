@@ -42,6 +42,7 @@ import AppBackground from "../components/layout/AppBackground";
 import PageHeader from "../components/layout/PageHeader";
 import BottomSheet from "../components/ui/BottomSheet";
 import ConfirmDialog from "../components/ui/ConfirmDialog";
+import TaskAdvancedOptions from "../components/tasks/TaskAdvancedOptions";
 import EmptyState from "../components/ui/EmptyState";
 import { ScrollArea } from "../components/ui/ScrollArea";
 
@@ -3960,6 +3961,31 @@ function TimelineItem({
                   </span>
                 )}
 
+                {/* Categorias: discretas (sem ícone, borda suave) porque são
+                    contexto, não estado da tarefa. Teto de 2 para uma tarefa com
+                    muitas tags não empurrar o horário fora da linha.
+                    A COMPLEXIDADE não aparece aqui de propósito: é dado de
+                    planejamento, não de execução, e poluiria a agenda. */}
+                {(task.tags ?? []).slice(0, 2).map((tag) => (
+                  <span
+                    key={tag.id}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-full border border-soft px-2 py-0.5 text-[0.62rem] font-medium text-muted"
+                  >
+                    {/* Ponto colorido em vez de fundo colorido: a cor identifica
+                        a categoria sem competir com os badges de estado
+                        (subtarefas, adiada), que usam fundo. Tag sem cor
+                        simplesmente não mostra o ponto. */}
+                    {tag.color && (
+                      <span
+                        className="h-1.5 w-1.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: tag.color }}
+                        aria-hidden
+                      />
+                    )}
+                    {tag.label}
+                  </span>
+                ))}
+
                 {/* Último item da linha, seguindo o gap das tags: sem tag
                     nenhuma ele encosta à esquerda, alinhado com o título; a
                     cada tag adicionada ele vai deslocando para a direita. */}
@@ -4347,6 +4373,10 @@ function CreatePlanningItemModal({
   // Quantas etapas do objetivo esta tarefa vale ao ser concluída.
   const [objectiveSteps, setObjectiveSteps] = useState("1");
   const [objectives, setObjectives] = useState<api.Objective[]>([]);
+  // Opções avançadas: "" = não informado (vira null no backend).
+  const [complexity, setComplexity] = useState<"" | api.TaskComplexity>("");
+  const [tags, setTags] = useState<api.TaskTag[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -4385,11 +4415,17 @@ function CreatePlanningItemModal({
       setAxonPickTime(false);
       setDuration("");
       setIsKeyTask(false);
+      setComplexity("");
+      setSelectedTagIds([]);
 
       // Objetivos ativos para o campo "Vincular a objetivo".
       api.getObjectives()
         .then((list) => setObjectives(list.filter((o) => o.status === "active")))
         .catch(() => setObjectives([]));
+
+      // Vocabulário de categorias. A primeira chamada semeia a lista padrão no
+      // backend, então nunca volta vazia para um usuário novo.
+      api.getTaskTags().then(setTags).catch(() => setTags([]));
     }
   }, [isOpen, defaultDate]);
 
@@ -4452,6 +4488,10 @@ function CreatePlanningItemModal({
           selectedType === "task" && objectiveId
             ? Math.max(Number(objectiveSteps) || 1, 1)
             : undefined,
+        // "" = não informado: manda undefined para o campo ficar NULL em vez de
+        // gravar um nível que o usuário não escolheu.
+        complexity: complexity || undefined,
+        tag_ids: selectedTagIds.length > 0 ? selectedTagIds : undefined,
       } as any);
 
       const validDrafts = draftSubtasks.filter((s) => s.title.trim());
@@ -4821,6 +4861,19 @@ function CreatePlanningItemModal({
               </label>
             )}
 
+            <TaskAdvancedOptions
+              complexity={complexity}
+              onComplexityChange={setComplexity}
+              tags={tags}
+              selectedTagIds={selectedTagIds}
+              onSelectedTagsChange={setSelectedTagIds}
+              onTagCreated={(tag) =>
+                setTags((prev) =>
+                  prev.some((t) => t.id === tag.id) ? prev : [...prev, tag]
+                )
+              }
+            />
+
             <label className="block">
               <span className="mb-2 block text-xs font-medium text-muted">
                 Observação
@@ -5000,6 +5053,9 @@ function EditPlanningItemModal({
   // Quantas etapas o checklist cobre, por objetivo.
   const [checklistSteps, setChecklistSteps] = useState<Record<string, number>>({});
   const [objectives, setObjectives] = useState<api.Objective[]>([]);
+  const [complexity, setComplexity] = useState<"" | api.TaskComplexity>("");
+  const [tags, setTags] = useState<api.TaskTag[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -5018,7 +5074,13 @@ function EditPlanningItemModal({
     setIsKeyTask(!!task.is_key_task);
     setObjectiveId(task.objective_id ?? "");
     setObjectiveSteps(String(task.objective_steps ?? 1));
+    setComplexity((task.complexity as api.TaskComplexity) ?? "");
+    // As tags que a tarefa já tem vêm no próprio objeto (list_tasks anexa em
+    // bulk), então a seleção inicial não precisa de requisição.
+    setSelectedTagIds((task.tags ?? []).map((t) => t.id));
     setFormError(null);
+
+    api.getTaskTags().then(setTags).catch(() => setTags([]));
 
     // Objetivos ativos para o campo "Vincular a objetivo". Mantém o objetivo
     // já vinculado na lista mesmo que ele esteja concluído, para não perder a
@@ -5086,6 +5148,11 @@ function EditPlanningItemModal({
           objective_id: isTask ? objectiveId : undefined,
           objective_steps:
             isTask && objectiveId ? Math.max(Number(objectiveSteps) || 1, 1) : undefined,
+          // null limpa a complexidade (o usuário voltou para "não informado").
+          complexity: complexity || null,
+          // Sempre enviado: tag_ids SUBSTITUI o conjunto, e uma lista vazia é
+          // como o usuário remove a última tag da tarefa.
+          tag_ids: selectedTagIds,
         } as any
       );
 
@@ -5396,6 +5463,19 @@ function EditPlanningItemModal({
                 </select>
               </label>
             )}
+
+            <TaskAdvancedOptions
+              complexity={complexity}
+              onComplexityChange={setComplexity}
+              tags={tags}
+              selectedTagIds={selectedTagIds}
+              onSelectedTagsChange={setSelectedTagIds}
+              onTagCreated={(tag) =>
+                setTags((prev) =>
+                  prev.some((t) => t.id === tag.id) ? prev : [...prev, tag]
+                )
+              }
+            />
 
             <label className="block">
               <span className="mb-2 block text-xs font-medium text-muted">

@@ -89,6 +89,25 @@ class PlanningPreferences(BaseModel):
 
 # --- Tasks ---
 
+class TagResponse(BaseModel):
+    """Uma tag do vocabulário do usuário (ver Migration 31)."""
+    id: str
+    label: str
+    slug: str
+    color: Optional[str] = None
+    is_default: bool = False
+
+
+class TagCreate(BaseModel):
+    label: str
+    color: Optional[str] = None
+
+
+class TagUpdate(BaseModel):
+    label: Optional[str] = None
+    color: Optional[str] = None
+
+
 class TaskCreate(BaseModel):
     title: str
     description: Optional[str] = None
@@ -110,6 +129,11 @@ class TaskCreate(BaseModel):
     objective_id: Optional[str] = None  # UUID do objetivo ao qual esta tarefa pertence
     # Quantas etapas do objetivo esta tarefa vale ao ser concluída.
     objective_steps: Optional[int] = None
+    # Carga cognitiva: 'light' | 'moderate' | 'focus' | 'deep_focus'. None =
+    # não informado, e a tarefa fica fora da análise de complexidade — não há
+    # default implícito (ver Migration 31).
+    complexity: Optional[str] = None
+    tag_ids: Optional[list[str]] = None
 
 
 class TaskUpdate(BaseModel):
@@ -130,6 +154,9 @@ class TaskUpdate(BaseModel):
     is_key_task: Optional[bool] = None
     objective_id: Optional[str] = None
     objective_steps: Optional[int] = None
+    complexity: Optional[str] = None
+    # Lista vazia REMOVE todas as tags; ausente (None) não mexe nelas.
+    tag_ids: Optional[list[str]] = None
 
 
 class TaskResponse(BaseModel):
@@ -158,6 +185,8 @@ class TaskResponse(BaseModel):
     completed_at: Optional[str] = None
     is_key_task: bool = False
     carry_count: int = 0
+    complexity: Optional[str] = None
+    tags: list[TagResponse] = []
 
 
 # --- Conversations ---

@@ -32,6 +32,23 @@ def serialize(row: dict) -> dict:
     return row
 
 
+# Os quatro níveis de carga cognitiva aceitos (ver Migration 31). Valor fora
+# desta lista é descartado em vez de chegar ao banco e bater no check — o
+# cliente antigo ou o agente podem mandar qualquer coisa.
+COMPLEXITY_VALUES = ("light", "moderate", "focus", "deep_focus")
+
+
+def _clean_complexity(payload: dict) -> None:
+    """Normaliza `complexity` no payload: string vazia vira NULL (desinformar)."""
+    if "complexity" not in payload:
+        return
+    value = payload.get("complexity")
+    if value in (None, ""):
+        payload["complexity"] = None
+    elif str(value) not in COMPLEXITY_VALUES:
+        payload.pop("complexity")
+
+
 def _stringify_dates(payload: dict) -> dict:
     for field in _WRITE_DATE_FIELDS:
         if payload.get(field) is not None:
@@ -190,6 +207,23 @@ def list_tasks(
 
     result = query.execute()
     tasks = [serialize(row) for row in (result.data or [])]
+
+    # Tags em BULK (duas queries no total, não uma por tarefa) — ver o docstring
+    # de tags_for_tasks sobre o custo de um N+1 aqui.
+    if tasks:
+        try:
+            from services import task_tags_service
+
+            by_task = task_tags_service.tags_for_tasks(
+                user_id, [t["id"] for t in tasks]
+            )
+            for t in tasks:
+                t["tags"] = by_task.get(t["id"], [])
+        except Exception as e:
+            print(f"[tasks] tags não carregadas: {e}", flush=True)
+            for t in tasks:
+                t.setdefault("tags", [])
+
     return sorted(tasks, key=_task_sort_key)
 
 
@@ -211,6 +245,11 @@ def create_task(user_id: str, data: dict, now: datetime | None = None) -> dict:
     payload = _stringify_dates({**data})
     payload["user_id"] = user_id
 
+    # Tags não são coluna de `tasks`: saem do payload e viram vínculos depois do
+    # insert (precisam do id da tarefa).
+    tag_ids = payload.pop("tag_ids", None)
+    _clean_complexity(payload)
+
     # Slot escolhido pelo próprio Axon ("Axon decide"), preenchido abaixo. Fica
     # registrado no ledger de otimizações como histórico do trabalho de
     # organização dele — com freed_minutes 0, porque agendar uma tarefa que não
@@ -231,6 +270,10 @@ def create_task(user_id: str, data: dict, now: datetime | None = None) -> dict:
                 user_id, day, int(duration), now=now,
                 priority=payload.get("priority"),
                 is_key_task=bool(payload.get("is_key_task")),
+                # A complexidade entra justamente aqui: é o caminho em que o
+                # AXON escolhe o horário, e uma tarefa de foco profundo não pode
+                # cair em bloco fraco só porque a prioridade é baixa.
+                complexity=payload.get("complexity"),
             )
             if slot:
                 payload["start_time"], payload["end_time"] = slot
@@ -251,6 +294,20 @@ def create_task(user_id: str, data: dict, now: datetime | None = None) -> dict:
         raise ValueError("Erro ao criar tarefa")
 
     task = serialize(result.data[0])
+
+    # Vínculo de tag em try/except: a tarefa já existe, e falhar ao marcar a
+    # categoria dela não pode desfazer a criação.
+    if tag_ids is not None:
+        try:
+            from services import task_tags_service
+
+            task_tags_service.set_task_tags(user_id, task["id"], tag_ids)
+            task["tags"] = task_tags_service.tags_for_tasks(
+                user_id, [task["id"]]
+            ).get(task["id"], [])
+        except Exception as e:
+            print(f"[tasks] tags não vinculadas task={task['id']}: {e}", flush=True)
+
     calendar_sync.sync_task_async(user_id, task, "create")
 
     if axon_picked_slot and task.get("scheduled_date"):
@@ -347,8 +404,36 @@ def _mirror_subtasks(user_id: str, task_id: str, *, done: bool) -> None:
 
 def update_task(user_id: str, task_id: str, data: dict) -> dict:
     payload = _stringify_dates({**data})
-    if not payload:
+
+    # Tags vivem em outra tabela: saem do payload antes da checagem de "nenhum
+    # campo". `None` = não veio no PATCH (não mexer); lista vazia = remover
+    # todas. Um PATCH que só troca as tags deixa o payload vazio e ainda assim é
+    # uma edição válida, por isso a checagem considera as duas coisas.
+    tag_ids = payload.pop("tag_ids", None)
+    _clean_complexity(payload)
+
+    if not payload and tag_ids is None:
         raise ValueError("Nenhum campo para atualizar")
+
+    if not payload:
+        # Só tags mudaram: aplica o vínculo e devolve a tarefa sem passar pelo
+        # UPDATE (que exigiria ao menos uma coluna).
+        _ensure_owned(user_id, task_id)
+        from services import task_tags_service
+
+        task_tags_service.set_task_tags(user_id, task_id, tag_ids)
+        current = (
+            supabase.table("tasks")
+            .select("*, objectives(title)")
+            .eq("id", task_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+        task = serialize(current.data[0])
+        task["tags"] = task_tags_service.tags_for_tasks(user_id, [task_id]).get(
+            task_id, []
+        )
+        return task
 
     # Confirma posse e lê estado atual (status para completed_at; scheduled_date
     # e is_key_task para a lógica de unicidade de tarefa chave).
@@ -434,6 +519,19 @@ def update_task(user_id: str, task_id: str, data: dict) -> dict:
         objectives_service.sync_task_completion(
             user_id, task, became_done=False, became_undone=True
         )
+
+    # Tags depois do UPDATE, em try/except: a tarefa já foi salva.
+    try:
+        from services import task_tags_service
+
+        if tag_ids is not None:
+            task_tags_service.set_task_tags(user_id, task_id, tag_ids)
+        task["tags"] = task_tags_service.tags_for_tasks(user_id, [task_id]).get(
+            task_id, []
+        )
+    except Exception as e:
+        print(f"[tasks] tags não atualizadas task={task_id}: {e}", flush=True)
+        task.setdefault("tags", [])
 
     return task
 

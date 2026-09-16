@@ -652,6 +652,18 @@ export type TaskType = "task" | "event" | "routine";
 export type TaskStatus = "todo" | "progress" | "done" | "scheduled";
 export type TaskPriority = "low" | "medium" | "high";
 
+// Carga cognitiva da tarefa — eixo independente de `priority` (que é urgência).
+// `null`/ausente = não informado, e a tarefa fica fora da análise.
+export type TaskComplexity = "light" | "moderate" | "focus" | "deep_focus";
+
+export interface TaskTag {
+  id: string;
+  label: string;
+  slug: string;
+  color?: string | null;
+  is_default: boolean;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -677,6 +689,8 @@ export interface Task {
   objective_steps?: number;
   created_by: "user" | "agent";
   created_at: string;
+  complexity?: TaskComplexity | null;
+  tags?: TaskTag[];
 }
 
 export interface TaskCreateInput {
@@ -695,6 +709,9 @@ export interface TaskCreateInput {
   duration_minutes?: number;
   objective_id?: string;
   objective_steps?: number;
+  complexity?: TaskComplexity | null;
+  // Substitui o conjunto de tags: mande a lista completa. Vazia remove todas.
+  tag_ids?: string[];
 }
 
 // `null` limpa o campo no banco; `undefined` (ou omitido) deixa como está. O
@@ -708,6 +725,45 @@ export type TaskUpdateInput = Partial<TaskCreateInput> & {
   description?: string | null;
   location?: string | null;
 };
+
+// ===========================================================================
+// TAGS DE TAREFAS
+// ===========================================================================
+// Vocabulário de categorias do usuário. A primeira chamada semeia a lista padrão
+// no backend, então nunca volta vazia para um usuário novo.
+
+export function getTaskTags() {
+  return request<TaskTag[]>("/task-tags");
+}
+
+export function createTaskTag(label: string, color?: string | null) {
+  return request<TaskTag>("/task-tags", {
+    method: "POST",
+    body: JSON.stringify({ label, color }),
+  });
+}
+
+export function updateTaskTag(
+  id: string,
+  body: { label?: string; color?: string | null }
+) {
+  return request<TaskTag>(`/task-tags/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+// Quantas tarefas usam a tag — mostrado na confirmação ANTES de excluir, para o
+// usuário ver o alcance da exclusão em cascata.
+export function getTaskTagUsage(id: string) {
+  return request<{ tag_id: string; task_count: number }>(
+    `/task-tags/${id}/usage`
+  );
+}
+
+export function deleteTaskTag(id: string) {
+  return request<{ ok: boolean }>(`/task-tags/${id}`, { method: "DELETE" });
+}
 
 // Usado no Planning, Dashboard e Focus com filtros opcionais de data/status/tipo.
 export function getTasks(params?: {

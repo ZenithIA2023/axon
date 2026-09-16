@@ -141,16 +141,76 @@ ALLOWED_BLOCKS: dict[str, tuple[str, ...]] = {
 BLOCK_PREFERENCE: tuple[str, ...] = _ALL_GOOD
 
 
-def allowed_blocks(priority: str | None, is_key_task: bool = False) -> tuple[str, ...]:
+# Piso por COMPLEXIDADE (carga cognitiva), o eixo independente da prioridade
+# (urgência). Ver o comentário da Migration 31: "pagar a conta de luz" é urgente
+# e leve, "escrever a tese" pode não ser urgente e exigir o melhor da energia.
+#
+# `light` e `moderate` não restringem nada além do que a prioridade já restringe:
+# uma tarefa mecânica pode ir para qualquer bloco bom, e é a prioridade que
+# decide se ela merece um bloco melhor.
+COMPLEXITY_BLOCKS: dict[str, tuple[str, ...]] = {
+    "deep_focus": ("pico", "foco_profundo"),
+    "focus":      ("pico", "foco_profundo", "foco_moderado"),
+    "moderate":   _ALL_GOOD,
+    "light":      _ALL_GOOD,
+}
+
+
+def allowed_blocks(
+    priority: str | None,
+    is_key_task: bool = False,
+    complexity: str | None = None,
+) -> tuple[str, ...]:
     """
     Blocos em que o Axon pode agendar uma tarefa, do melhor para o pior.
 
-    `is_key_task` tem precedência sobre `priority` (toda tarefa chave é salva
-    com priority='high', mas a restrição dela é mais estrita).
+    Duas restrições independentes se combinam aqui, e as duas são PISO (o bloco
+    mais fraco aceitável), nunca teto:
+
+      - prioridade/chave = urgência. `is_key_task` tem precedência sobre
+        `priority` (toda tarefa chave é salva com priority='high', mas a
+        restrição dela é mais estrita).
+      - complexidade = carga cognitiva. `None` significa "não informado" e NÃO
+        restringe nada — o resultado é idêntico ao de antes da Migration 31.
+
+    Quando as duas existem, vale a MAIS RESTRITIVA, que é a interseção das duas
+    listas. Em termos práticos, como toda lista aqui é um prefixo de _ALL_GOOD
+    (as listas só cortam os blocos fracos do fim), a interseção é simplesmente a
+    mais curta das duas. Exemplos:
+
+        low + deep_focus  → ("pico", "foco_profundo")
+            a prioridade liberaria qualquer bloco bom, mas trabalho de foco
+            profundo em bloco fraco é trabalho jogado fora.
+
+        key + light       → ("pico", "foco_profundo")
+            a complexidade liberaria qualquer bloco bom, mas tarefa chave é a
+            aposta do dia e continua no melhor horário.
+
+        high + focus      → ("pico", "foco_profundo", "foco_moderado")
+            as duas concordam no mesmo piso.
+
+    A ordem é preservada (melhor bloco primeiro), porque quem chama usa a lista
+    como ordem de preferência.
     """
     if is_key_task:
-        return ALLOWED_BLOCKS["key"]
-    return ALLOWED_BLOCKS.get(priority or "medium", _ALL_GOOD)
+        by_priority = ALLOWED_BLOCKS["key"]
+    else:
+        by_priority = ALLOWED_BLOCKS.get(priority or "medium", _ALL_GOOD)
+
+    if complexity is None:
+        return by_priority
+
+    by_complexity = COMPLEXITY_BLOCKS.get(complexity)
+    if by_complexity is None:
+        # Valor desconhecido (cliente antigo, agente alucinando um rótulo): cai
+        # no comportamento sem complexidade em vez de restringir por acidente.
+        return by_priority
+
+    # Interseção preservando a ordem de `by_priority`. Escrita como interseção
+    # de verdade (e não `min(..., key=len)`) para continuar correta se algum dia
+    # uma das listas deixar de ser prefixo de _ALL_GOOD — com as listas atuais o
+    # resultado é o mesmo, mas aqui a intenção fica explícita.
+    return tuple(level for level in by_priority if level in by_complexity)
 
 # ---------------------------------------------------------------------------
 # Blocos de 90 minutos — 16 blocos cobrem as 24h do dia.

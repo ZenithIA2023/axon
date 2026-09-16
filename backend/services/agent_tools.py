@@ -175,6 +175,7 @@ TOOL_LABELS = {
     "deletar_rotina": "Removendo rotina",
     "criar_objetivo": "Criando objetivo",
     "listar_objetivos": "Consultando objetivos",
+    "listar_tags": "Consultando categorias",
     "atualizar_objetivo": "Atualizando objetivo",
     "listar_etapas": "Consultando etapas",
     "deletar_objetivo": "Removendo objetivo",
@@ -187,6 +188,27 @@ TOOL_LABELS = {
 
 _TASK_TYPE = {"type": "string", "enum": ["task", "event", "routine"]}
 _PRIORITY = {"type": "string", "enum": ["low", "medium", "high"]}
+# Carga cognitiva — eixo INDEPENDENTE de _PRIORITY (que é urgência). Ver
+# Migration 31 e o prompt do agente.
+_COMPLEXITY = {
+    "type": "string",
+    "enum": ["light", "moderate", "focus", "deep_focus"],
+    "description": (
+        "Carga cognitiva da tarefa, NÃO a urgência (isso é priority). "
+        "light = mecânica, dá para fazer cansado; moderate = atenção normal; "
+        "focus = exige concentração; deep_focus = exige o melhor da energia. "
+        "OMITA quando não estiver claro — não adivinhe. Uma tarefa sem "
+        "complexidade fica fora da análise, o que é melhor que um palpite errado."
+    ),
+}
+_TAG_IDS = {
+    "type": "array",
+    "items": {"type": "string"},
+    "description": (
+        "UUIDs das tags (categorias) desta tarefa. Descubra os ids com "
+        "listar_tags antes de usar. Omita se o usuário não indicou categoria."
+    ),
+}
 _STATUS = {"type": "string", "enum": ["todo", "progress", "done", "scheduled"]}
 _DATE = {"type": "string", "description": "Data no formato YYYY-MM-DD"}
 _TIME = {"type": "string", "description": "Horário no formato HH:MM"}
@@ -222,6 +244,8 @@ TOOLS = [
                         "usuário indicar claramente qual é a prioridade máxima do dia."
                     ),
                 },
+                "complexity": _COMPLEXITY,
+                "tag_ids": _TAG_IDS,
                 "objective_id": {
                     "type": "string",
                     "description": (
@@ -311,6 +335,16 @@ TOOLS = [
                         "Quantas etapas do objetivo esta tarefa vale ao ser concluída "
                         "(ex.: uma maratona de estudo que cobre 5 aulas → 5). Padrão: 1. "
                         "Só faz sentido junto com objective_id."
+                    ),
+                },
+                "complexity": _COMPLEXITY,
+                "tag_ids": {
+                    **_TAG_IDS,
+                    "description": (
+                        _TAG_IDS["description"]
+                        + " SUBSTITUI o conjunto atual: mande a lista completa que a "
+                        "tarefa deve ficar com, não só a tag nova. Lista vazia remove "
+                        "todas as tags."
                     ),
                 },
             },
@@ -584,6 +618,16 @@ TOOLS = [
         "input_schema": {"type": "object", "properties": {}},
     },
     {
+        "name": "listar_tags",
+        "description": (
+            "Lista as tags (categorias) de tarefas do usuário, com o id de cada uma. "
+            "Use ANTES de criar ou atualizar uma tarefa com tag_ids — os ids são "
+            "UUIDs e não podem ser inventados. Se nenhuma tag existente servir, não "
+            "invente: crie a tarefa sem tag e comente com o usuário."
+        ),
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "atualizar_objetivo",
         "description": "Atualiza título, descrição, prazo ou prioridade de um objetivo existente.",
         "input_schema": {
@@ -829,6 +873,12 @@ def execute_tool(name: str, tool_input: dict, user_id: str, tz_name: str | None 
                 task_type=tool_input.get("task_type"),
             )
             return {"ok": True, "count": len(tasks), "tasks": tasks}
+
+        if name == "listar_tags":
+            from services import task_tags_service
+
+            tags = task_tags_service.list_tags(user_id)
+            return {"ok": True, "count": len(tags), "tags": tags}
 
         if name == "atualizar_tarefa":
             data = {k: v for k, v in tool_input.items() if k != "task_id"}

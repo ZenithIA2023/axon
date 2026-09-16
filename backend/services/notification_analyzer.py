@@ -247,7 +247,9 @@ def _ensure_free_slot(user_id: str, ctx: dict, action: dict) -> dict | None:
 
     duration = _duration_min(moved)
     allowed = chronotype_service.allowed_blocks(
-        (moved or {}).get("priority"), bool((moved or {}).get("is_key_task"))
+        (moved or {}).get("priority"),
+        bool((moved or {}).get("is_key_task")),
+        (moved or {}).get("complexity"),
     )
     tomorrow = str(date.fromisoformat(today_str) + timedelta(days=1))
 
