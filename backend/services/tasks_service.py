@@ -211,6 +211,12 @@ def create_task(user_id: str, data: dict, now: datetime | None = None) -> dict:
     payload = _stringify_dates({**data})
     payload["user_id"] = user_id
 
+    # Slot escolhido pelo próprio Axon ("Axon decide"), preenchido abaixo. Fica
+    # registrado no ledger de otimizações como histórico do trabalho de
+    # organização dele — com freed_minutes 0, porque agendar uma tarefa que não
+    # tinha horário não ADIANTA o fim do dia (não havia "antes" para comparar).
+    axon_picked_slot = None
+
     # "Axon decide": escolhe o melhor slot de energia para o dia, baseado no cronotipo.
     if payload.pop("axon_pick_time", False):
         duration = payload.pop("duration_minutes", None)
@@ -228,6 +234,7 @@ def create_task(user_id: str, data: dict, now: datetime | None = None) -> dict:
             )
             if slot:
                 payload["start_time"], payload["end_time"] = slot
+                axon_picked_slot = slot
         else:
             payload.pop("duration_minutes", None)
     else:
@@ -245,6 +252,25 @@ def create_task(user_id: str, data: dict, now: datetime | None = None) -> dict:
 
     task = serialize(result.data[0])
     calendar_sync.sync_task_async(user_id, task, "create")
+
+    if axon_picked_slot and task.get("scheduled_date"):
+        # Import local: saved_time_service importa daily_stats_service, que
+        # importa este módulo — no topo do arquivo isso seria um ciclo.
+        try:
+            from datetime import date as _date
+            from services import saved_time_service
+
+            saved_time_service.record_optimization(
+                user_id,
+                task["id"],
+                _date.fromisoformat(str(task["scheduled_date"])),
+                0,
+                new_start=axon_picked_slot[0],
+                new_end=axon_picked_slot[1],
+                source="pick_time",
+            )
+        except Exception:
+            pass  # métrica não pode impedir a criação da tarefa
 
     # O título novo precisa entrar no vocabulário de voz: sem isto o usuário
     # criaria a tarefa e, ao falar dela em seguida, o reconhecedor ainda não a

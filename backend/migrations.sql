@@ -917,3 +917,80 @@ create policy "day_closures_select" on public.day_closures for select using (aut
 create policy "day_closures_insert" on public.day_closures for insert with check (auth.uid() = user_id);
 create policy "day_closures_update" on public.day_closures for update using (auth.uid() = user_id);
 create policy "day_closures_delete" on public.day_closures for delete using (auth.uid() = user_id);
+
+-- =============================================
+-- Migration 30: horas poupadas — crédito por reorganização do AXON
+-- ---------------------------------------------
+-- Terceira origem do número (as duas primeiras, nas Migrations 28 e 29, vêm de
+-- COMO O USUÁRIO executou o dia). Esta vem do que o próprio AXON reorganizou.
+--
+-- O QUE SE PERDIA. Quando o AXON sugere mover uma tarefa e o usuário aceita, o
+-- horário antigo é sobrescrito no update e esquecido — `old_time` chega a ser
+-- lido no aceite só para escrever o texto da notificação de mudança, e é
+-- descartado em seguida. Ninguém registrava que houve uma melhoria, então a
+-- contribuição do AXON era invisível para a métrica.
+--
+-- POR QUE ESTE É O SINAL MAIS FORTE. Não depende do usuário marcar tarefa nem
+-- responder pergunta: o "antes" e o "depois" são dois horários que o sistema
+-- conhece com certeza. É medição determinística, ao contrário do completed_at
+-- (ver o cabeçalho de saved_time_service.py).
+--
+-- freed_minutes NÃO é o tamanho do movimento. Mover uma tarefa 4h para trás não
+-- libera 4h: só libera tempo o movimento que adianta o FIM DO DIA. Mover a
+-- última tarefa de 20:00–22:00 para 16:00–18:00, com a penúltima acabando
+-- 21:20, libera 40 min (22:00 → 21:20). Mover uma tarefa do MEIO do dia não
+-- libera nada, porque o dia continua acabando no mesmo horário. Por isso a
+-- coluna guarda o resultado desse cálculo, e não a diferença de horários.
+--
+-- source distingue as duas origens:
+--   'improvement' = sugestão de melhoria aceita pelo usuário (tem "antes").
+--   'pick_time'   = o AXON escolheu o horário de uma tarefa NOVA ("Axon
+--                   decide", em tasks_service.create_task). Não existe "antes",
+--                   então nada foi adiantado e freed_minutes é 0 — a linha fica
+--                   só como histórico do trabalho de organização do AXON, fora
+--                   do número.
+--
+-- O índice único parcial em notification_id impede crédito em dobro: um duplo
+-- toque em "aceitar" (ou um retry do cliente) passaria duas vezes pelo mesmo
+-- fluxo, e sem ele a mesma melhoria somaria duas vezes no total. Mesmo espírito
+-- do índice de objective_step_entries (Migration 27).
+-- =============================================
+
+create table if not exists public.axon_optimizations (
+  id              uuid primary key default gen_random_uuid(),
+  user_id         uuid references auth.users(id) on delete cascade not null,
+  -- CASCADE: apagar a tarefa desfaz o crédito que ela gerou. Um número que
+  -- sobrevivesse à tarefa que o originou não teria como ser justificado no
+  -- detalhamento.
+  task_id         uuid references public.tasks(id) on delete cascade not null,
+  notification_id uuid references public.notifications(id) on delete set null,
+  day             date not null,
+  old_start_time  time,
+  old_end_time    time,
+  new_start_time  time,
+  new_end_time    time,
+  freed_minutes   integer default 0 not null,
+  source          text default 'improvement' not null,
+  created_at      timestamp with time zone default now()
+);
+
+create unique index if not exists axon_optimizations_notification_uniq
+  on public.axon_optimizations(notification_id)
+  where notification_id is not null;
+
+create index if not exists axon_optimizations_user_day_idx
+  on public.axon_optimizations(user_id, day);
+
+alter table public.axon_optimizations enable row level security;
+
+create policy "axon_optimizations_select" on public.axon_optimizations for select using (auth.uid() = user_id);
+create policy "axon_optimizations_insert" on public.axon_optimizations for insert with check (auth.uid() = user_id);
+create policy "axon_optimizations_update" on public.axon_optimizations for update using (auth.uid() = user_id);
+create policy "axon_optimizations_delete" on public.axon_optimizations for delete using (auth.uid() = user_id);
+
+-- O crédito de otimização no fechamento do dia. Coluna PRÓPRIA (e não somada em
+-- saved_minutes) porque ela é a ÚNICA exceção à regra "só confiança alta soma":
+-- o crédito é determinístico e entra no total mesmo num dia que o AXON não
+-- conseguiu fechar com certeza. Ver saved_time_service.py.
+alter table public.day_closures
+  add column if not exists optimization_minutes integer default 0 not null;

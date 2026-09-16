@@ -1680,6 +1680,16 @@ export default function Insights() {
                         </span>
                       </div>
                     )}
+                    {savedTime.optimization_minutes > 0 && (
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-sm font-semibold text-primary">
+                          {formatSavedDuration(savedTime.optimization_minutes)}
+                        </span>
+                        <span className="text-xs text-muted">
+                          reorganização feita pelo AXON
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Esta frase não é decoração: é o que torna o número
