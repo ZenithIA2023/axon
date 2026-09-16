@@ -252,9 +252,14 @@ def create_task(user_id: str, data: dict, now: datetime | None = None) -> dict:
     from services import stt_vocabulary
     stt_vocabulary.invalidate(user_id)
 
-    if task.get("objective_id"):
-        from services.objectives_service import recalculate_progress
-        recalculate_progress(task["objective_id"])
+    # Tarefa que já nasce concluída (importação, registro retroativo) precisa
+    # lançar a etapa na hora — não haverá transição todo→done depois para
+    # disparar o ledger.
+    if task.get("objective_id") and task.get("status") == "done":
+        from services import objectives_service
+        objectives_service.sync_task_completion(
+            user_id, task, became_done=True, became_undone=False
+        )
 
     return task
 
@@ -271,6 +276,49 @@ def _ensure_owned(user_id: str, task_id: str) -> None:
         raise ValueError("Tarefa não encontrada")
 
 
+def _mirror_subtasks(user_id: str, task_id: str, *, done: bool) -> None:
+    """
+    Espelha o status da tarefa nas subtarefas e lança as que estão vinculadas
+    a um objetivo.
+
+    A escrita vai direto na tabela (sem passar por `subtasks_service`) para não
+    disparar o recálculo reverso, que sobrescreveria o status que acabamos de
+    definir. O efeito colateral é que o gancho de ledger daquele serviço também
+    fica de fora — então ele é chamado aqui, explicitamente. Sem isto, concluir
+    a tarefa mãe marcaria as subtarefas vinculadas sem avançar o objetivo, e o
+    contador ficaria parado sem nada indicando o erro.
+    """
+    affected = (
+        supabase.table("subtasks")
+        .select("id, done, objective_id, objective_steps")
+        .eq("task_id", task_id)
+        .eq("user_id", user_id)
+        .execute()
+    ).data or []
+
+    supabase.table("subtasks").update({"done": done}).eq("task_id", task_id).eq(
+        "user_id", user_id
+    ).execute()
+
+    linked = [s for s in affected if s.get("objective_id")]
+    if not linked:
+        return
+
+    from services import objectives_service
+
+    for subtask in linked:
+        was_done = bool(subtask.get("done"))
+        if was_done == done:
+            continue  # já estava nesse estado: nada a lançar nem a desfazer
+
+        objectives_service.sync_subtask_completion(
+            user_id,
+            {**subtask, "done": done},
+            became_done=done,
+            became_undone=not done,
+        )
+
+
 def update_task(user_id: str, task_id: str, data: dict) -> dict:
     payload = _stringify_dates({**data})
     if not payload:
@@ -280,7 +328,7 @@ def update_task(user_id: str, task_id: str, data: dict) -> dict:
     # e is_key_task para a lógica de unicidade de tarefa chave).
     existing = (
         supabase.table("tasks")
-        .select("status, scheduled_date, is_key_task, objective_id")
+        .select("status, scheduled_date, is_key_task, objective_id, objective_steps")
         .eq("id", task_id)
         .eq("user_id", user_id)
         .execute()
@@ -328,25 +376,38 @@ def update_task(user_id: str, task_id: str, data: dict) -> dict:
     # não disparar o recálculo reverso, que sobrescreveria o status que
     # acabamos de definir. É o par da lógica subtarefas→tarefa em
     # subtasks_service._recalculate_task_progress.
-    new_status = payload.get("status")
-    if new_status == "done" and current_status != "done":
-        supabase.table("subtasks").update({"done": True}).eq(
-            "task_id", task_id
-        ).eq("user_id", user_id).execute()
-    elif new_status and new_status != "done" and current_status == "done":
-        supabase.table("subtasks").update({"done": False}).eq(
-            "task_id", task_id
-        ).eq("user_id", user_id).execute()
+    mirrored_status = payload.get("status")
+    if mirrored_status == "done" and current_status != "done":
+        _mirror_subtasks(user_id, task_id, done=True)
+    elif mirrored_status and mirrored_status != "done" and current_status == "done":
+        _mirror_subtasks(user_id, task_id, done=False)
 
-    # Recalcula o progresso do objetivo novo E do antigo — cobre vincular,
-    # trocar de objetivo e desvincular, sem deixar o objetivo de origem com
-    # progresso defasado.
-    affected = {current_objective_id, task.get("objective_id")}
-    affected.discard(None)
-    if affected:
-        from services.objectives_service import recalculate_progress
-        for objective_id in affected:
-            recalculate_progress(objective_id)
+    # Ledger do objetivo. Duas coisas independentes podem mudar aqui: o status
+    # da tarefa (concluiu/reabriu) e o objetivo a que ela pertence. Tratar só a
+    # primeira deixaria o lançamento preso no objetivo errado quando uma tarefa
+    # JÁ concluída é movida de objetivo.
+    from services import objectives_service
+
+    new_status = task.get("status")
+    was_done = current_status == "done"
+    is_done = new_status == "done"
+    new_objective_id = task.get("objective_id")
+    objective_changed = new_objective_id != current_objective_id
+
+    if objective_changed and was_done and current_objective_id:
+        # O lançamento antigo sai antes de qualquer coisa: o índice único é por
+        # tarefa, então sem apagar primeiro o lançamento no destino não entra.
+        # (remove_entry_for_task já reconcilia o objetivo de origem.)
+        objectives_service.remove_entry_for_task(task_id)
+
+    if is_done and (not was_done or (objective_changed and new_objective_id)):
+        objectives_service.sync_task_completion(
+            user_id, task, became_done=True, became_undone=False
+        )
+    elif was_done and not is_done:
+        objectives_service.sync_task_completion(
+            user_id, task, became_done=False, became_undone=True
+        )
 
     return task
 
@@ -368,9 +429,11 @@ def delete_task(user_id: str, task_id: str) -> None:
     supabase.table("tasks").delete().eq("id", task_id).eq("user_id", user_id).execute()
     calendar_sync.sync_task_async(user_id, task, "delete")
 
+    # O cascade de `objective_step_entries.source_task_id` já apagou o
+    # lançamento junto com a tarefa; só falta reconciliar o cache do objetivo.
     if objective_id:
-        from services.objectives_service import recalculate_progress
-        recalculate_progress(objective_id)
+        from services import objectives_service
+        objectives_service.recalculate_from_ledger(objective_id)
 
 
 def carry_forward_tasks(user_id: str, today=None) -> list[dict]:

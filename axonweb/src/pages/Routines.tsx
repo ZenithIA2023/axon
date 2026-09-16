@@ -25,7 +25,9 @@ import {
 } from "lucide-react";
 
 import Sidebar from "../components/layout/Sidebar";
-import NewRoutineSheet from "../components/routines/NewRoutineSheet";
+import NewRoutineSheet, {
+  RoutineEndObjectiveField,
+} from "../components/routines/NewRoutineSheet";
 import {
   blankItem,
   draftToCreateInput,
@@ -1334,6 +1336,9 @@ export function RoutineDetailPage() {
   const [showDelete, setShowDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // Término por objetivo, editável depois da criação.
+  const [savingEndObjective, setSavingEndObjective] = useState(false);
+
   // Carrega a rotina selecionada pelo id da rota.
   function load() {
     setLoading(true);
@@ -1376,6 +1381,26 @@ export function RoutineDetailPage() {
       setError((e as Error).message || "Não foi possível renomear a rotina.");
     } finally {
       setSavingName(false);
+    }
+  }
+
+  // Salva o término por objetivo na hora da troca: é um campo só, e um botão
+  // "salvar" para ele sozinho seria atrito sem ganho.
+  async function saveEndObjective(objectiveId: string) {
+    if (!routine) return;
+    setSavingEndObjective(true);
+    try {
+      const updated = await api.updateRoutine(routine.id, {
+        objective_id: objectiveId || null,
+      });
+      setRoutine(updated);
+      setError(null);
+    } catch (e) {
+      setError(
+        (e as Error).message || "Não foi possível salvar o término por objetivo."
+      );
+    } finally {
+      setSavingEndObjective(false);
     }
   }
 
@@ -1604,8 +1629,18 @@ export function RoutineDetailPage() {
                 <span>
                   {routine.end_date
                     ? `Término ${formatDate(routine.end_date)}`
+                    : routine.objective_id
+                    ? "Termina com o objetivo"
                     : "Sem data de término"}
                 </span>
+              </div>
+
+              <div className="mt-4 border-t border-slate-200/80 pt-4 dark:border-white/8">
+                <RoutineEndObjectiveField
+                  value={routine.objective_id ?? ""}
+                  onChange={saveEndObjective}
+                  disabled={savingEndObjective}
+                />
               </div>
             </section>
 

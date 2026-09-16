@@ -227,7 +227,17 @@ TOOLS = [
                     "description": (
                         "UUID do objetivo ao qual esta tarefa pertence. Use quando o usuário "
                         "estiver adicionando uma etapa a um objetivo existente. "
-                        "Descubra o id correto com listar_objetivos antes."
+                        "Descubra o id correto com listar_objetivos antes. NÃO crie uma "
+                        "tarefa por unidade de progresso: o objetivo é um contador."
+                    ),
+                },
+                "objective_steps": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": (
+                        "Quantas etapas do objetivo esta tarefa vale ao ser concluída "
+                        "(ex.: uma maratona de estudo que cobre 5 aulas → 5). Padrão: 1. "
+                        "Só faz sentido junto com objective_id."
                     ),
                 },
                 "confirmar_conflito": {
@@ -293,6 +303,15 @@ TOOLS = [
                 "objective_id": {
                     "type": "string",
                     "description": "UUID do objetivo ao qual esta tarefa pertence (para mover entre objetivos ou desvincular).",
+                },
+                "objective_steps": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": (
+                        "Quantas etapas do objetivo esta tarefa vale ao ser concluída "
+                        "(ex.: uma maratona de estudo que cobre 5 aulas → 5). Padrão: 1. "
+                        "Só faz sentido junto com objective_id."
+                    ),
                 },
             },
             "required": ["task_id"],
@@ -419,12 +438,40 @@ TOOLS = [
                                     "'antes das 10h' → '10:00'."
                                 ),
                             },
+                            "objective_id": {
+                                "type": "string",
+                                "description": (
+                                    "id (UUID) de um objetivo ao qual ESTE item avança "
+                                    "(use listar_objetivos para descobrir). O vínculo é "
+                                    "por item: numa rotina 'Manhã', só o item 'Alemão' "
+                                    "pode contar para o objetivo. Omita se o item não "
+                                    "avança nenhum objetivo."
+                                ),
+                            },
+                            "steps_per_completion": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "description": (
+                                    "Quantas etapas do objetivo cada conclusão deste item "
+                                    "vale (ex.: 2 aulas por dia de estudo). Padrão: 1. "
+                                    "Só faz sentido com objective_id."
+                                ),
+                            },
                         },
                         "required": ["title", "days_of_week"],
                     },
                 },
                 "start_date": {**_DATE, "description": "Data de início. Padrão: hoje. Aceita 'hoje'/'amanhã'/dia da semana."},
                 "end_date": {**_DATE, "description": "Data final (opcional). Omitir para rotina sem fim."},
+                "objective_id": {
+                    "type": "string",
+                    "description": (
+                        "Término por OBJETIVO em vez de por data: a rotina é encerrada e a "
+                        "agenda futura é limpa quando este objetivo atingir o total. Use "
+                        "quando a rotina existe só para cumprir aquele objetivo "
+                        "('estudar alemão todo dia até terminar o curso')."
+                    ),
+                },
             },
             "required": ["name", "items"],
         },
@@ -488,11 +535,14 @@ TOOLS = [
     {
         "name": "criar_objetivo",
         "description": (
-            "Cria um objetivo: uma meta maior composta por etapas (subtarefas) que "
-            "serão distribuídas ao longo do tempo. Use quando o usuário falar de algo "
-            "que levará dias, semanas ou meses e tem um resultado final claro "
-            "(ex.: 'fazer o TCC', 'lançar o app', 'aprender inglês'). "
-            "Após criar o objetivo, use criar_tarefa com objective_id para adicionar etapas."
+            "Cria um objetivo: uma META NUMÉRICA com um total de etapas a cumprir "
+            "(ex.: 'aprender alemão' = 257 aulas, 'ler A Montanha Mágica' = 700 páginas). "
+            "Use quando o usuário falar de algo que levará dias, semanas ou meses e tem "
+            "um resultado final claro. "
+            "IMPORTANTE: o objetivo é um CONTADOR e criar um objetivo NÃO cria nada na "
+            "agenda. NUNCA crie uma tarefa por unidade de progresso — 257 aulas não são "
+            "257 tarefas. O contador avança quando o usuário conclui uma tarefa ou um "
+            "item de rotina vinculado ao objetivo, ou quando lança etapas manualmente."
         ),
         "input_schema": {
             "type": "object",
@@ -505,6 +555,21 @@ TOOLS = [
                     "enum": ["low", "medium", "high"],
                     "description": "Prioridade do objetivo (low/medium/high). Objetivos de prioridade alta aparecem no topo da lista. Padrão: medium.",
                 },
+                "total_steps": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": (
+                        "Quantas etapas o objetivo tem no total (ex.: 257 aulas, 700 páginas, "
+                        "12 capítulos). É o denominador do progresso. Padrão: 1."
+                    ),
+                },
+                "step_label": {
+                    "type": "string",
+                    "description": (
+                        "Como chamar a unidade de progresso, no plural: 'aulas', 'páginas', "
+                        "'capítulos', 'treinos'. Padrão: 'etapas'."
+                    ),
+                },
             },
             "required": ["title"],
         },
@@ -512,9 +577,9 @@ TOOLS = [
     {
         "name": "listar_objetivos",
         "description": (
-            "Lista todos os objetivos do usuário com progresso, prazo e contagem de etapas. "
-            "Use antes de atualizar, deletar ou adicionar etapas a um objetivo específico "
-            "para descobrir o id correto."
+            "Lista todos os objetivos do usuário com o contador de etapas "
+            "(concluídas/total), prazo, ritmo e previsão de conclusão. Use antes de "
+            "atualizar, deletar ou vincular algo a um objetivo, para descobrir o id correto."
         ),
         "input_schema": {"type": "object", "properties": {}},
     },
@@ -533,6 +598,15 @@ TOOLS = [
                     "enum": ["low", "medium", "high"],
                     "description": "Prioridade do objetivo (low/medium/high).",
                 },
+                "total_steps": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Novo total de etapas (muda o denominador do progresso).",
+                },
+                "step_label": {
+                    "type": "string",
+                    "description": "Como chamar a unidade de progresso ('aulas', 'páginas').",
+                },
             },
             "required": ["objective_id"],
         },
@@ -540,8 +614,9 @@ TOOLS = [
     {
         "name": "listar_etapas",
         "description": (
-            "Lista as etapas (subtarefas) de um objetivo específico com status e data agendada. "
-            "Use para dar um overview do progresso ou antes de atualizar/deletar uma etapa."
+            "Mostra o CONTADOR de um objetivo (etapas concluídas / total), o ritmo, a "
+            "previsão de conclusão e os lançamentos recentes (de onde veio cada avanço). "
+            "Use para dar um overview do progresso de um objetivo."
         ),
         "input_schema": {
             "type": "object",
@@ -554,7 +629,8 @@ TOOLS = [
     {
         "name": "deletar_objetivo",
         "description": (
-            "Remove permanentemente um objetivo E todas as suas etapas (cascade). "
+            "Remove permanentemente um objetivo e o histórico de lançamentos dele "
+            "(cascade). As tarefas da agenda vinculadas continuam existindo, sem vínculo. "
             "Use listar_objetivos antes para identificar o id. Exige confirmação do usuário."
         ),
         "input_schema": {
@@ -572,12 +648,31 @@ TOOLS = [
         "description": (
             "Adiciona uma subtarefa (item de checklist) a uma tarefa existente. "
             "Use quando o usuário quiser detalhar os passos de uma tarefa específica. "
-            "Descubra o task_id correto com listar_tarefas antes."
+            "Descubra o task_id correto com listar_tarefas antes. "
+            "A subtarefa pode ter vínculo PRÓPRIO com um objetivo: aí marcá-la "
+            "avança o contador sozinha, sem esperar a tarefa mãe ser concluída."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "task_id": {"type": "string", "description": "id (UUID) da tarefa mãe"},
+                "objective_id": {
+                    "type": "string",
+                    "description": (
+                        "Vínculo próprio com um objetivo: marcar ESTA subtarefa avança o "
+                        "contador na hora, sem esperar a tarefa mãe fechar. Use quando a "
+                        "unidade real de progresso é o item do checklist (cada aula), e "
+                        "não o bloco que os agrupa. Omita se a subtarefa não avança nada."
+                    ),
+                },
+                "objective_steps": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": (
+                        "Quantas etapas do objetivo esta subtarefa vale. Padrão: 1. "
+                        "Só faz sentido junto com objective_id."
+                    ),
+                },
                 "title": {"type": "string", "description": "Título da subtarefa"},
             },
             "required": ["task_id", "title"],
@@ -776,6 +871,7 @@ def execute_tool(name: str, tool_input: dict, user_id: str, tz_name: str | None 
                     "items": tool_input.get("items") or [],
                     "start_date": _resolve_to_date(tool_input.get("start_date"), today),
                     "end_date": _resolve_to_date(tool_input.get("end_date"), today),
+                    "objective_id": tool_input.get("objective_id"),
                 }
                 routine = routines_service.create_routine(user_id, data, today, now=now)
                 _notify_routine_change(user_id, "criar", routine)
@@ -828,7 +924,19 @@ def execute_tool(name: str, tool_input: dict, user_id: str, tz_name: str | None 
 
         if name == "listar_etapas":
             obj = objectives_service.get_objective(user_id, tool_input["objective_id"])
-            return {"ok": True, "objective": obj["title"], "subtasks": obj.get("subtasks", [])}
+            # O progresso é o contador, não a contagem de tarefas: as tarefas
+            # agendadas entram só como contexto do que já está na agenda.
+            return {
+                "ok": True,
+                "objective": obj["title"],
+                "completed_steps": obj.get("completed_steps", 0),
+                "total_steps": obj.get("total_steps", 1),
+                "step_label": obj.get("step_label", "etapas"),
+                "progress": obj.get("progress", 0),
+                "projection": obj.get("projection"),
+                "entries": obj.get("entries", []),
+                "linked_tasks": obj.get("linked_tasks", []),
+            }
 
         if name == "deletar_objetivo":
             objs = objectives_service.list_objectives(user_id)
@@ -839,7 +947,13 @@ def execute_tool(name: str, tool_input: dict, user_id: str, tz_name: str | None 
         # --- Subtarefas -------------------------------------------------------
         if name == "criar_subtarefa":
             sub = subtasks_service.create_subtask(
-                user_id, tool_input["task_id"], {"title": tool_input["title"]}
+                user_id,
+                tool_input["task_id"],
+                {
+                    "title": tool_input["title"],
+                    "objective_id": tool_input.get("objective_id"),
+                    "objective_steps": tool_input.get("objective_steps"),
+                },
             )
             return {"ok": True, "subtask": sub}
 

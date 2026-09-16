@@ -3935,6 +3935,11 @@ function TimelineItem({
                   <span className="inline-flex items-center gap-1 rounded-full border border-accent-soft bg-accent-soft px-2 py-0.5 text-[0.62rem] font-medium text-accent">
                     <Target className="h-2.5 w-2.5" />
                     {task.objective_title}
+                    {/* Quanto esta tarefa vale no contador do objetivo. Só
+                        aparece quando vale mais de uma etapa: "+1" seria ruído. */}
+                    {(task.objective_steps ?? 1) > 1 && (
+                      <span className="font-bold">+{task.objective_steps}</span>
+                    )}
                   </span>
                 )}
 
@@ -4251,6 +4256,63 @@ function SubtasksPreview({
 // MODAL DE CRIAÇÃO DE ITEM
 // ===========================================================================
 
+// Quantas etapas do objetivo a tarefa vale. Só aparece com um objetivo
+// selecionado — sem vínculo o número não significa nada.
+function ObjectiveStepsField({
+  objective,
+  value,
+  onChange,
+  checklistSteps = 0,
+}: {
+  objective?: api.Objective;
+  value: string;
+  onChange: (value: string) => void;
+  // Quanto as subtarefas vinculadas ao MESMO objetivo já cobrem. A tarefa lança
+  // só a diferença, então mostrar a conta evita a leitura errada de que o
+  // número aqui é somado por cima do checklist.
+  checklistSteps?: number;
+}) {
+  const unit = objective?.step_label ?? "etapas";
+  const total = Math.max(Number(value) || 1, 1);
+  const remainder = total - checklistSteps;
+
+  return (
+    <label className="block">
+      <span className="mb-2 block text-xs font-medium text-muted">
+        Quantas {unit} esta tarefa vale
+      </span>
+
+      <input
+        type="number"
+        min={1}
+        inputMode="numeric"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="min-h-[52px] w-full rounded-2xl border border-soft bg-surface-muted px-4 text-sm text-primary outline-none transition focus:border-accent-soft"
+      />
+
+      <span className="mt-1.5 block text-[0.68rem] text-muted">
+        {checklistSteps > 0 ? (
+          remainder > 0 ? (
+            <>
+              É o total do trabalho. As subtarefas vinculadas cobrem{" "}
+              {checklistSteps}, e a tarefa lança as {remainder} restantes ao ser
+              concluída.
+            </>
+          ) : (
+            <>
+              As subtarefas vinculadas já cobrem {checklistSteps} — a tarefa não
+              lança nada a mais, para o mesmo trabalho não valer em dobro.
+            </>
+          )
+        ) : (
+          "Concluir a tarefa avança o contador do objetivo nesse tanto."
+        )}
+      </span>
+    </label>
+  );
+}
+
 function CreatePlanningItemModal({
   isOpen,
   defaultDate,
@@ -4282,6 +4344,8 @@ function CreatePlanningItemModal({
     { key: string; title: string }[]
   >([]);
   const [objectiveId, setObjectiveId] = useState("");
+  // Quantas etapas do objetivo esta tarefa vale ao ser concluída.
+  const [objectiveSteps, setObjectiveSteps] = useState("1");
   const [objectives, setObjectives] = useState<api.Objective[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -4384,6 +4448,10 @@ function CreatePlanningItemModal({
         is_key_task: selectedType === "task" && isKeyTask ? true : undefined,
         objective_id:
           selectedType === "task" && objectiveId ? objectiveId : undefined,
+        objective_steps:
+          selectedType === "task" && objectiveId
+            ? Math.max(Number(objectiveSteps) || 1, 1)
+            : undefined,
       } as any);
 
       const validDrafts = draftSubtasks.filter((s) => s.title.trim());
@@ -4709,6 +4777,14 @@ function CreatePlanningItemModal({
               </label>
             )}
 
+            {selectedType === "task" && objectiveId && (
+              <ObjectiveStepsField
+                objective={objectives.find((o) => o.id === objectiveId)}
+                value={objectiveSteps}
+                onChange={setObjectiveSteps}
+              />
+            )}
+
             {selectedType === "event" && (
               <label className="block">
                 <span className="mb-2 block text-xs font-medium text-muted">
@@ -4920,6 +4996,9 @@ function EditPlanningItemModal({
   const [description, setDescription] = useState("");
   const [isKeyTask, setIsKeyTask] = useState(false);
   const [objectiveId, setObjectiveId] = useState("");
+  const [objectiveSteps, setObjectiveSteps] = useState("1");
+  // Quantas etapas o checklist cobre, por objetivo.
+  const [checklistSteps, setChecklistSteps] = useState<Record<string, number>>({});
   const [objectives, setObjectives] = useState<api.Objective[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -4938,6 +5017,7 @@ function EditPlanningItemModal({
     setDescription(task.description ?? "");
     setIsKeyTask(!!task.is_key_task);
     setObjectiveId(task.objective_id ?? "");
+    setObjectiveSteps(String(task.objective_steps ?? 1));
     setFormError(null);
 
     // Objetivos ativos para o campo "Vincular a objetivo". Mantém o objetivo
@@ -5004,6 +5084,8 @@ function EditPlanningItemModal({
           description: description || null,
           is_key_task: isTask ? isKeyTask : undefined,
           objective_id: isTask ? objectiveId : undefined,
+          objective_steps:
+            isTask && objectiveId ? Math.max(Number(objectiveSteps) || 1, 1) : undefined,
         } as any
       );
 
@@ -5270,6 +5352,15 @@ function EditPlanningItemModal({
               </label>
             )}
 
+            {isTask && objectiveId && (
+              <ObjectiveStepsField
+                objective={objectives.find((o) => o.id === objectiveId)}
+                value={objectiveSteps}
+                onChange={setObjectiveSteps}
+                checklistSteps={checklistSteps[objectiveId] ?? 0}
+              />
+            )}
+
             {isEvent && (
               <label className="block">
                 <span className="mb-2 block text-xs font-medium text-muted">
@@ -5321,7 +5412,12 @@ function EditPlanningItemModal({
             </label>
 
             {isTask && (
-              <SubtaskEditor taskId={task.id} onSubtaskChange={onSubtaskChange} />
+              <SubtaskEditor
+                taskId={task.id}
+                objectives={objectives}
+                onSubtaskChange={onSubtaskChange}
+                onLinkedObjectivesChange={setChecklistSteps}
+              />
             )}
 
             {formError && (
@@ -5349,15 +5445,25 @@ function EditPlanningItemModal({
 
 function SubtaskEditor({
   taskId,
+  objectives,
   onSubtaskChange,
+  onLinkedObjectivesChange,
 }: {
   taskId: string;
+  objectives: api.Objective[];
   onSubtaskChange?: () => void;
+  // Quantas etapas o checklist cobre, por objetivo. O modal usa isso para
+  // mostrar quanto sobra para a tarefa mãe lançar.
+  onLinkedObjectivesChange?: (stepsByObjective: Record<string, number>) => void;
 }) {
   const [subtasks, setSubtasks] = useState<api.Subtask[]>([]);
   const [loading, setLoading] = useState(true);
   const [newTitle, setNewTitle] = useState("");
   const [adding, setAdding] = useState(false);
+  // Qual subtarefa está com o seletor de objetivo aberto. Uma por vez: o
+  // vínculo é exceção, não o caso comum — deixar um select em cada linha
+  // transformaria o checklist num formulário.
+  const [linkingId, setLinkingId] = useState<string | null>(null);
 
   useEffect(() => {
     api.getTaskSubtasks(taskId)
@@ -5365,6 +5471,19 @@ function SubtaskEditor({
       .catch(() => setSubtasks([]))
       .finally(() => setLoading(false));
   }, [taskId]);
+
+  // Avisa o pai sempre que a cobertura muda — inclusive na carga inicial, para
+  // a conta aparecer já ao abrir o modal.
+  useEffect(() => {
+    const totals: Record<string, number> = {};
+    for (const subtask of subtasks) {
+      if (!subtask.objective_id) continue;
+      totals[subtask.objective_id] =
+        (totals[subtask.objective_id] ?? 0) + (subtask.objective_steps ?? 1);
+    }
+    onLinkedObjectivesChange?.(totals);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subtasks]);
 
   async function handleToggle(s: api.Subtask) {
     try {
@@ -5404,6 +5523,36 @@ function SubtaskEditor({
     }
   }
 
+  // Vincular/desvincular a subtarefa. Salva na hora: é um campo só, e a
+  // subtarefa já existe no banco.
+  async function handleLink(subtaskId: string, objectiveId: string) {
+    try {
+      const updated = await api.updateSubtask(subtaskId, {
+        objective_id: objectiveId || null,
+      });
+      setSubtasks((prev) =>
+        prev.map((subtask) => (subtask.id === updated.id ? updated : subtask))
+      );
+      onSubtaskChange?.();
+    } catch {
+      // Mantém o estado atual em caso de erro.
+    }
+  }
+
+  async function handleSteps(subtaskId: string, steps: number) {
+    try {
+      const updated = await api.updateSubtask(subtaskId, {
+        objective_steps: Math.max(steps || 1, 1),
+      });
+      setSubtasks((prev) =>
+        prev.map((subtask) => (subtask.id === updated.id ? updated : subtask))
+      );
+      onSubtaskChange?.();
+    } catch {
+      // Mantém o estado atual em caso de erro.
+    }
+  }
+
   return (
     <div className="rounded-2xl border border-soft bg-surface-muted p-4">
       <p className="mb-3 text-xs font-semibold text-muted">Subtarefas</p>
@@ -5416,31 +5565,106 @@ function SubtaskEditor({
         <>
           {subtasks.length > 0 && (
             <div className="mb-3 space-y-2">
-              {subtasks.map((s) => (
-                <div key={s.id} className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleToggle(s)}
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition active:scale-90 ${
-                      s.done
-                        ? "border-emerald-400 bg-emerald-400 text-[#11111a]"
-                        : "border-soft hover:border-accent-soft"
-                    }`}
-                  >
-                    {s.done && <CheckCircle2 className="h-3 w-3" />}
-                  </button>
-                  <p className={`flex-1 truncate text-sm ${s.done ? "text-soft line-through" : "text-primary"}`}>
-                    {s.title}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(s.id)}
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-muted transition active:scale-[0.94]"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
+              {subtasks.map((s) => {
+                const linked = objectives.find((o) => o.id === s.objective_id);
+                const open = linkingId === s.id;
+
+                return (
+                  <div key={s.id}>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleToggle(s)}
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition active:scale-90 ${
+                          s.done
+                            ? "border-emerald-400 bg-emerald-400 text-[#11111a]"
+                            : "border-soft hover:border-accent-soft"
+                        }`}
+                      >
+                        {s.done && <CheckCircle2 className="h-3 w-3" />}
+                      </button>
+                      <p className={`flex-1 truncate text-sm ${s.done ? "text-soft line-through" : "text-primary"}`}>
+                        {s.title}
+                      </p>
+
+                      {objectives.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setLinkingId(open ? null : s.id)}
+                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl transition active:scale-[0.94] ${
+                            s.objective_id
+                              ? "bg-accent-soft text-accent"
+                              : "bg-surface-muted text-muted"
+                          }`}
+                          aria-label={
+                            s.objective_id
+                              ? "Editar objetivo desta subtarefa"
+                              : "Vincular esta subtarefa a um objetivo"
+                          }
+                        >
+                          <Target className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(s.id)}
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-muted transition active:scale-[0.94]"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+
+                    {/* Resumo do vínculo quando o painel está fechado. */}
+                    {!open && linked && (
+                      <p className="mt-1 pl-7 text-[0.65rem] text-accent">
+                        {linked.title}
+                        {(s.objective_steps ?? 1) > 1
+                          ? ` · +${s.objective_steps} ${linked.step_label ?? "etapas"}`
+                          : ""}
+                      </p>
+                    )}
+
+                    {open && (
+                      <div className="mt-2 space-y-2 rounded-xl border border-soft bg-surface p-2.5">
+                        <select
+                          value={s.objective_id ?? ""}
+                          onChange={(e) => handleLink(s.id, e.target.value)}
+                          className="min-h-[38px] w-full rounded-xl border border-soft bg-surface-muted px-3 text-sm text-primary outline-none focus:border-accent-soft"
+                        >
+                          <option value="">Nenhum objetivo</option>
+                          {objectives.map((objective) => (
+                            <option key={objective.id} value={objective.id}>
+                              {objective.title}
+                            </option>
+                          ))}
+                        </select>
+
+                        {s.objective_id && (
+                          <label className="block">
+                            <span className="mb-1 block text-[0.65rem] text-muted">
+                              Quantas {linked?.step_label ?? "etapas"} esta subtarefa vale
+                            </span>
+                            <input
+                              type="number"
+                              min={1}
+                              inputMode="numeric"
+                              defaultValue={s.objective_steps ?? 1}
+                              onBlur={(e) => handleSteps(s.id, Number(e.target.value))}
+                              className="min-h-[38px] w-full rounded-xl border border-soft bg-surface-muted px-3 text-sm text-primary outline-none focus:border-accent-soft"
+                            />
+                          </label>
+                        )}
+
+                        <p className="text-[0.65rem] leading-4 text-muted">
+                          Marcar esta subtarefa avança o objetivo na hora, sem
+                          esperar a tarefa inteira ser concluída.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 

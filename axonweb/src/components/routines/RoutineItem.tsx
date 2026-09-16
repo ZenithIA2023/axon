@@ -1,6 +1,9 @@
-import { Clock, Sparkles, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ChevronDown, ChevronUp, Clock, Sparkles, Target, Trash2 } from "lucide-react";
 
+import * as api from "../../lib/api";
 import type {
+  Objective,
   RoutineItem,
   RoutineItemCreateInput,
   RoutineItemUpdateInput,
@@ -27,6 +30,13 @@ export type DraftItem = {
 
   // Duração em minutos, mantida como string para controlar o input.
   duration: string;
+
+  // Vínculo com objetivo (opções avançadas). "" = sem objetivo. Concluir a
+  // tarefa gerada por este item avança o contador do objetivo em `steps`.
+  // O TÉRMINO da rotina por objetivo é da rotina inteira, não do item — fica
+  // no passo de período, ao lado da data de término.
+  objectiveId: string;
+  steps: string;
 };
 
 // ===========================================================================
@@ -57,6 +67,8 @@ export function blankItem(): DraftItem {
     startTime: "",
     endTime: "",
     duration: "",
+    objectiveId: "",
+    steps: "1",
   };
 }
 
@@ -72,6 +84,8 @@ export function itemToDraft(item: RoutineItem): DraftItem {
     startTime: item.start_time ?? "",
     endTime: item.end_time ?? "",
     duration: isFlexible ? String(item.duration_minutes) : "",
+    objectiveId: item.objective_id ?? "",
+    steps: String(item.steps_per_completion ?? 1),
   };
 }
 
@@ -89,21 +103,38 @@ export function itemValid(item: DraftItem): boolean {
   return Number.isFinite(duration) && duration > 0;
 }
 
+// O multiplicador só viaja com um objetivo selecionado: sem ele, o backend o
+// ignora e guardá-lo aqui só criaria um valor fantasma.
+function objectiveLinkFields(item: DraftItem) {
+  if (!item.objectiveId) return { objective_id: null };
+
+  const steps = Number(item.steps);
+
+  return {
+    objective_id: item.objectiveId,
+    steps_per_completion: Number.isFinite(steps) && steps > 0 ? steps : 1,
+  };
+}
+
 // Monta o payload de criação esperado pelo backend.
 export function draftToCreateInput(
   item: DraftItem
 ): RoutineItemCreateInput {
+  const link = objectiveLinkFields(item);
+
   return item.mode === "fixed"
     ? {
         title: item.title.trim(),
         days_of_week: item.days,
         start_time: item.startTime,
         end_time: item.endTime,
+        ...link,
       }
     : {
         title: item.title.trim(),
         days_of_week: item.days,
         duration_minutes: Number(item.duration),
+        ...link,
       };
 }
 
@@ -115,6 +146,7 @@ export function draftToUpdateInput(
   const base = {
     title: item.title.trim(),
     days_of_week: item.days,
+    ...objectiveLinkFields(item),
   };
 
   return item.mode === "fixed"
@@ -184,6 +216,8 @@ export function RoutineItemEditor({
           onChange={(duration) => onChange({ duration })}
         />
       )}
+
+      <ObjectiveLinkFields item={item} onChange={onChange} />
     </div>
   );
 }
@@ -380,6 +414,121 @@ function FlexibleDurationField({
       <p className="mt-1.5 text-[0.68rem] leading-4 text-muted">
         O Axon escolhe o melhor horário com base no seu cronotipo.
       </p>
+    </div>
+  );
+}
+
+// ===========================================================================
+// OPÇÕES AVANÇADAS — VÍNCULO COM OBJETIVO
+// ===========================================================================
+// Recolhido por padrão: o formulário já tem título, dias e horário, e a maioria
+// dos itens não avança objetivo nenhum. Abre sozinho quando o item JÁ está
+// vinculado, senão a configuração ficaria escondida na edição.
+function ObjectiveLinkFields({
+  item,
+  onChange,
+}: {
+  item: DraftItem;
+  onChange: (patch: Partial<DraftItem>) => void;
+}) {
+  const [open, setOpen] = useState(Boolean(item.objectiveId));
+  const [objectives, setObjectives] = useState<Objective[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  // Busca sob demanda: quem nunca abre o bloco não paga a requisição.
+  useEffect(() => {
+    if (!open || loaded) return;
+
+    let active = true;
+
+    api
+      .getObjectives()
+      .then((data) => {
+        if (active) setObjectives(data.filter((o) => o.status !== "done"));
+      })
+      .catch(() => {
+        if (active) setObjectives([]);
+      })
+      .finally(() => {
+        if (active) setLoaded(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [open, loaded]);
+
+  const selected = objectives.find((o) => o.id === item.objectiveId);
+  const unit = selected?.step_label ?? "etapas";
+
+  return (
+    <div className="mt-4 border-t border-soft pt-3">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="flex w-full items-center justify-between text-xs font-medium text-muted transition active:scale-[0.99]"
+      >
+        <span className="flex items-center gap-1.5">
+          <Target className="h-3.5 w-3.5" />
+          Opções avançadas
+        </span>
+        {open ? (
+          <ChevronUp className="h-3.5 w-3.5" />
+        ) : (
+          <ChevronDown className="h-3.5 w-3.5" />
+        )}
+      </button>
+
+      {open && (
+        <div className="mt-3 space-y-3">
+          <div>
+            <label className="text-[0.68rem] text-muted">
+              Vincular a objetivo
+            </label>
+
+            <select
+              value={item.objectiveId}
+              onChange={(e) =>
+                onChange({
+                  objectiveId: e.target.value,
+                  // Desvincular volta os dois campos ao padrão para não guardar
+                  // "vale 3 etapas" de um objetivo que não está mais escolhido.
+                  ...(e.target.value ? {} : { steps: "1" }),
+                })
+              }
+              className="mt-1 w-full rounded-xl border border-soft bg-surface-muted px-3 py-2 text-sm text-primary outline-none focus:border-accent-soft"
+            >
+              <option value="">Nenhum</option>
+              {objectives.map((objective) => (
+                <option key={objective.id} value={objective.id}>
+                  {objective.title}
+                </option>
+              ))}
+            </select>
+
+            <p className="mt-1.5 text-[0.68rem] leading-4 text-muted">
+              Concluir este item avança o contador do objetivo.
+            </p>
+          </div>
+
+          {item.objectiveId && (
+            <div>
+              <label className="text-[0.68rem] text-muted">
+                Quantas {unit} cada conclusão vale
+              </label>
+
+              <input
+                type="number"
+                min={1}
+                inputMode="numeric"
+                value={item.steps}
+                onChange={(e) => onChange({ steps: e.target.value })}
+                className="mt-1 w-full rounded-xl border border-soft bg-surface-muted px-3 py-2 text-sm text-primary outline-none focus:border-accent-soft"
+              />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
