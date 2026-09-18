@@ -50,6 +50,34 @@ _GOOD_BLOCKS = set(chronotype_service.BLOCK_PREFERENCE)
 # Máximo de simples por dia na fase de testes
 _MAX_SIMPLE_PER_DAY = 3
 
+# ── Compactação do dia ──────────────────────────────────────────────────────
+# Ganho mínimo para valer interromper o usuário com "seu dia pode acabar mais
+# cedo". 45 min é deliberado, não chute:
+#   - abaixo de ~30 min o ganho não muda o que a pessoa consegue fazer com o
+#     tempo (não dá para um treino, uma aula, buscar alguém) — é ruído;
+#   - os blocos do cronotipo têm 90 min, então 45 é meio bloco: o menor
+#     movimento que ainda desloca a agenda de forma perceptível;
+#   - o gatilho é MUITO mais frequente que o de bloco ruim (quase todo dia tem
+#     espaço livre antes da última tarefa), e um piso baixo transformaria o Axon
+#     no assistente que fica empurrando a agenda para cima.
+# Para calibrar: baixar faz a sugestão aparecer mais. Se aparecer de menos, é o
+# comportamento desejado nesta fase — o caminho contrário (soltar agora, apertar
+# depois) custa irritar o usuário durante o teste.
+_MIN_COMPACTION_GAIN_MIN = 45
+
+# Não sugerir mover tarefa que o usuário acabou de criar ou editar: ele escolheu
+# aquele horário de propósito minutos atrás, e ouvir "mova para outro horário" em
+# seguida é o Axon discutindo com uma decisão fresca. 2h cobre a sessão de
+# planejamento típica (a pessoa monta o dia e segue mexendo por um tempo) sem
+# proteger a tarefa para sempre.
+_COMPACTION_RECENT_TOUCH_MIN = 120
+
+# Acima disto o usuário está dizendo que gosta da agenda como está. O gatilho de
+# bloco ruim continua valendo (tarefa às 3h é problema real), mas oportunidade de
+# compactar, não. Mais restritivo que o limite do prompt para 'improvement' (5)
+# de propósito: recusar compactação é sinal de preferência, não de desatenção.
+_COMPACTION_MAX_REJECTIONS = 3
+
 
 def _load_user_context(user_id: str, tz_name: str) -> dict:
     """Carrega dados necessários para a análise (no fuso do usuário)."""
@@ -201,6 +229,122 @@ def _pick_free_good_slot(
     return None
 
 
+def _recently_touched(task: dict, now: datetime) -> bool:
+    """
+    True se a tarefa foi criada ou editada nos últimos
+    `_COMPACTION_RECENT_TOUCH_MIN` minutos — o usuário escolheu aquele horário
+    agora e não quer ser contrariado.
+
+    Falha para o lado de NÃO sugerir: timestamp ilegível é tratado como recente.
+    """
+    for field in ("updated_at", "created_at"):
+        raw = task.get(field)
+        if not raw:
+            continue
+        try:
+            ts = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        except Exception:
+            return True  # não sei quando foi tocada → não mexo
+        if (now - ts).total_seconds() / 60 < _COMPACTION_RECENT_TOUCH_MIN:
+            return True
+    return False
+
+
+def _compaction_candidate(user_id: str, ctx: dict) -> dict | None:
+    """
+    A última tarefa do dia pode vir para mais cedo e fazer o dia acabar antes?
+
+    Este é o SEGUNDO gatilho de melhoria (o primeiro é tarefa em bloco ruim). Ele
+    existe porque o crédito de horas poupadas do Axon (`axon_optimizations`,
+    Migration 30) mede justamente o quanto o fim do dia adiantou — e o gatilho de
+    bloco ruim quase nunca produz esse movimento: no cronotipo bimodal, bloco
+    ruim é madrugada até 07:29, e tarefa ali raramente é a última do dia.
+
+    Só a ÚLTIMA tarefa interessa. Mover uma do meio não adianta o fim do dia:
+
+        09:00–10:00 Reunião
+        20:00–22:00 Estudar alemão   ← mover para 16:00–18:00 = 4h liberadas
+        14:00–15:00 Ler artigo       ← mover para 10:00 = 0, a última segue 22:00
+
+    Devolve None quando não há candidato — o que é o caso comum e desejado.
+    """
+    tasks = ctx["tasks_today"]
+    now_min = _to_minutes(ctx["now_hhmm"])
+
+    # Candidatas: têm horário de fim real e ainda não foram concluídas. Tarefa
+    # feita não se move, e sem horário não há fim de dia a comparar.
+    timed = []
+    for t in tasks:
+        if t.get("status") == "done":
+            continue
+        iv = tasks_service.task_interval(t.get("start_time"), t.get("end_time"))
+        if not iv:
+            continue
+        timed.append((iv[1], iv[0], t))
+    if not timed:
+        return None
+
+    # O fim do dia é o maior horário de término — incluindo as CONCLUÍDAS, porque
+    # uma tarefa já feita às 22h mantém o dia terminando às 22h e mover a
+    # pendente das 20h não liberaria nada.
+    day_end = 0
+    for t in tasks:
+        iv = tasks_service.task_interval(t.get("start_time"), t.get("end_time"))
+        if iv:
+            day_end = max(day_end, iv[1])
+
+    last_end, last_start, last_task = max(timed, key=lambda x: x[0])
+
+    # A pendente mais tardia precisa SER o fim do dia; se algo (concluído ou não)
+    # termina depois, movê-la não adianta nada.
+    if last_end < day_end:
+        return None
+
+    # Empate: duas tarefas terminam juntas e mover só uma não muda o fim do dia.
+    # Mover as duas de uma vez é escopo de outra fase.
+    if sum(1 for end, _, _ in timed if end == last_end) > 1:
+        return None
+
+    # O dia já acabou — não há o que compactar.
+    if last_end <= now_min:
+        return None
+
+    if _recently_touched(last_task, datetime.now(user_tz.zone(ctx["timezone"]))):
+        return None
+
+    duration = last_end - last_start
+    allowed = chronotype_service.allowed_blocks(
+        last_task.get("priority"),
+        bool(last_task.get("is_key_task")),
+        last_task.get("complexity"),
+    )
+
+    slot = _pick_free_good_slot(
+        user_id,
+        str(ctx["today"]),
+        ctx["blocks"],
+        duration,
+        last_task["id"],
+        not_before_min=now_min,
+        allowed=allowed,
+    )
+    if not slot:
+        return None
+
+    new_end = _to_minutes(slot[1])
+    gain = last_end - new_end
+    if gain < _MIN_COMPACTION_GAIN_MIN:
+        return None
+
+    return {
+        "task": last_task,
+        "new_start_time": slot[0],
+        "new_end_time": slot[1],
+        "current_end": f"{last_end // 60:02d}:{last_end % 60:02d}",
+        "freed_minutes": gain,
+    }
+
+
 def _ensure_free_slot(user_id: str, ctx: dict, action: dict) -> dict | None:
     """
     Decide o horário DEFINITIVO da sugestão. O horário vem do Claude (o
@@ -305,6 +449,7 @@ def _rewrite_suggestion_text(
     new_start: str | None,
     reason: str | None,
     relaxed: bool = False,
+    compaction_end: str | None = None,
 ) -> tuple[str, str]:
     """
     Reescreve título/corpo da melhoria quando o horário final difere do que o
@@ -326,6 +471,14 @@ def _rewrite_suggestion_text(
     is_tomorrow = new_date and str(new_date) != str(ctx["today"])
     quando = f"amanhã às {new_start}" if is_tomorrow else f"às {new_start}"
 
+    # Compactação: o texto precisa falar do fim do dia, que é o ganho real.
+    extra = (
+        f"\nEste movimento faz o DIA TERMINAR às {compaction_end} em vez do horário "
+        f"atual. Diga isso explicitamente — é o benefício que importa."
+        if compaction_end
+        else ""
+    )
+
     try:
         client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
         response = client.messages.create(
@@ -335,7 +488,7 @@ def _rewrite_suggestion_text(
 
 Tarefa: {title_task}
 Novo horário sugerido: {quando}
-Motivo: {reason or 'melhor adequação ao ritmo do usuário'}
+Motivo: {reason or 'melhor adequação ao ritmo do usuário'}{extra}
 {"IMPORTANTE: o dia de hoje não tem mais espaço livre, por isso a sugestão é para AMANHÃ. Deixe isso claro e natural no texto." if is_tomorrow else ""}
 {"IMPORTANTE: não havia horário do nível ideal livre para esta tarefa. Este é o melhor disponível, e ainda assim é bem melhor que o horário atual. Seja honesto sobre isso, sem soar negativo." if relaxed else ""}
 
@@ -350,12 +503,25 @@ Retorne APENAS JSON válido: {{"title": "título curto", "body": "2 frases"}}"""
         body = (parsed.get("body") or "").strip()
         # Só aceita o texto do Claude se ele de fato cita o horário decidido.
         # Sem essa checagem, um modelo distraído reintroduz a divergência.
-        if title and body and new_start and new_start in body:
+        #
+        # Título OU corpo: na compactação o ganho vai no título de propósito (o
+        # corpo é cortado na prévia), então exigir o horário só no corpo
+        # rejeitaria justamente o texto bem escrito e cairia no fallback.
+        if title and body and new_start and (new_start in body or new_start in title):
             return title, body
     except Exception:
         pass
 
     # Fallback determinístico: redação simples, horário garantido.
+    if compaction_end and not is_tomorrow:
+        # O ganho vai no TÍTULO de propósito: o toast corta o corpo em 2 linhas
+        # (line-clamp-2, ~96 caracteres) e cortaria justamente o "termina às X".
+        # O título aparece inteiro nos dois lugares, e o card do Dashboard — onde
+        # o usuário de fato aceita — mostra o corpo completo.
+        return (
+            f"Seu dia pode terminar às {compaction_end}",
+            f"Movendo '{title_task}' para {new_start}, você fecha o dia mais cedo.",
+        )
     if relaxed:
         return (
             "Melhor que o horário atual",
@@ -375,10 +541,14 @@ Retorne APENAS JSON válido: {{"title": "título curto", "body": "2 frases"}}"""
     )
 
 
-def _apply_rule_filter(ctx: dict) -> dict:
+def _apply_rule_filter(user_id: str, ctx: dict) -> dict:
     """
     Aplica regras baratas para identificar candidatos de notificação.
     Retorna dict com flags do que foi detectado.
+
+    `compaction_candidate` é o único item aqui que consulta o banco
+    (_pick_free_good_slot lê as tarefas do dia). Ainda é barato comparado à
+    chamada ao Claude que ele evita quando não há candidato.
     """
     tasks_today = ctx["tasks_today"]
     blocks = ctx["blocks"]
@@ -396,9 +566,47 @@ def _apply_rule_filter(ctx: dict) -> dict:
         "no_tasks_today": len(tasks_today) == 0,
         "bad_block_tasks": bad_block_tasks,
         "has_improvement_candidate": len(bad_block_tasks) > 0,
+        # Segundo gatilho de melhoria: o dia pode acabar mais cedo. Ver
+        # _compaction_candidate sobre por que ele existe.
+        "compaction_candidate": _compaction_candidate(user_id, ctx),
         # consecutive_rejections é preenchido no caller (analyze_and_notify)
         "consecutive_rejections": 0,
     }
+
+
+def _compaction_prompt_section(flags: dict) -> str:
+    """
+    Descreve o candidato de compactação para o Claude, ou avisa que não há.
+
+    Dá os números PRONTOS (horário atual, proposto, ganho em h/min) em vez de
+    deixar o modelo calcular: o texto da notificação tem de bater com a ação, e
+    subtração feita por LLM é fonte de divergência.
+    """
+    cand = flags.get("compaction_candidate")
+    if not cand:
+        return "COMPACTAÇÃO DISPONÍVEL: nenhuma (não sugira compactação)"
+
+    gain = cand["freed_minutes"]
+    horas, minutos = divmod(gain, 60)
+    if horas and minutos:
+        ganho = f"{horas}h{minutos:02d}"
+    elif horas:
+        ganho = f"{horas}h"
+    else:
+        ganho = f"{minutos} minutos"
+
+    task = cand["task"]
+    return (
+        "COMPACTAÇÃO DISPONÍVEL (o dia pode acabar mais cedo):\n"
+        f"  task_id: {task['id']}\n"
+        f"  tarefa: {task['title']}\n"
+        f"  horário atual: {(task.get('start_time') or '')[:5]}–{cand['current_end']}"
+        " (é a ÚLTIMA do dia)\n"
+        f"  horário proposto: {cand['new_start_time']}–{cand['new_end_time']}\n"
+        f"  o dia passaria a terminar às {cand['new_end_time']} "
+        f"em vez de {cand['current_end']}\n"
+        f"  ganho: {ganho} livres no fim do dia"
+    )
 
 
 def _build_analysis_prompt(ctx: dict, flags: dict) -> str:
@@ -441,6 +649,8 @@ MELHOR HORÁRIO LIVRE DISPONÍVEL: {good_slot_str}
 
 TAREFAS EM HORÁRIOS INADEQUADOS: {json.dumps([{'title': t['title'], 'start_time': t.get('start_time'), 'block': t['_block_level']} for t in flags['bad_block_tasks']], ensure_ascii=False)}
 
+{_compaction_prompt_section(flags)}
+
 NOTIFICAÇÕES RECENTES (evite repetir):
 {json.dumps([{'type': n['type'], 'title': n['title'], 'status': n['status']} for n in ctx['recent_notifications']], ensure_ascii=False, indent=2)}
 
@@ -452,12 +662,29 @@ SITUAÇÃO DETECTADA:
 - Nenhuma tarefa iniciada hoje: {flags['none_started']}
 - Sem tarefas para hoje: {flags['no_tasks_today']}
 - Tarefas em horários inadequados: {len(flags['bad_block_tasks'])}
+- Dia pode acabar mais cedo (compactação): {'sim' if flags.get('compaction_candidate') else 'não'}
 - Rejeições consecutivas de melhorias: {flags['consecutive_rejections']}
 
 INSTRUÇÕES:
 1. Decida se alguma notificação é genuinamente útil agora. Prefira NÃO notificar se não houver algo relevante.
 2. Para 'simple': use quando houver algo concreto a celebrar ou incentivar (max 3/dia já considera o histórico).
-3. Para 'improvement': sugira APENAS se houver tarefa em bloco inadequado E houver horário melhor disponível. Explique claramente o porquê e o benefício.
+3. Para 'improvement': há DOIS motivos válidos, e só estes dois:
+   (a) TAREFA EM BLOCO INADEQUADO — existe tarefa em bloco de sono/recuperação e há horário melhor livre.
+   (b) COMPACTAÇÃO DO DIA — o bloco "COMPACTAÇÃO DISPONÍVEL" acima está preenchido.
+   Se os DOIS existirem, escolha (a): tarefa em bloco ruim é um problema do usuário; dia que
+   poderia acabar mais cedo é apenas uma oportunidade. Problema vem antes de oportunidade.
+   Se nenhum dos dois existir, NÃO use 'improvement'.
+6. Na compactação (b), o texto precisa dizer o GANHO CONCRETO, não uma promessa vaga.
+   Diga a que horas o dia passa a terminar e quanto tempo isso libera. Use o task_id, o
+   horário e o ganho EXATAMENTE como informados no bloco "COMPACTAÇÃO DISPONÍVEL".
+   Coloque o ganho no TÍTULO: o corpo é cortado em 2 linhas na prévia, e o título aparece
+   sempre inteiro. Corpo de no máximo ~90 caracteres, uma frase.
+   Bom:  título "Seu dia pode acabar 2h mais cedo"
+         corpo  "Estudar alemão às 18h em vez de 20h fecha seu dia às 20h."
+   Ruim: título "Sugestão de horário"  (o ganho ficou escondido no corpo, que é cortado)
+   Ruim: "Notei que sua agenda pode ser otimizada."  (vago, sem número)
+   Nunca enquadre como cobrança ("você está perdendo tempo"): é uma oferta, e o usuário
+   pode ter deixado a tarefa tarde de propósito.
 4. Para 'change': use apenas após uma alteração ter sido feita (não se aplica aqui).
 5. Se rejeições consecutivas > 5, seja muito mais seletivo com 'improvement'.
 
@@ -505,7 +732,7 @@ def analyze_and_notify(user_id: str, tz_header: str | None = None) -> dict | Non
         notification_service.update_analyzed_at(user_id)
 
     ctx = _load_user_context(user_id, tz_name)
-    flags = _apply_rule_filter(ctx)
+    flags = _apply_rule_filter(user_id, ctx)
     flags["consecutive_rejections"] = notification_service.count_consecutive_rejections(user_id)
 
     simple_today = notification_service.count_today(user_id, "simple")
@@ -515,7 +742,29 @@ def analyze_and_notify(user_id: str, tz_header: str | None = None) -> dict | Non
     # contra corrida é o índice único parcial no banco (ver create_improvement_guarded).
     has_pending_improvement = notification_service.has_open_improvement(user_id)
 
-    improvement_eligible = flags["has_improvement_candidate"] and not has_pending_improvement
+    # ── Elegibilidade da melhoria: dois gatilhos independentes ──────────────
+    # (1) tarefa em bloco ruim — um PROBLEMA, reage sempre;
+    # (2) dia que pode acabar mais cedo — uma OPORTUNIDADE, com três travas.
+    #
+    # As travas existem porque o gatilho (2) é muito mais frequente: quase todo
+    # dia tem espaço livre antes da última tarefa. E há quem deixe a última
+    # tarefa às 20h PORQUE QUER (a tarde é do filho, do treino, do descanso) —
+    # para essa pessoa, "seu dia pode acabar mais cedo" é o Axon pedindo para
+    # encher o tempo livre dela.
+    compaction = flags.get("compaction_candidate")
+    compaction_eligible = bool(compaction)
+    if compaction_eligible:
+        # (a) Uma compactação por dia. count_today não serve: ela conta por TIPO,
+        # e os dois gatilhos usam o tipo 'improvement'. A marca vai no action.
+        if notification_service.count_compactions_today(user_id, tz_name) > 0:
+            compaction_eligible = False
+        # (b) Quem vem recusando está dizendo que gosta da agenda como está.
+        elif flags["consecutive_rejections"] >= _COMPACTION_MAX_REJECTIONS:
+            compaction_eligible = False
+
+    improvement_eligible = (
+        flags["has_improvement_candidate"] or compaction_eligible
+    ) and not has_pending_improvement
     simple_candidate = flags["all_done"] or flags["none_started"] or flags["no_tasks_today"]
     simple_eligible = cooldown_elapsed and simple_candidate and simple_today < _MAX_SIMPLE_PER_DAY
 
@@ -534,7 +783,12 @@ def analyze_and_notify(user_id: str, tz_header: str | None = None) -> dict | Non
             messages=[{"role": "user", "content": prompt}],
         )
         result = _parse_json(response.content[0].text)
-    except Exception:
+    except Exception as e:
+        # NÃO silenciar: sem este log, "conta sem créditos" e "JSON inválido"
+        # viram indistinguíveis de "o Claude decidiu não notificar" — e a
+        # análise inteira parece funcionar enquanto está morta. Foi assim que
+        # a falta de créditos passou despercebida em 16-18/09/2026.
+        print(f"[notification_analyzer] análise falhou user={user_id}: {e}", flush=True)
         return None
 
     if not result.get("should_notify"):
@@ -556,10 +810,41 @@ def analyze_and_notify(user_id: str, tz_header: str | None = None) -> dict | Non
         return None
 
     if notif_type == "improvement":
+        # O Claude escolheu compactar? Reconhecemos pelo task_id bater com o
+        # candidato que NÓS calculamos — e não por um campo que ele devolva, que
+        # seria palpite dele sobre a própria intenção.
+        is_compaction = bool(
+            compaction
+            and compaction_eligible
+            and str(action.get("task_id")) == str(compaction["task"]["id"])
+        )
+
         # Anti-colisão: nunca sugerir um horário já ocupado por outra tarefa.
         action = _ensure_free_slot(user_id, ctx, action)
         if action is None:
             return None
+
+        if is_compaction:
+            # _ensure_free_slot pode ter realocado para AMANHÃ (passo 3) ou para
+            # um horário que termina DEPOIS do atual — as duas coisas destroem a
+            # premissa da compactação, que é o dia de hoje acabar mais cedo.
+            # Nesse caso a sugestão deixa de ser compactação: se o Claude também
+            # não tinha motivo de bloco ruim, não há o que sugerir.
+            still_earlier = (
+                str(action.get("new_date") or ctx["today"]) == str(ctx["today"])
+                and action.get("new_end_time")
+                and _to_minutes(action["new_end_time"])
+                <= _to_minutes(compaction["current_end"]) - _MIN_COMPACTION_GAIN_MIN
+            )
+            if not still_earlier:
+                if not flags["has_improvement_candidate"]:
+                    return None
+                is_compaction = False
+
+        if is_compaction:
+            # A marca que sustenta a trava "uma compactação por dia"
+            # (count_compactions_today) e identifica a origem da sugestão.
+            action["kind"] = "compaction"
 
         title = result.get("title", "Axon")
         body = result.get("body", "")
@@ -578,6 +863,11 @@ def analyze_and_notify(user_id: str, tz_header: str | None = None) -> dict | Non
                 new_start=action.get("new_start_time"),
                 reason=action.get("reason"),
                 relaxed=relaxed,
+                # Na compactação o texto tem de falar do FIM DO DIA, não de um
+                # "horário melhor" genérico — é esse o ganho que o usuário aceita.
+                compaction_end=(
+                    action.get("new_end_time") if is_compaction else None
+                ),
             )
 
         # Via protegida pelo índice único: se outra análise concorrente já criou

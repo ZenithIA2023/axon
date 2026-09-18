@@ -69,6 +69,43 @@ def count_today(user_id: str, notif_type: str) -> int:
     return res.count or 0
 
 
+def count_compactions_today(user_id: str, tz_name: str | None = None) -> int:
+    """
+    Quantas sugestões de COMPACTAÇÃO foram criadas hoje (dia local do usuário).
+
+    count_today() não serve aqui: ela conta por TIPO, e os dois gatilhos de
+    melhoria (bloco ruim e compactação) usam o mesmo tipo 'improvement'. A
+    distinção está na marca `kind: 'compaction'` dentro de `action`, gravada pelo
+    analisador.
+
+    O dia é o LOCAL, não o UTC: o usuário que recebe a sugestão às 22h de
+    Brasília não deve receber outra às 21h do dia seguinte só porque o UTC virou
+    no meio.
+    """
+    from services import user_tz  # import local evita ciclo na carga do módulo
+
+    tz = user_tz.zone(tz_name) if tz_name else user_tz.zone(None)
+    local_midnight = datetime.now(tz).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    res = (
+        supabase.table("notifications")
+        .select("action")
+        .eq("user_id", user_id)
+        .eq("type", "improvement")
+        .gte("created_at", local_midnight.astimezone(timezone.utc).isoformat())
+        .execute()
+    )
+    # O filtro pela marca é em memória: são poucas linhas (melhorias de um dia) e
+    # um filtro JSON no PostgREST amarraria a query ao formato do action.
+    return sum(
+        1
+        for row in (res.data or [])
+        if isinstance(row.get("action"), dict)
+        and row["action"].get("kind") == "compaction"
+    )
+
+
 def count_consecutive_rejections(user_id: str) -> int:
     """
     Conta quantas notificações de melhoria consecutivas foram rejeitadas
