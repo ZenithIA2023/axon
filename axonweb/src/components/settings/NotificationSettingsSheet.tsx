@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, CalendarDays, Clock, Zap } from "lucide-react";
+import { Bell, CalendarDays, Clock, Sparkles, Zap } from "lucide-react";
 
 import BottomSheet from "../ui/BottomSheet";
 import * as api from "../../lib/api";
@@ -34,6 +34,8 @@ const DEFAULT_PREFS: api.PlanningPreferences = {
   weekly_planning_enabled: true,
   weekly_planning_day: null,
   weekly_use_chronotype: true,
+  routine_analysis_enabled: false,
+  routine_analysis_time: null,
 };
 
 // ===========================================================================
@@ -139,6 +141,7 @@ export default function NotificationSettingsSheet({ isOpen, onClose }: Props) {
         <div className="space-y-6">
           <DailyPlanningSection prefs={prefs} onUpdate={update} />
           <WeeklyPlanningSection prefs={prefs} onUpdate={update} />
+          <RoutineAnalysisSection prefs={prefs} onUpdate={update} />
         </div>
       )}
     </BottomSheet>
@@ -282,6 +285,57 @@ function WeeklyPlanningSection({
               </PickerRow>
             )}
           </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// Análise completa de rotina agendada. Segue o padrão das seções acima; a
+// diferença é que aqui não há "horário pelo cronótipo": o usuário escolhe
+// quando quer receber a proposta do dia seguinte.
+function RoutineAnalysisSection({
+  prefs,
+  onUpdate,
+}: {
+  prefs: api.PlanningPreferences;
+  onUpdate: (patch: Partial<api.PlanningPreferences>) => void;
+}) {
+  return (
+    <section>
+      <SectionTitle title="Análise da rotina" />
+
+      <div className="space-y-3">
+        <ToggleRow
+          icon={Sparkles}
+          title="Analisar o dia seguinte"
+          description="O Axon revisa sua agenda de amanhã e envia uma proposta. Nada muda sem você aprovar."
+          enabled={prefs.routine_analysis_enabled}
+          onToggle={() =>
+            onUpdate({
+              routine_analysis_enabled: !prefs.routine_analysis_enabled,
+              // Liga com um horário padrão para o agendamento já valer: sem
+              // horário o scheduler não dispara, e o usuário achava que estava
+              // ligado.
+              ...(prefs.routine_analysis_enabled || prefs.routine_analysis_time
+                ? {}
+                : { routine_analysis_time: "20:00" }),
+            })
+          }
+        />
+
+        {prefs.routine_analysis_enabled && (
+          <PickerRow icon={Clock} label="Horário">
+            <input
+              type="time"
+              value={prefs.routine_analysis_time ?? "20:00"}
+              onChange={(event) =>
+                onUpdate({ routine_analysis_time: event.target.value })
+              }
+              className="rounded-xl border border-soft bg-surface-muted px-3 py-2 text-sm font-medium text-primary outline-none focus:border-accent-soft"
+              style={{ colorScheme: "dark" }}
+            />
+          </PickerRow>
         )}
       </div>
     </section>

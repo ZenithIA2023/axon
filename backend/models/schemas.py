@@ -85,6 +85,10 @@ class PlanningPreferences(BaseModel):
     weekly_planning_enabled: bool          = True
     weekly_planning_day:     Optional[int] = None   # 0=Seg…6=Dom
     weekly_use_chronotype:   bool          = True
+    # Análise completa de rotina agendada (Migration 32): o Axon analisa o dia
+    # seguinte no horário escolhido e NOTIFICA com a proposta — nunca aplica.
+    routine_analysis_enabled: bool         = False
+    routine_analysis_time:   Optional[str] = None   # "HH:MM"
 
 
 # --- Tasks ---
@@ -755,3 +759,39 @@ class SavedTimeAnswer(BaseModel):
 class SavedTimeDismiss(BaseModel):
     """Usuário fechou a pergunta sem responder — não insistir naquele dia."""
     date: str
+
+
+# --- Routine analysis (Migration 32) ---
+
+class RoutineMove(BaseModel):
+    """Um movimento proposto pela análise completa de rotina."""
+    task_id: str
+    title: str
+    old_start: str
+    old_end: str
+    new_start: str
+    new_end: str
+    kind: str   # bad_block | complexity_match | grouping | compaction
+    reason: str
+
+
+class RoutineAnalysisResponse(BaseModel):
+    id: str
+    target_date: str
+    status: str
+    proposal: list[RoutineMove] = []
+    # Fim das tarefas que NÃO se movem — piso do recálculo na tela de revisão.
+    fixed_day_end: Optional[str] = None
+    current_day_end: Optional[str] = None
+    proposed_day_end: Optional[str] = None
+    freed_minutes: int = 0
+    source: str = "manual"
+    created_at: str = ""
+
+
+class RoutineAnalysisRequest(BaseModel):
+    target_date: Optional[str] = None   # YYYY-MM-DD; padrão = hoje
+
+
+class RoutineAnalysisApply(BaseModel):
+    accepted_task_ids: list[str]

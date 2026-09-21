@@ -22,6 +22,7 @@ from database import supabase
 from services import notification_service
 from services import daily_stats_service
 from services import saved_time_service
+from services import routine_analysis_service
 from services import report_service
 from services import user_tz as user_tz_service
 
@@ -120,7 +121,8 @@ def run() -> None:
             .select(
                 "id, name, chronotype, timezone, "
                 "daily_planning_enabled, daily_planning_time, daily_use_chronotype, "
-                "weekly_planning_enabled, weekly_planning_day, weekly_use_chronotype"
+                "weekly_planning_enabled, weekly_planning_day, weekly_use_chronotype, "
+                "routine_analysis_enabled, routine_analysis_time"
             )
             .not_.is_("chronotype", "null")
             .execute()
@@ -213,6 +215,20 @@ def _process_user(user: dict, now_utc: datetime) -> None:
                 )
         except Exception as e:
             print(f"[planning_scheduler] catch_up falhou user={user_id}: {e}", flush=True)
+
+    # Análise completa de rotina agendada (Migration 32): analisa AMANHÃ no
+    # horário escolhido pelo usuário e notifica com a proposta — NUNCA aplica.
+    # Janela curta como a dos relatórios: chama o Claude (custo), e o índice
+    # único de proposta pendente por dia segura a duplicata se a janela repetir.
+    # try/except próprio: falhar aqui não pode derrubar o resto do ciclo.
+    if _bool(user.get("routine_analysis_enabled"), False) and user.get("routine_analysis_time"):
+        if _in_window(str(user["routine_analysis_time"])[:5]):
+            try:
+                created = routine_analysis_service.run_scheduled(user_id, tz_name)
+                if created:
+                    print(f"[planning_scheduler] routine_analysis → user={user_id}", flush=True)
+            except Exception as e:
+                print(f"[planning_scheduler] routine_analysis falhou user={user_id}: {e}", flush=True)
 
     daily_enabled  = _bool(user.get("daily_planning_enabled"),  True)
     weekly_enabled = _bool(user.get("weekly_planning_enabled"), True)
