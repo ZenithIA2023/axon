@@ -16,7 +16,8 @@ from datetime import date, datetime, timedelta
 import anthropic
 
 from database import supabase
-from services import notification_service, tasks_service, memory_service
+from services import notification_service
+from services import tasks_service, memory_service
 from services import chronotype as chronotype_service, user_tz
 
 _MODEL = "claude-sonnet-4-6"
@@ -271,11 +272,23 @@ def _compaction_candidate(user_id: str, ctx: dict) -> dict | None:
     tasks = ctx["tasks_today"]
     now_min = _to_minutes(ctx["now_hhmm"])
 
-    # Candidatas: têm horário de fim real e ainda não foram concluídas. Tarefa
-    # feita não se move, e sem horário não há fim de dia a comparar.
+    # Candidatas: têm horário de fim real, não foram concluídas e não são EVENTO.
+    # Tarefa feita não se move, e sem horário não há fim de dia a comparar.
+    #
+    # Evento tem hora marcada com outras pessoas — o Axon sugerir antecipar uma
+    # reunião ou uma aula é propor algo que não está na mão do usuário. A análise
+    # completa já recusava (routine_analysis_service._movable); aqui faltava, e a
+    # simetria importa: os dois caminhos decidem a MESMA coisa.
+    #
+    # Tarefa de rotina CONTINUA candidata (decisão de 21/09/2026): a rotina define
+    # o padrão do dia, não um compromisso com terceiros, e mover a instância de
+    # hoje não altera a rotina. Um horário que é compromisso de verdade deve ser
+    # cadastrado como evento — é isso que o protege, nos dois caminhos.
     timed = []
     for t in tasks:
         if t.get("status") == "done":
+            continue
+        if t.get("task_type") == "event":
             continue
         iv = tasks_service.task_interval(t.get("start_time"), t.get("end_time"))
         if not iv:
@@ -751,8 +764,36 @@ def analyze_and_notify(user_id: str, tz_header: str | None = None) -> dict | Non
     # tarefa às 20h PORQUE QUER (a tarde é do filho, do treino, do descanso) —
     # para essa pessoa, "seu dia pode acabar mais cedo" é o Axon pedindo para
     # encher o tempo livre dela.
+    # ── Coordenação com a análise completa de rotina ────────────────────────
+    # Os dois caminhos propõem mover tarefas e aplicam as mesmas regras. A
+    # análise completa silencia a pontual naquele dia — ou porque há proposta
+    # aberta (o usuário está decidindo sobre ela), ou porque ela acabou de dizer
+    # "está bem estruturado" e contradizer isso na aba seguinte é o app
+    # discordando de si mesmo. Ver silenced_dates para os dois motivos.
+    #
+    # Por DIA, nunca global: a pontual sugere para hoje E para amanhã, então uma
+    # proposta de amanhã não pode calar uma sugestão sobre uma tarefa de hoje
+    # às 03h. Por isso filtramos a LISTA de candidatos, não só a flag.
+    # Import local: routine_analysis_service importa ESTE módulo (reusa
+    # _load_user_context, _MODEL, _BAD_BLOCKS), então no topo daria ciclo. A
+    # dependência real é uma só — a análise completa depende do analisador.
+    from services import routine_analysis_service
+
+    blocked_dates = routine_analysis_service.silenced_dates(user_id, tz_name)
+    if blocked_dates:
+        kept = [
+            t for t in flags["bad_block_tasks"]
+            if str(t.get("scheduled_date")) not in blocked_dates
+        ]
+        if len(kept) != len(flags["bad_block_tasks"]):
+            flags["bad_block_tasks"] = kept
+            flags["has_improvement_candidate"] = len(kept) > 0
+
     compaction = flags.get("compaction_candidate")
     compaction_eligible = bool(compaction)
+    # A compactação é sempre sobre HOJE (_compaction_candidate lê tasks_today).
+    if compaction_eligible and str(ctx["today"]) in blocked_dates:
+        compaction_eligible = False
     if compaction_eligible:
         # (a) Uma compactação por dia. count_today não serve: ela conta por TIPO,
         # e os dois gatilhos usam o tipo 'improvement'. A marca vai no action.
@@ -888,16 +929,33 @@ def analyze_and_notify(user_id: str, tz_header: str | None = None) -> dict | Non
     )
 
 
+# Frase acrescentada ao corpo quando o aceite expirou uma proposta de análise
+# completa. Determinística, não escrita pelo Claude: é a explicação de algo que
+# DESAPARECEU da tela do usuário, e não pode depender de o modelo lembrar de
+# incluí-la. Diz o efeito ("recomeçar"), não o mecanismo ("status=expired"), e
+# diz o que fazer em seguida — sem isso a proposta sumiria em silêncio e
+# pareceria bug.
+_PROPOSAL_EXPIRED_NOTE = (
+    "A análise de rotina que estava aberta para este dia foi descartada, "
+    "porque partia da agenda anterior — se quiser, rode de novo no Planejamento."
+)
+
+
 def generate_change_notification(
     user_id: str,
     task_title: str,
     old_time: str | None,
     new_time: str | None,
     reason: str | None,
+    proposal_expired: bool = False,
 ) -> dict:
     """
     Gera e persiste uma notificação de alteração após uma melhoria aceita.
     Claude escreve o texto explicando o que mudou e por quê.
+
+    `proposal_expired`: o aceite invalidou uma proposta de análise completa
+    daquele dia. A frase entra no corpo para o usuário entender por que ela
+    saiu do Planning (ver _PROPOSAL_EXPIRED_NOTE).
     """
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
@@ -923,6 +981,9 @@ Retorne APENAS JSON válido:
     except Exception:
         title = "Axon atualizou sua agenda"
         body = f"O horário de '{task_title}' foi ajustado para {new_time} conforme sugerido."
+
+    if proposal_expired:
+        body = f"{body.rstrip()} {_PROPOSAL_EXPIRED_NOTE}"
 
     return notification_service.create_notification(
         user_id=user_id,

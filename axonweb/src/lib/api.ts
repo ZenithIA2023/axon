@@ -1338,6 +1338,86 @@ export interface PlanningPreferences {
   weekly_planning_enabled: boolean;
   weekly_planning_day: number | null; // 0=Seg…6=Dom
   weekly_use_chronotype: boolean;
+  // Análise completa de rotina agendada: o Axon analisa o dia seguinte e
+  // NOTIFICA com a proposta — nunca aplica sozinho.
+  routine_analysis_enabled: boolean;
+  routine_analysis_time: string | null; // "HH:MM"
+}
+
+// ===========================================================================
+// ANÁLISE COMPLETA DE ROTINA
+// ===========================================================================
+// O Axon reorganiza o dia inteiro e devolve uma proposta INSPECIONÁVEL: o
+// usuário marca linha a linha o que quer aplicar. Nada muda sem confirmação.
+
+export type RoutineMoveKind =
+  | "bad_block"
+  | "complexity_match"
+  | "grouping"
+  | "compaction";
+
+export interface RoutineMove {
+  task_id: string;
+  title: string;
+  old_start: string;
+  old_end: string;
+  new_start: string;
+  new_end: string;
+  kind: RoutineMoveKind;
+  reason: string;
+}
+
+export interface RoutineAnalysis {
+  id: string;
+  target_date: string;
+  status: "pending" | "applied" | "dismissed" | "expired";
+  proposal: RoutineMove[];
+  // Fim das tarefas que não entram na proposta: piso do recálculo ao desmarcar.
+  fixed_day_end: string | null;
+  current_day_end: string | null;
+  proposed_day_end: string | null;
+  freed_minutes: number;
+  source: "manual" | "scheduled";
+  created_at: string;
+}
+
+export type RoutineAnalysisResult =
+  | { status: "proposal"; analysis: RoutineAnalysis }
+  | { status: "pending"; analysis: RoutineAnalysis }
+  | { status: "nothing"; message: string }
+  | { status: "limit"; limit: number };
+
+export function runRoutineAnalysis(targetDate?: string) {
+  return request<RoutineAnalysisResult>("/routine-analysis", {
+    method: "POST",
+    body: JSON.stringify({ target_date: targetDate ?? null }),
+  });
+}
+
+export function getPendingRoutineAnalysis(targetDate?: string) {
+  const qs = targetDate ? `?target_date=${encodeURIComponent(targetDate)}` : "";
+  return request<{ analysis: RoutineAnalysis | null }>(`/routine-analysis/pending${qs}`);
+}
+
+export interface RoutineApplyResult {
+  ok: boolean;
+  status: "applied" | "dismissed";
+  applied: { task_id: string; title: string; freed_minutes: number }[];
+  // Movimentos que conflitaram entre ver a proposta e aplicar — pulados.
+  skipped: { task_id: string; title: string; reason: string }[];
+}
+
+export function applyRoutineAnalysis(id: string, acceptedTaskIds: string[]) {
+  return request<RoutineApplyResult>(`/routine-analysis/${id}/apply`, {
+    method: "POST",
+    body: JSON.stringify({ accepted_task_ids: acceptedTaskIds }),
+  });
+}
+
+export function dismissRoutineAnalysis(id: string) {
+  return request<{ ok: boolean }>(`/routine-analysis/${id}/dismiss`, {
+    method: "POST",
+  });
 }
 
 export function getPlanningPreferences() {

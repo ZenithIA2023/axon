@@ -43,6 +43,7 @@ import PageHeader from "../components/layout/PageHeader";
 import BottomSheet from "../components/ui/BottomSheet";
 import ConfirmDialog from "../components/ui/ConfirmDialog";
 import TaskAdvancedOptions from "../components/tasks/TaskAdvancedOptions";
+import RoutineAnalysisCard from "../components/planning/RoutineAnalysisCard";
 import EmptyState from "../components/ui/EmptyState";
 import { ScrollArea } from "../components/ui/ScrollArea";
 
@@ -1077,6 +1078,16 @@ function AgendaView({
                         {undatedTasks.length}
                       </span>
                     </button>
+                  )}
+
+                  {/* Análise completa de rotina do dia selecionado: o Axon
+                      propõe, o usuário revisa linha a linha e aplica. Só para
+                      hoje em diante — dia passado não se reorganiza. */}
+                  {selectedIso >= todayIso && (
+                    <RoutineAnalysisCard
+                      targetDate={selectedIso}
+                      onApplied={() => void loadTasks()}
+                    />
                   )}
 
                   {loading ? (

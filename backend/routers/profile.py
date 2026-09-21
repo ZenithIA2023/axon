@@ -180,7 +180,8 @@ def get_planning_preferences(current_user: dict = Depends(get_current_user)):
         supabase.table("profiles")
         .select(
             "daily_planning_enabled, daily_planning_time, daily_use_chronotype, "
-            "weekly_planning_enabled, weekly_planning_day, weekly_use_chronotype"
+            "weekly_planning_enabled, weekly_planning_day, weekly_use_chronotype, "
+            "routine_analysis_enabled, routine_analysis_time"
         )
         .eq("id", current_user["id"])
         .single()
@@ -194,6 +195,8 @@ def get_planning_preferences(current_user: dict = Depends(get_current_user)):
         weekly_planning_enabled=_bool_default(d.get("weekly_planning_enabled"),True),
         weekly_planning_day=d.get("weekly_planning_day"),
         weekly_use_chronotype=_bool_default(d.get("weekly_use_chronotype"),    True),
+        routine_analysis_enabled=_bool_default(d.get("routine_analysis_enabled"), False),
+        routine_analysis_time=(str(d["routine_analysis_time"])[:5] if d.get("routine_analysis_time") else None),
     )
 
 
@@ -206,6 +209,8 @@ def update_planning_preferences(body: PlanningPreferences, current_user: dict = 
         "weekly_planning_enabled": body.weekly_planning_enabled,
         "weekly_planning_day":     body.weekly_planning_day,
         "weekly_use_chronotype":   body.weekly_use_chronotype,
+        "routine_analysis_enabled": body.routine_analysis_enabled,
+        "routine_analysis_time":   body.routine_analysis_time,
     }).eq("id", current_user["id"]).execute()
     return body
 

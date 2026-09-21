@@ -1085,3 +1085,71 @@ begin
       check (complexity in ('light', 'moderate', 'focus', 'deep_focus'));
   end if;
 end $$;
+
+-- =============================================
+-- Migration 32: análise completa de rotina (routine_analyses)
+-- ---------------------------------------------
+-- Última fase do roteiro de planejamento. A Fase 1 (Migration 31) deu ao Axon
+-- os dados — complexidade e tags; a Fase 2 (compactação) o fez mover UMA tarefa
+-- por vez, sozinho. Esta fase reorganiza o dia INTEIRO, mexendo em várias
+-- tarefas de uma vez, sob demanda do usuário ou num horário agendado.
+--
+-- POR QUE A PROPOSTA É UMA TABELA E NÃO UMA NOTIFICAÇÃO. Uma sugestão pontual é
+-- "aceitar ou não". Reorganizar o dia pode mexer em oito tarefas, e aceitar tudo
+-- às cegas é inaceitável — há precedente doloroso: o Axon criou 40 tarefas de
+-- uma vez ao organizar um curso, tecnicamente certo e na prática abandonado.
+-- A proposta fica persistida com cada movimento e seu motivo, para o usuário
+-- INSPECIONAR, desmarcar linha a linha e só então aplicar. `proposal` guarda a
+-- lista de movimentos:
+--   { task_id, title, old_start, old_end, new_start, new_end, kind, reason }
+--   kind ∈ bad_block | complexity_match | grouping | compaction
+--
+-- A VERSÃO AGENDADA NÃO APLICA NADA. Ela gera a proposta (status 'pending') e
+-- notifica; o usuário abre e decide. O Axon sempre pediu permissão antes de
+-- mexer na agenda, e aplicar em lote sem o usuário ver seria o comportamento
+-- mais agressivo do app.
+--
+-- O índice único parcial em (user_id, target_date) WHERE status = 'pending'
+-- impede acumular propostas abertas para o mesmo dia — duas análises
+-- concorrentes (botão + agendamento no mesmo minuto) gerariam duas propostas
+-- diferentes para a mesma agenda, e o usuário aplicaria uma por cima da outra.
+-- Mesmo espírito do índice de notifications (Migration 14).
+-- =============================================
+
+create table if not exists public.routine_analyses (
+  id                uuid primary key default gen_random_uuid(),
+  user_id           uuid references auth.users(id) on delete cascade not null,
+  target_date       date not null,
+  status            text default 'pending' not null,
+  proposal          jsonb default '[]'::jsonb not null,
+  current_day_end   time,
+  proposed_day_end  time,
+  freed_minutes     integer default 0 not null,
+  -- 'manual' (botão) ou 'scheduled' (horário nas preferências).
+  source            text default 'manual' not null,
+  created_at        timestamp with time zone default now(),
+  resolved_at       timestamp with time zone
+);
+
+create unique index if not exists routine_analyses_one_pending_per_day
+  on public.routine_analyses(user_id, target_date)
+  where status = 'pending';
+
+-- "Proposta aberta deste usuário" e "quantas análises manuais hoje" (trava de
+-- custo) varrem por usuário e data de criação.
+create index if not exists routine_analyses_user_created_idx
+  on public.routine_analyses(user_id, created_at desc);
+
+alter table public.routine_analyses enable row level security;
+
+create policy "routine_analyses_select" on public.routine_analyses for select using (auth.uid() = user_id);
+create policy "routine_analyses_insert" on public.routine_analyses for insert with check (auth.uid() = user_id);
+create policy "routine_analyses_update" on public.routine_analyses for update using (auth.uid() = user_id);
+create policy "routine_analyses_delete" on public.routine_analyses for delete using (auth.uid() = user_id);
+
+-- Preferências do agendamento, ao lado das de planejamento diário/semanal.
+-- Desligado por padrão: é uma análise que chama o Claude todo dia, e o usuário
+-- precisa optar por ela.
+alter table public.profiles
+  add column if not exists routine_analysis_enabled boolean default false not null,
+  add column if not exists routine_analysis_time time;

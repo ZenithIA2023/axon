@@ -13,6 +13,7 @@ from services import (
     user_tz,
     push_service,
     saved_time_service,
+    routine_analysis_service,
 )
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -201,6 +202,25 @@ def accept_notification(
     # Marca como aceita
     notification_service.mark_accepted(user_id, notification_id)
 
+    # A agenda mudou: qualquer proposta de análise completa AINDA ABERTA para os
+    # dias afetados retrata um estado que já não existe. Aplicá-la depois poderia
+    # mover a tarefa de volta, desfazendo o que o usuário acabou de aceitar —
+    # ele teria aceito duas coisas e o Axon feito as duas, uma contra a outra.
+    #
+    # Os DOIS dias quando o movimento troca de data: o dia de origem também
+    # mudou de estado (ficou um vão onde a tarefa estava).
+    #
+    # Só no aceite: rejeitar não muda a agenda, então a proposta segue válida.
+    expired_any = False
+    try:
+        affected = {d for d in (old_date, update_data.get("scheduled_date")) if d}
+        for day in affected:
+            if routine_analysis_service.expire_pending_for_date(user_id, str(day)):
+                expired_any = True
+    except Exception as e:
+        # A tarefa já foi movida: isto não pode derrubar o aceite.
+        print(f"[notifications] expiração de proposta falhou: {e}", flush=True)
+
     # Cria change notification
     change_notif = notification_analyzer.generate_change_notification(
         user_id=user_id,
@@ -208,6 +228,7 @@ def accept_notification(
         old_time=old_time,
         new_time=action.get("new_start_time"),
         reason=action.get("reason"),
+        proposal_expired=expired_any,
     )
 
     return NotificationAnalyzeResponse(analyzed=True, notification=change_notif)
