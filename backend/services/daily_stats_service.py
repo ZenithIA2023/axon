@@ -96,9 +96,21 @@ def _planned_window(task: dict) -> tuple[int, int] | None:
 
     Tarefa com só `start_time` conta como janela de duração zero: o horário é
     real (serve de fim do plano), mas não há duração planejada para somar.
+
+    Os DOIS lados são os planejados quando existem (`planned_start_time` /
+    `planned_end_time`, Migrations 33 e 34). Uma tarefa concluída antes da hora
+    teve os horários mexidos de verdade — encurtou (caso A) ou mudou de lugar
+    (caso B) — e ler o horário novo aqui faria o dia parecer planejado
+    diferente do que foi.
+
+    Ler só o fim não basta. No caso B a tarefa MOVE: 17:00–18:00 vira
+    14:00–15:00, e a duração continua 60 min — mas se o início lido for o novo
+    (14:00) e o fim o planejado (18:00), a janela vira 4 HORAS e o
+    `planned_minutes` do dia incha. As horas poupadas passariam a dar números
+    errados sem erro nenhum aparecer: é sempre o par que tem de ser coerente.
     """
-    start = (task.get("start_time") or "")[:5]
-    end = (task.get("end_time") or "")[:5]
+    start = (task.get("planned_start_time") or task.get("start_time") or "")[:5]
+    end = (task.get("planned_end_time") or task.get("end_time") or "")[:5]
     if not start and not end:
         return None
 
@@ -258,7 +270,7 @@ def _fetch(user_id: str) -> tuple[list[dict], dict[str, list[dict]]]:
         supabase.table("tasks")
         .select(
             "id, task_type, status, scheduled_date, end_date, "
-            "start_time, end_time, carry_count"
+            "start_time, end_time, planned_start_time, planned_end_time, carry_count"
         )
         .eq("user_id", user_id)
         .execute()

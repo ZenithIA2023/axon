@@ -5,6 +5,7 @@ from auth_helper import get_current_user
 from database import supabase
 from services import chronotype as chronotype_service, calibration_service, routines_service, streak_service
 from services import user_tz as user_tz_service
+from services import tasks_service
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -246,7 +247,13 @@ def _fetch_tasks_with_times(user_id: str, today: str) -> list[dict]:
     """Busca as tarefas de hoje que têm start_time, para distribuir nos blocos."""
     res = (
         supabase.table("tasks")
-        .select("id, title, status, task_type, start_time, end_time, is_key_task, priority, objectives(title)")
+        .select(
+            "id, title, status, task_type, start_time, end_time, "
+            # Horários planejados de tarefa encurtada/movida (Migrations 33 e
+            # 34): o marcador de tempo ganho é calculado a partir deles.
+            "planned_start_time, planned_end_time, is_key_task, priority, "
+            "objectives(title)"
+        )
         .eq("user_id", user_id)
         .eq("scheduled_date", today)
         .not_.is_("start_time", "null")
@@ -287,6 +294,7 @@ def _tasks_for_block(tasks: list[dict], block_idx: int) -> list[dict]:
                 "task_type": t.get("task_type", "task"),
                 "start_time": str(st)[:5] if st else None,
                 "end_time": str(t["end_time"])[:5] if t.get("end_time") else None,
+                "saved_display_minutes": tasks_service.saved_display_minutes(t),
                 "is_key_task": bool(t.get("is_key_task")),
                 "priority": t.get("priority"),
             })
@@ -378,6 +386,7 @@ def _today_blocks(curve_key: str, tasks: list[dict]) -> list[dict]:
             "task_type": t.get("task_type", "task"),
             "start_time": str(t["start_time"])[:5],
             "end_time": str(t["end_time"])[:5] if t.get("end_time") else None,
+            "saved_display_minutes": tasks_service.saved_display_minutes(t),
             "is_key_task": bool(t.get("is_key_task")),
             "priority": t.get("priority"),
         })
