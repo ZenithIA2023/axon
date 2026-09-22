@@ -174,6 +174,14 @@ class TaskResponse(BaseModel):
     end_date: Optional[str] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
+    # Horários ORIGINAIS de uma tarefa concluída fora da janela planejada:
+    # só o fim quando ela encurtou (caso A, Migration 33), os dois quando ela
+    # mudou de lugar (caso B, Migration 34). Nulos = nunca mexida.
+    planned_start_time: Optional[str] = None
+    planned_end_time: Optional[str] = None
+    # Minutos ganhos, já com o piso de exibição aplicado. Calculado no backend
+    # porque a regra difere entre encurtar e mover (ver saved_display_minutes).
+    saved_display_minutes: Optional[int] = None
     progress: int = 0
     recurrence: Optional[str] = None
     location: Optional[str] = None

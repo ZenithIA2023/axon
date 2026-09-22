@@ -16,7 +16,10 @@ from database import supabase
 from services import calendar_sync
 
 # Campos de data que o Supabase devolve como date/datetime e precisam virar str.
-_DATE_FIELDS = ("scheduled_date", "end_date", "deadline", "start_time", "end_time", "created_at", "completed_at")
+_DATE_FIELDS = (
+    "scheduled_date", "end_date", "deadline", "start_time", "end_time",
+    "planned_start_time", "planned_end_time", "created_at", "completed_at",
+)
 # Campos de data que enviamos ao Supabase e precisam ser serializados antes.
 _WRITE_DATE_FIELDS = ("scheduled_date", "end_date", "deadline")
 
@@ -29,6 +32,9 @@ def serialize(row: dict) -> dict:
     # Achata o join objectives(title) → objective_title
     obj = row.pop("objectives", None)
     row["objective_title"] = (obj or {}).get("title") if isinstance(obj, dict) else None
+    # Campo derivado, calculado aqui para o frontend não ter de reimplementar a
+    # regra (que difere entre encurtar e mover). None quando não há marcador.
+    row["saved_display_minutes"] = saved_display_minutes(row)
     return row
 
 
@@ -65,6 +71,335 @@ def _task_sort_key(t: dict) -> tuple:
         _PRIORITY_WEIGHT.get(t.get("priority") or "medium", 1),
         t.get("start_time") or "",
     )
+
+
+# ── Encurtamento por conclusão antecipada ───────────────────────────────────
+#
+# POR QUE ISTO É UMA FUNÇÃO, E NÃO CÓDIGO DENTRO DE update_task. Há DOIS
+# caminhos que concluem uma tarefa: o PATCH normal (update_task) e a última
+# subtarefa do checklist (subtasks_service._recalculate_task_progress, que
+# escreve direto na tabela `tasks` para não disparar o recálculo reverso).
+# Esse mesmo par de caminhos já causou um bug em que concluir pelo checklist
+# não lançava a etapa no objetivo — a regra ficou só num deles. Aqui a regra
+# nasce compartilhada: os dois caminhos chamam esta função e acrescentam o
+# resultado ao payload do UPDATE que já iam fazer.
+#
+# O ganho NÃO é acumulado em lugar nenhum, de propósito. `completed_at` marca
+# quando o usuário TOCOU no botão, não quando terminou a tarefa (nos dados
+# reais, 64% das marcações vinham depois do fim planejado). Um feedback no
+# instante é confiável; um total semanal não seria.
+
+
+def shortening_payload(task_row: dict, now_local: datetime) -> dict:
+    """
+    Campos do UPDATE quando uma tarefa é concluída ANTES do fim planejado.
+
+    Devolve `{}` quando não há nada a encurtar — o chamador sempre pode fazer
+    `payload.update(shortening_payload(...))` sem checar nada.
+
+    `now_local` precisa estar no FUSO DO USUÁRIO: comparar um "agora" em UTC
+    com um `end_time` que é hora local encurtaria (ou não) por engano em todo
+    fuso diferente de UTC.
+
+    Não encurta quando:
+    - é evento: reunião tem hora marcada com outras pessoas, e mexer no fim
+      dela mentiria sobre um compromisso que não é só do usuário;
+    - falta start_time ou end_time: sem janela planejada não há o que encurtar;
+    - agora >= fim planejado: marcou em cima da hora ou depois — a tarefa durou
+      o que estava previsto, e ESTENDER seria inventar tempo que não passou;
+    - agora <= start_time: marcou antes de a tarefa começar. Encurtar aqui
+      criaria uma tarefa de duração negativa (fim antes do início), que quebra
+      _planned_window e o desenho do bloco no calendário.
+    """
+    if task_row.get("task_type") == "event":
+        return {}
+
+    start = _to_minutes(task_row.get("start_time"))
+    end = _to_minutes(task_row.get("end_time"))
+    if start is None or end is None:
+        return {}
+
+    now_min = now_local.hour * 60 + now_local.minute
+    if now_min >= end or now_min <= start:
+        return {}
+
+    payload = {"end_time": f"{now_min // 60:02d}:{now_min % 60:02d}"}
+    # Só grava o planejado na PRIMEIRA vez. Encurtar → reabrir → encurtar de
+    # novo tem de continuar apontando para o horário que o usuário planejou;
+    # sobrescrever aqui guardaria o horário já encurtado e a régua do snapshot
+    # andaria um pouco a cada ciclo.
+    if not task_row.get("planned_end_time"):
+        payload["planned_end_time"] = str(task_row["end_time"])[:5]
+    return payload
+
+
+def move_back_payload(
+    user_id: str,
+    task_id: str,
+    task_row: dict,
+    now_local: datetime,
+    first_subtask_done_at: datetime | None = None,
+) -> dict:
+    """
+    Campos do UPDATE quando uma tarefa é concluída ANTES de a janela começar —
+    o "caso B". A tarefa não encurta: ela MUDA DE LUGAR para o horário em que o
+    trabalho de fato aconteceu.
+
+        planejada 17:00–18:00, concluída às 15:00 → vira 14:00–15:00
+
+    O fim vira o momento da marcação. O início recua, e o quanto ele recua
+    depende de haver evidência:
+
+    - `first_subtask_done_at` (a primeira subtarefa marcada, Migration 34) é um
+      horário REAL de quando o trabalho começou — usa ele;
+    - sem ela, o Axon só pode estimar: agora menos a duração planejada.
+
+    POR QUE O CASO "ADIANTEI UMA ETAPA E FIZ O RESTO NA HORA" NÃO CHEGA AQUI.
+    Considere a tarefa 18:00–19:00 com a primeira subtarefa marcada às 14:00 e
+    a tarefa concluída às 19:00. Usar o 14:00 como início registraria uma
+    jornada de 5 horas que nunca existiu — o usuário adiantou uma etapa quando
+    teve tempo e fez o resto no horário planejado. A proteção é a
+    pré-condição `now <= start`: concluir às 19:00 não é o caso B (é o caso A,
+    ou nada), então a lógica de subtarefa nunca é alcançada. Quem for
+    "melhorar" esta função relaxando essa pré-condição vai reintroduzir
+    exatamente esse bug.
+
+    Devolve `{}` quando não há nada a mover — o chamador pode sempre fazer
+    `payload.update(move_back_payload(...))` sem checar nada.
+    """
+    if task_row.get("task_type") == "event":
+        return {}  # compromisso com outras pessoas não muda de lugar sozinho
+
+    # Usa os planejados quando já existem: a tarefa pode estar sendo
+    # RECONCLUÍDA (concluiu → reabriu → concluiu), e nesse caso start/end já
+    # são os horários movidos da vez anterior. A duração que importa é sempre a
+    # que o usuário planejou.
+    start = _to_minutes(task_row.get("planned_start_time") or task_row.get("start_time"))
+    end = _to_minutes(task_row.get("planned_end_time") or task_row.get("end_time"))
+    if start is None or end is None or end <= start:
+        return {}
+
+    now_min = now_local.hour * 60 + now_local.minute
+    if now_min > start:
+        return {}  # dentro da janela (caso A) ou depois dela — não é o caso B
+
+    # Só o dia de HOJE. Concluir hoje uma tarefa planejada para amanhã é
+    # adiantamento de capacidade, não "fiz mais cedo": mover a tarefa para hoje
+    # apagaria o dia em que ela estava planejada, e o snapshot daquele dia
+    # perderia a linha inteira em vez de registrar o adiantamento.
+    if str(task_row.get("scheduled_date") or "") != str(now_local.date()):
+        return {}
+
+    duration = end - start
+    new_end = now_min
+
+    new_start = now_min - duration
+    if first_subtask_done_at is not None:
+        sub_local = first_subtask_done_at.astimezone(now_local.tzinfo)
+        # Subtarefa de OUTRO dia é ignorada de propósito. "Comecei ontem e
+        # terminei hoje" tem o mesmo problema do caso protegido acima: não há
+        # como afirmar que o trabalho foi contínuo, e o início viraria um
+        # horário do dia errado.
+        if sub_local.date() == now_local.date():
+            sub_min = sub_local.hour * 60 + sub_local.minute
+            if sub_min < now_min:
+                new_start = sub_min
+
+    # Recuar para antes da meia-noite exigiria mover a tarefa para o dia
+    # anterior, o que muda o dia de um snapshot já fechado. Não mexer é menos
+    # errado que mexer no histórico.
+    if new_start < 0:
+        return {}
+
+    new_start_str = f"{new_start // 60:02d}:{new_start % 60:02d}"
+    new_end_str = f"{new_end // 60:02d}:{new_end % 60:02d}"
+
+    # Só consulta conflito depois de TODAS as pré-condições — é uma query
+    # (list_tasks + tags) e a maioria das conclusões nem chega aqui.
+    # Sobrepor duas tarefas é pior que deixar um slot desatualizado: o usuário
+    # perde a leitura do dia e o anti-colisão do Axon passa a mentir.
+    if find_conflicting_task(
+        user_id,
+        str(task_row.get("scheduled_date")),
+        new_start_str,
+        new_end_str,
+        exclude_id=task_id,
+    ):
+        return {}
+
+    payload = {"start_time": new_start_str, "end_time": new_end_str}
+    # Mesma razão de shortening_payload: só grava o planejado na PRIMEIRA vez,
+    # senão cada ciclo de concluir/reabrir empurraria a régua um pouco.
+    if not task_row.get("planned_start_time"):
+        payload["planned_start_time"] = str(task_row["start_time"])[:5]
+    if not task_row.get("planned_end_time"):
+        payload["planned_end_time"] = str(task_row["end_time"])[:5]
+    return payload
+
+
+# Piso do marcador de tempo ganho. Abaixo disso a tarefa ainda encurta/move no
+# calendário (o vão é real), mas não vale um chip: "ganhou 3 min" é ruído, e o
+# ruído é o que faz o usuário parar de ler os marcadores.
+SAVED_DISPLAY_FLOOR_MIN = 10
+
+
+def saved_display_minutes(task_row: dict) -> int | None:
+    """
+    Minutos que o usuário ganhou ao concluir a tarefa fora da janela, ou None
+    quando não há marcador a mostrar.
+
+    POR QUE ISTO É REGRA DE NEGÓCIO E MORA NO BACKEND. Os dois casos medem
+    coisas DIFERENTES, e a diferença não é óbvia:
+
+    - caso A (encurtou): `fim_planejado − fim_novo`, o pedaço final que sobrou;
+    - caso B (moveu): a DURAÇÃO PLANEJADA inteira.
+
+    No caso B é tentador mostrar a distância do movimento — a tarefa das 17:00
+    concluída às 15:00 "andou" 3 horas. Seria falso: o usuário já estava livre
+    às 15:00 e usou aquele tempo para trabalhar. O que mudou no dia dele é que
+    o slot das 17:00–18:00 deixou de estar reservado. O ganho é sempre o tempo
+    que deixou de estar ocupado, nunca o tamanho do salto.
+
+    Deixar esse cálculo no frontend faria as duas regras divergirem na primeira
+    tela que alguém esquecesse de atualizar.
+
+    E ele NÃO é somado em lugar nenhum — nem semana, nem mês, nem horas
+    poupadas. Esta feature já foi descartada uma vez (agosto/2026) por isso:
+    `completed_at` marca quando o usuário TOCOU no botão, não quando terminou.
+    O feedback do instante é confiável (o app está aberto na mão dele); um
+    acumulado não seria.
+    """
+    planned_end = _to_minutes(task_row.get("planned_end_time"))
+    if planned_end is None:
+        return None
+
+    planned_start = _to_minutes(task_row.get("planned_start_time"))
+    if planned_start is not None:
+        # Caso B: a tarefa mudou de lugar. O ganho é a janela que vagou.
+        gained = planned_end - planned_start
+    else:
+        # Caso A: só o fim mexeu. O ganho é o pedaço final que sobrou.
+        end = _to_minutes(task_row.get("end_time"))
+        if end is None:
+            return None
+        gained = planned_end - end
+
+    return gained if gained >= SAVED_DISPLAY_FLOOR_MIN else None
+
+
+def _first_subtask_for_move(
+    user_id: str, task_id: str, task_row: dict, now_local: datetime
+) -> datetime | None:
+    """
+    Busca o `done_at` da primeira subtarefa SÓ quando o caso B tem chance de se
+    aplicar.
+
+    Esta pré-triagem existe por causa do custo: cada query ao Supabase são
+    ~105ms, e a esmagadora maioria das conclusões é caso A (dentro da janela)
+    ou nada (depois dela). Consultar subtarefa em toda conclusão colocaria essa
+    latência no caminho de um botão que o usuário toca o dia inteiro.
+
+    Repete de propósito as pré-condições baratas de move_back_payload — as que
+    não custam query. A função continua validando tudo por conta própria: esta
+    aqui só decide se vale pagar a busca.
+    """
+    if task_row.get("task_type") == "event":
+        return None
+    start = _to_minutes(task_row.get("planned_start_time") or task_row.get("start_time"))
+    end = _to_minutes(task_row.get("planned_end_time") or task_row.get("end_time"))
+    if start is None or end is None or end <= start:
+        return None
+    if (now_local.hour * 60 + now_local.minute) > start:
+        return None
+    if str(task_row.get("scheduled_date") or "") != str(now_local.date()):
+        return None
+    return first_subtask_done_at(user_id, task_id)
+
+
+def first_subtask_done_at(user_id: str, task_id: str) -> datetime | None:
+    """
+    Quando a PRIMEIRA subtarefa desta tarefa foi marcada (Migration 34), ou
+    None se nenhuma tem `done_at`.
+
+    UMA query, ordenada no banco com limit 1 — não traz o checklist inteiro
+    para ordenar em Python. Quem chama só deve chamar quando as pré-condições
+    do caso B já passaram: a maioria das conclusões não é caso B, e uma query a
+    mais em toda conclusão custaria ~105ms à toa.
+    """
+    try:
+        res = (
+            supabase.table("subtasks")
+            .select("done_at")
+            .eq("task_id", task_id)
+            .eq("user_id", user_id)
+            .not_.is_("done_at", "null")
+            .order("done_at", desc=False)
+            .limit(1)
+            .execute()
+        )
+    except Exception as e:
+        # Não derruba a conclusão da tarefa por causa do sinal auxiliar: sem
+        # ele o caso B cai no fallback da duração, que é aceitável. Mas LOGA —
+        # um except mudo aqui esconderia a regra das subtarefas nunca rodando.
+        print(f"[tasks] done_at da primeira subtarefa falhou (task={task_id}): {e}", flush=True)
+        return None
+
+    rows = res.data or []
+    if not rows:
+        return None
+    try:
+        return datetime.fromisoformat(str(rows[0]["done_at"]).replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def restore_payload(task_row: dict) -> dict:
+    """
+    Campos do UPDATE quando uma tarefa encurtada (caso A) ou movida (caso B) é
+    REABERTA: os horários voltam a ser os planejados e as colunas de régua
+    zeram.
+
+    Os dois lados são independentes: o caso A só grava `planned_end_time`, e
+    restaurar um `start_time` que nunca mudou apagaria o horário real da
+    tarefa. Por isso cada lado só volta se tiver sido guardado.
+
+    `{}` quando a tarefa nunca foi encurtada nem movida.
+    """
+    planned_end = task_row.get("planned_end_time")
+    planned_start = task_row.get("planned_start_time")
+    if not planned_end and not planned_start:
+        return {}
+
+    payload: dict = {}
+    if planned_end:
+        payload["end_time"] = str(planned_end)[:5]
+        payload["planned_end_time"] = None
+    if planned_start:
+        payload["start_time"] = str(planned_start)[:5]
+        payload["planned_start_time"] = None
+    return payload
+
+
+def _now_for_user(user_id: str) -> datetime:
+    """
+    "Agora" no fuso do usuário, para quem chama update_task sem ter resolvido o
+    fuso (agente, notificações, análise de rotina). Import local: user_tz lê
+    `profiles` e o topo deste módulo já é caminho quente.
+    """
+    from services import user_tz
+
+    return datetime.now(user_tz.zone(user_tz.stored_tz(user_id)))
+
+
+def _to_minutes(value: str | None) -> int | None:
+    """"HH:MM" ou "HH:MM:SS" → minutos desde 00:00. None se ausente/inválido."""
+    if not value:
+        return None
+    try:
+        hh, mm = str(value).split(":")[:2]
+        return int(hh) * 60 + int(mm)
+    except Exception:
+        return None
 
 
 # Duração assumida quando a tarefa não tem end_time — 45 min reflete melhor a
@@ -402,7 +737,16 @@ def _mirror_subtasks(user_id: str, task_id: str, *, done: bool) -> None:
         )
 
 
-def update_task(user_id: str, task_id: str, data: dict) -> dict:
+def update_task(
+    user_id: str, task_id: str, data: dict, now: datetime | None = None
+) -> dict:
+    """
+    `now` é o "agora" NO FUSO DO USUÁRIO e só serve ao encurtamento por
+    conclusão antecipada. O router passa o horário que já resolveu pelo header
+    X-Timezone; quem chama de dentro (agente, notificações, análise de rotina)
+    omite e cai no fuso salvo no perfil — uma query a mais, mas só no PATCH que
+    de fato conclui uma tarefa.
+    """
     payload = _stringify_dates({**data})
 
     # Tags vivem em outra tabela: saem do payload antes da checagem de "nenhum
@@ -439,13 +783,19 @@ def update_task(user_id: str, task_id: str, data: dict) -> dict:
     # e is_key_task para a lógica de unicidade de tarefa chave).
     existing = (
         supabase.table("tasks")
-        .select("status, scheduled_date, is_key_task, objective_id, objective_steps")
+        .select(
+            "status, scheduled_date, is_key_task, objective_id, objective_steps, "
+            # Janela planejada + tipo: o encurtamento por conclusão antecipada
+            # decide a partir deles, e ler junto evita uma segunda query.
+            "task_type, start_time, end_time, planned_start_time, planned_end_time"
+        )
         .eq("id", task_id)
         .eq("user_id", user_id)
         .execute()
     )
     if not existing.data:
         raise ValueError("Tarefa não encontrada")
+    existing_row = existing.data[0]
     current_status = existing.data[0].get("status")
     current_scheduled_date = existing.data[0].get("scheduled_date")
     current_objective_id = existing.data[0].get("objective_id")
@@ -462,11 +812,44 @@ def update_task(user_id: str, task_id: str, data: dict) -> dict:
         if effective_date:
             _unset_key_task(user_id, effective_date, exclude_id=task_id)
 
+    # Mexer no horário REPLANEJA a tarefa: o fim novo é o novo plano, e o
+    # horário guardado no encurtamento anterior deixa de valer. Sem zerar aqui,
+    # uma tarefa encurtada e depois remarcada manteria para sempre um "fim
+    # planejado" de outro horário, e o snapshot leria a régua errada.
+    if "end_time" in payload or "start_time" in payload:
+        if existing_row.get("planned_end_time"):
+            payload.setdefault("planned_end_time", None)
+        if existing_row.get("planned_start_time"):
+            payload.setdefault("planned_start_time", None)
+
     if "status" in payload:
         if payload["status"] == "done" and current_status != "done":
             payload["completed_at"] = datetime.now(timezone.utc).isoformat()
+            # Encurtamento: só quando o PATCH não está mexendo no horário. Um
+            # PATCH que conclui E move a tarefa ao mesmo tempo (o agente faz
+            # isso) tem horário explícito do chamador, e sobrescrevê-lo aqui
+            # desfaria o movimento que ele acabou de pedir.
+            if "end_time" not in payload and "start_time" not in payload:
+                now_local = now or _now_for_user(user_id)
+                moved = shortening_payload(existing_row, now_local)
+                if not moved:
+                    # Caso B (Migration 34): marcou ANTES da janela começar.
+                    # As duas funções são mutuamente exclusivas por construção
+                    # — A exige `start < agora < fim`, B exige `agora <= start`
+                    # —, então tentar a segunda só quando a primeira sai vazia
+                    # não pode aplicar as duas.
+                    moved = move_back_payload(
+                        user_id,
+                        task_id,
+                        existing_row,
+                        now_local,
+                        _first_subtask_for_move(user_id, task_id, existing_row, now_local),
+                    )
+                payload.update(moved)
         elif payload["status"] != "done":
             payload["completed_at"] = None  # reabriu a tarefa
+            if current_status == "done" and "end_time" not in payload:
+                payload.update(restore_payload(existing_row))
 
     result = (
         supabase.table("tasks")

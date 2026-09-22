@@ -50,14 +50,20 @@ def create_task(
 def update_task(
     task_id: str,
     body: TaskUpdate,
+    x_timezone: Optional[str] = Header(default=None),
     current_user: dict = Depends(get_current_user),
 ):
     try:
+        # O fuso importa ao CONCLUIR: a tarefa encurta até o horário de agora, e
+        # "agora" em UTC encurtaria para o horário errado em todo fuso que não
+        # seja o de Londres.
+        tz_name = user_tz.resolve(current_user["id"], x_timezone)
         # exclude_unset (não exclude_none): campo enviado como null LIMPA o valor
         # no banco; campo omitido não é tocado. Com exclude_none, apagar o
         # horário/descrição no modal e salvar não fazia nada — o valor "voltava".
         return tasks_service.update_task(
-            current_user["id"], task_id, body.model_dump(exclude_unset=True)
+            current_user["id"], task_id, body.model_dump(exclude_unset=True),
+            now=datetime.now(user_tz.zone(tz_name)),
         )
     except ValueError as e:
         detail = str(e)

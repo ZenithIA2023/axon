@@ -14,6 +14,9 @@ from database import supabase
 def _serialize(row: dict) -> dict:
     if row.get("created_at") is not None:
         row["created_at"] = str(row["created_at"])
+    # done_at é timestamptz e sai do Supabase como datetime em alguns caminhos.
+    if row.get("done_at") is not None:
+        row["done_at"] = str(row["done_at"])
     return row
 
 
@@ -66,6 +69,8 @@ def _sync_objective(
 
 def _recalculate_task_progress(user_id: str, task_id: str) -> None:
     """Recalcula progress + status da tarefa mãe com base nas subtarefas."""
+    from services import tasks_service
+
     try:
         res = (
             supabase.table("subtasks")
@@ -86,7 +91,13 @@ def _recalculate_task_progress(user_id: str, task_id: str) -> None:
         # lança a etapa no objetivo é o gancho abaixo, não aquele caminho.
         current = (
             supabase.table("tasks")
-            .select("status, objective_id, objective_steps, routine_item_id")
+            .select(
+                "status, objective_id, objective_steps, routine_item_id, "
+                # Janela planejada + tipo: concluir a ÚLTIMA subtarefa conclui a
+                # tarefa, e ela precisa encurtar igual ao caminho do PATCH.
+                "task_type, scheduled_date, start_time, end_time, "
+                "planned_start_time, planned_end_time"
+            )
             .eq("id", task_id)
             .eq("user_id", user_id)
             .single()
@@ -105,6 +116,8 @@ def _recalculate_task_progress(user_id: str, task_id: str) -> None:
             if current_status == "done":
                 payload["status"] = "todo"
                 payload["completed_at"] = None
+                # Reabriu: se a tarefa tinha encurtado, o horário planejado volta.
+                payload.update(tasks_service.restore_payload(current_task))
             supabase.table("tasks").update(payload).eq("id", task_id).eq(
                 "user_id", user_id
             ).execute()
@@ -118,16 +131,44 @@ def _recalculate_task_progress(user_id: str, task_id: str) -> None:
         payload: dict = {"progress": progress, "status": status}
         if status == "done" and current_status != "done":
             payload["completed_at"] = datetime.now(timezone.utc).isoformat()
+            # Encurtamento por conclusão antecipada. A regra mora em
+            # tasks_service porque este caminho escreve direto em `tasks`: sem
+            # compartilhar, concluir pelo checklist não encurtaria, e o bug
+            # seria invisível (mesma armadilha do lançamento de objetivos).
+            now_local = tasks_service._now_for_user(user_id)
+            moved = tasks_service.shortening_payload(current_task, now_local)
+            if not moved:
+                # Caso B (Migration 34): a última subtarefa concluiu a tarefa
+                # ANTES de a janela começar — ela move para o horário real. O
+                # `done_at` da primeira subtarefa já está gravado neste ponto:
+                # update_subtask grava o timestamp e só DEPOIS chama este
+                # recálculo, então a evidência de início está disponível.
+                moved = tasks_service.move_back_payload(
+                    user_id,
+                    task_id,
+                    current_task,
+                    now_local,
+                    tasks_service._first_subtask_for_move(
+                        user_id, task_id, current_task, now_local
+                    ),
+                )
+            payload.update(moved)
         elif status != "done" and current_status == "done":
             payload["completed_at"] = None  # reabriu a tarefa
+            payload.update(tasks_service.restore_payload(current_task))
 
         supabase.table("tasks").update(payload).eq("id", task_id).eq(
             "user_id", user_id
         ).execute()
         _sync_objective(user_id, current_task, task_id, current_status, status,
                         completed_at=payload.get("completed_at"))
-    except Exception:
-        pass
+    except Exception as e:
+        # Engolir é de propósito: uma falha aqui não pode derrubar o PATCH da
+        # subtarefa que o usuário acabou de marcar. Mas PRECISA aparecer no log
+        # — este recálculo carrega status, lançamento de objetivo e agora o
+        # encurtamento, e um except mudo já escondeu por semanas uma dessas
+        # três não acontecendo. Sem dado pessoal: só o id da tarefa.
+        print(f"[subtasks] recálculo falhou (task={task_id}): {e}", flush=True)
 
 
 def list_all(user_id: str) -> list[dict]:
@@ -216,7 +257,7 @@ def update_subtask(user_id: str, subtask_id: str, data: dict) -> dict:
     # sem eles não dá para saber se houve transição nem de qual objetivo sair.
     fetch = (
         supabase.table("subtasks")
-        .select("task_id, done, objective_id, objective_steps")
+        .select("task_id, done, objective_id, objective_steps, done_at")
         .eq("id", subtask_id)
         .eq("user_id", user_id)
         .execute()
@@ -237,6 +278,15 @@ def update_subtask(user_id: str, subtask_id: str, data: dict) -> dict:
         payload["title"] = t
     if "done" in data:
         payload["done"] = bool(data["done"])
+        # `done_at` só se move na TRANSIÇÃO (Migration 34). Marcar de novo uma
+        # subtarefa já marcada — o frontend reenvia o mesmo `done: true` num
+        # duplo toque — não pode reescrever o horário: o primeiro registro é a
+        # evidência de quando o trabalho começou, e sobrescrever empurraria o
+        # início da tarefa para a frente a cada toque.
+        if payload["done"] and not was_done:
+            payload["done_at"] = datetime.now(timezone.utc).isoformat()
+        elif not payload["done"] and was_done:
+            payload["done_at"] = None  # desmarcou: o horário deixa de valer
     if "objective_id" in data or "objective_steps" in data:
         payload.update(_objective_link_fields({**current, **data}))
 

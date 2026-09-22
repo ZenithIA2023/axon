@@ -195,7 +195,10 @@ def _advanced_minutes(user_id: str, day: date, tz) -> int:
     try:
         res = (
             supabase.table("tasks")
-            .select("scheduled_date, start_time, end_time, completed_at")
+            .select(
+                "scheduled_date, start_time, end_time, "
+                "planned_start_time, planned_end_time, completed_at"
+            )
             .eq("user_id", user_id)
             .eq("status", "done")
             .gt("scheduled_date", str(day))
@@ -214,8 +217,13 @@ def _advanced_minutes(user_id: str, day: date, tz) -> int:
             continue
         if dt.date() != day:
             continue  # só o que foi fechado NESTE dia
-        start = _to_minutes(row.get("start_time"))
-        end = _to_minutes(row.get("end_time"))
+        # O que a tarefa adiantada libera é a duração PLANEJADA dela. Se ela foi
+        # concluída antes da hora, os horários mexeram (Migrations 33 e 34) e
+        # ler os novos daria uma duração que não é a que o usuário reservou.
+        # Os DOIS lados vêm do planejado pelo mesmo motivo de _planned_window:
+        # misturar um planejado com um movido inventa uma duração.
+        start = _to_minutes(row.get("planned_start_time") or row.get("start_time"))
+        end = _to_minutes(row.get("planned_end_time") or row.get("end_time"))
         if start is None or end is None or end <= start:
             continue  # sem duração planejada não há capacidade a creditar
         total += end - start
@@ -271,6 +279,13 @@ def freed_by_move(
             updated["start_time"] = new_start
         if new_end:
             updated["end_time"] = new_end
+        if new_start or new_end:
+            # Mover uma tarefa REPLANEJA o horário dela: os horários novos
+            # passam a ser o plano. Sem limpar as colunas de régua (Migrations
+            # 33 e 34), _planned_window continuaria lendo os horários antigos e
+            # o movimento pareceria não ter liberado nada.
+            updated["planned_start_time"] = None
+            updated["planned_end_time"] = None
         after_tasks.append(updated)
 
     after = daily_stats_service.planned_day_end(after_tasks, day)

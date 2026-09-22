@@ -29,6 +29,7 @@ import {
   Target,
   Trash2,
   X,
+  Zap,
 } from "lucide-react";
 
 import { results, type ChronotypeResultKey } from "../data/results";
@@ -38,6 +39,7 @@ import Goals from "./Goals";
 import * as api from "../lib/api";
 import { openAuthUrl } from "../lib/nativeAuth";
 import type { Task, TaskType, TaskStatus, Subtask, DailyStat } from "../lib/api";
+import { shortenedMinutes } from "../lib/api";
 import AppBackground from "../components/layout/AppBackground";
 import PageHeader from "../components/layout/PageHeader";
 import BottomSheet from "../components/ui/BottomSheet";
@@ -2358,6 +2360,7 @@ function DesktopScheduleGrid({
                   const subtasks = subtasksMap[task.id] ?? [];
                   const completedSubtasks = subtasks.filter((subtask) => subtask.done).length;
                   const hasSubtasks = subtasks.length > 0;
+                  const desktopSaved = shortenedMinutes(task);
 
                   return (
                     <button
@@ -2384,8 +2387,18 @@ function DesktopScheduleGrid({
                         {task.title}
                       </span>
 
-                      <span className={`mt-0.5 block text-[0.6rem] font-bold ${tone.text}`}>
+                      <span className={`mt-0.5 flex items-center gap-1 text-[0.6rem] font-bold ${tone.text}`}>
                         {getDesktopTaskTime(task)}
+                        {/* Tempo ganho ao concluir antes da hora. Vai na linha
+                            do horário e não numa linha própria: o bloco pode
+                            ter só 36px de altura e uma quarta linha estouraria
+                            o recorte, escondendo as subtarefas. */}
+                        {desktopSaved !== null && (
+                          <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-300">
+                            <Zap className="h-2.5 w-2.5" />
+                            {desktopSaved} min livres
+                          </span>
+                        )}
                       </span>
 
                       <span className={`mt-1 flex items-center gap-1 truncate text-[0.56rem] font-bold ${tone.text}`}>
@@ -3694,6 +3707,9 @@ function TimelineItem({
   const start = hhmm(task.start_time);
   const end = hhmm(task.end_time);
   const subtitle = task.description || typeLabels[task.task_type];
+  // O bloco já encolhe sozinho: `end` é o horário ENCURTADO no banco, e a
+  // altura do bloco na régua vem dele. Isto aqui é só o marcador.
+  const savedMinutes = shortenedMinutes(task);
 
   const isDone = task.status === "done";
   const isEvent = task.task_type === "event";
@@ -3936,6 +3952,21 @@ function TimelineItem({
               {/* pl = largura do losango (2.75rem) + gap (0.625rem), para os
                   chips e o horário alinharem com o título. */}
               <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-[3.375rem]">
+                {/* Tempo que VAGOU na agenda por ter concluído fora da hora.
+                    "livres" não é enfeite: no caso B a tarefa muda de lugar, e
+                    o número é a janela que abriu — não quanto o trabalho durou.
+                    Uma tarefa de 30 min feita em 2 mostra "30 min livres",
+                    porque os 30 min planejados deixaram de estar reservados.
+                    Sem o rótulo isso lê como "2 minutos renderam 30".
+                    Feedback do instante, não conquista: não entra em total
+                    nenhum (ver saved_display_minutes no backend). */}
+                {savedMinutes !== null && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300/30 bg-emerald-400/10 px-2 py-0.5 text-[0.62rem] font-semibold text-emerald-600 dark:text-emerald-200">
+                    <Zap className="h-2.5 w-2.5" />
+                    {savedMinutes} min livres
+                  </span>
+                )}
+
                 {isKey && (
                   <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/30 bg-amber-400/10 px-2 py-0.5 text-[0.62rem] font-semibold text-amber-600 dark:text-amber-200">
                     <Star className="h-2.5 w-2.5 fill-amber-300 text-amber-300" />

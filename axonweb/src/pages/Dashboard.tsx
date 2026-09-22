@@ -24,6 +24,7 @@ import DayReview from "./DayReview";
 import Sidebar from "../components/layout/Sidebar";
 import * as api from "../lib/api";
 import type { BlockTask, DashboardData, FocusBlock, Subtask } from "../lib/api";
+import { shortenedMinutes } from "../lib/api";
 import { AppBackground } from "../components/layout/AppBackground";
 import PageHeader from "../components/layout/PageHeader";
 import axonHeadHappy from "../assets/axon/axon-head-happy.png";
@@ -939,6 +940,7 @@ export default function Dashboard() {
                 const hasSubtasks = subtasks.length > 0;
                 const focusRecommendation = focusRecommendationByTaskId[task.id];
                 const timing = getTaskTiming(task, nowMinutes);
+                const savedMinutes = shortenedMinutes(task);
 
                 return (
                   <SwipeableTaskRow
@@ -995,6 +997,21 @@ export default function Dashboard() {
                               <span>
                                 {task.objective_title ? task.objective_title : taskTypeLabel[task.task_type] ?? "Tarefa"}
                               </span>
+
+                              {/* Tempo que VAGOU na agenda. No caso B é a
+                                  duração planejada, não a real: tarefa de 30
+                                  min feita em 2 libera os 30 que estavam
+                                  reservados. Daí o rótulo "livres". */}
+                              {savedMinutes !== null && (
+                                <>
+                                  <span className="text-soft">·</span>
+
+                                  <span className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-300">
+                                    <Zap className="h-3 w-3" />
+                                    {savedMinutes} min livres
+                                  </span>
+                                </>
+                              )}
 
                               {hasSubtasks && (
                                 <>

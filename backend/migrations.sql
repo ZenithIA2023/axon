@@ -1153,3 +1153,82 @@ create policy "routine_analyses_delete" on public.routine_analyses for delete us
 alter table public.profiles
   add column if not exists routine_analysis_enabled boolean default false not null,
   add column if not exists routine_analysis_time time;
+
+-- =============================================
+-- Migration 33: horário planejado antes de a tarefa ser encurtada
+-- =============================================
+-- Quando o usuário conclui uma tarefa ANTES do fim planejado, a tarefa encurta
+-- de verdade: `end_time` passa a ser o horário em que ele marcou. Isso abre um
+-- vão real no calendário, que é o ponto da funcionalidade — mas destrói duas
+-- coisas se o horário original não for guardado em algum lugar.
+--
+-- 1. A RÉGUA DAS HORAS POUPADAS. O snapshot das 00:10 congela o fim planejado
+--    do dia (`daily_task_stats.planned_day_end`, Migration 28) lendo os
+--    `end_time` como estão naquele momento. Se a última tarefa do dia encolheu
+--    de 19:00 para 18:37, o snapshot congelaria "o dia estava planejado até
+--    18:37" — e a economia real desapareceria sem erro nenhum, só com números
+--    menores. `planned_end_time` é a referência que o snapshot passa a usar.
+--
+-- 2. O DESFAZER. Reabrir uma tarefa concluída precisa devolver o horário que o
+--    usuário planejou, não o horário em que ele por acaso tocou no botão.
+--
+-- NULL significa "nunca foi encurtada" — a coluna só é escrita no instante do
+-- encurtamento e volta a NULL quando a tarefa é reaberta. Por isso ela não
+-- serve como "fim planejado" universal: quem precisa do plano lê
+-- coalesce(planned_end_time, end_time).
+alter table public.tasks
+  add column if not exists planned_end_time time;
+
+comment on column public.tasks.planned_end_time is
+  'end_time original de uma tarefa encurtada por conclusão antecipada. NULL = nunca encurtada.';
+
+-- =============================================
+-- Migration 34: caso B — a tarefa concluída antes da hora MUDA DE LUGAR
+-- =============================================
+-- A Migration 33 cobriu a tarefa concluída DENTRO da janela planejada: ela
+-- encurta. Faltava o caso de concluir ANTES de a janela começar — tarefa das
+-- 17:00–18:00 marcada às 15:00. Ali o encurtamento não serve (o fim ficaria
+-- antes do início), e o resultado era não fazer nada: o calendário mentia duas
+-- vezes, mostrando 15h livre quando o usuário estava ocupado e 17h ocupada
+-- quando ele já estará livre. Agora a tarefa MOVE para o horário real.
+--
+-- `subtasks.done_at` — QUANDO a subtarefa foi marcada.
+-- Mover a tarefa exige saber quando o trabalho começou. Sem evidência o Axon
+-- só pode CHUTAR (agora menos a duração planejada); com a primeira subtarefa
+-- marcada, há um horário real de início. `subtasks` só tinha `done boolean` e
+-- um `created_at` que é da CRIAÇÃO da subtarefa, não da marcação — nenhum dos
+-- dois responde à pergunta.
+--
+-- Subtarefas marcadas ANTES desta migration ficam com done_at nulo para
+-- sempre: o dado não existe em lugar nenhum e não há como recuperá-lo. Elas
+-- caem no fallback da duração planejada, que é o comportamento correto —
+-- melhor estimar do que inventar um horário.
+--
+-- `tasks.planned_start_time` — o início original.
+-- O caso A só mexia no fim, então guardar `planned_end_time` bastava. O caso B
+-- mexe nos DOIS lados, e desfazer exige os dois. Também é a segunda metade da
+-- régua do snapshot: `daily_task_stats` congela o fim planejado do dia E os
+-- minutos planejados (Migration 28). Sem o início original, uma tarefa movida
+-- para trás encolheria o `planned_minutes` do dia e as horas poupadas dariam
+-- números errados sem erro nenhum aparecer.
+--
+-- NULL nas duas = "nunca foi movida/encurtada". Quem precisa do plano lê
+-- coalesce(planned_start_time, start_time) e coalesce(planned_end_time, end_time).
+alter table public.subtasks
+  add column if not exists done_at timestamp with time zone;
+
+alter table public.tasks
+  add column if not exists planned_start_time time;
+
+comment on column public.subtasks.done_at is
+  'Quando a subtarefa foi marcada como concluída. NULL em subtarefas anteriores à Migration 34.';
+
+comment on column public.tasks.planned_start_time is
+  'start_time original de uma tarefa movida por conclusão fora da janela. NULL = nunca movida.';
+
+-- "Primeira subtarefa marcada desta tarefa" é uma busca por task_id ordenada
+-- por done_at com limit 1 — sem índice ela varre todas as subtarefas do
+-- usuário a cada conclusão que cai no caso B.
+create index if not exists subtasks_task_done_at_idx
+  on public.subtasks(task_id, done_at)
+  where done_at is not null;

@@ -456,6 +456,7 @@ export interface BlockTask {
   task_type: string;
   start_time?: string | null;
   end_time?: string | null;
+  saved_display_minutes?: number | null;
   is_key_task: boolean;
   priority?: string | null;
   objective_title?: string | null;
@@ -675,6 +676,12 @@ export interface Task {
   end_date?: string | null;
   start_time?: string | null;
   end_time?: string | null;
+  // Horários originais de uma tarefa concluída fora da janela: só o fim quando
+  // ela encurtou, os dois quando ela mudou de lugar. O ganho exibido NÃO é
+  // derivado deles aqui — vem pronto em `saved_display_minutes`.
+  planned_start_time?: string | null;
+  planned_end_time?: string | null;
+  saved_display_minutes?: number | null;
   progress: number;
   recurrence?: "daily" | "weekly" | "monthly" | null;
   location?: string | null;
@@ -691,6 +698,22 @@ export interface Task {
   created_at: string;
   complexity?: TaskComplexity | null;
   tags?: TaskTag[];
+}
+
+/**
+ * Minutos que o usuário ganhou ao concluir a tarefa fora da janela planejada,
+ * ou null quando não há marcador a mostrar.
+ *
+ * O NÚMERO VEM PRONTO DO BACKEND (`saved_display_minutes`), com o piso de
+ * exibição já aplicado. A regra não é a mesma nos dois casos — tarefa que
+ * encurtou ganha o pedaço final, tarefa que mudou de lugar ganha a duração
+ * inteira — e calcular isso aqui faria as telas divergirem da regra do
+ * servidor. Este wrapper existe só para as telas não lerem o campo cru.
+ */
+export function shortenedMinutes(task: {
+  saved_display_minutes?: number | null;
+}): number | null {
+  return task.saved_display_minutes ?? null;
 }
 
 export interface TaskCreateInput {
