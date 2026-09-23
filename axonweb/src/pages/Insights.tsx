@@ -1634,56 +1634,51 @@ export default function Insights() {
                 <div className="px-2 pb-2">
                   <div className="h-20 animate-pulse rounded-[1.4rem] bg-surface-muted" />
                 </div>
-              ) : !savedTime || savedTime.saved_minutes === 0 ? (
-                /* Estado vazio: NUNCA mostrar "0h poupadas" como se fosse um
-                   resultado. Sem dias fechados com certeza, o honesto é dizer
-                   que o AXON ainda não tem como provar o ganho. */
-                <div className={`${CHART_BOX} mx-2 mb-2`}>
-                  <p className="text-xs leading-5 text-muted">
-                    O AXON ainda está aprendendo seu ritmo. Conforme você planeja
-                    horários e conclui o que planejou, ele passa a medir quanto
-                    tempo seu dia terminou antes do previsto.
-                  </p>
-                </div>
               ) : (
+                /* Zero é um RESULTADO, não um estado vazio. A versão anterior
+                   escondia o número atrás de "o AXON ainda está aprendendo", e
+                   depois de uma semana de uso isso virou um card que nunca
+                   mostrava nada — ruído na tela em vez de informação. Agora o
+                   número aparece sempre; o que muda é a frase abaixo dele, que
+                   explica POR QUE está zerado. */
                 <div className={`${CHART_BOX} mx-2 mb-2`}>
                   <div className="flex items-baseline gap-2">
                     <Zap className="h-5 w-5 shrink-0 text-accent" />
                     <p className="text-2xl font-semibold text-primary">
-                      {formatSavedDuration(savedTime.saved_minutes)}
+                      {formatSavedDuration(savedTime?.saved_minutes ?? 0)}
                     </p>
                     <p className="text-xs text-muted">
                       {savedTimePeriod === "week" ? "esta semana" : "este mês"}
                     </p>
                   </div>
 
-                  {/* As duas origens do total. Aparecem só quando existem, para
+                  {/* As três origens do total. Aparecem só quando existem, para
                       um card de uma linha não virar uma lista de zeros. */}
                   <div className="mt-4 space-y-2">
-                    {savedTime.early_minutes > 0 && (
+                    {(savedTime?.early_minutes ?? 0) > 0 && (
                       <div className="flex items-baseline gap-2">
                         <span className="text-sm font-semibold text-primary">
-                          {formatSavedDuration(savedTime.early_minutes)}
+                          {formatSavedDuration(savedTime!.early_minutes)}
                         </span>
                         <span className="text-xs text-muted">
                           dias terminados antes do previsto
                         </span>
                       </div>
                     )}
-                    {savedTime.advanced_minutes > 0 && (
+                    {(savedTime?.advanced_minutes ?? 0) > 0 && (
                       <div className="flex items-baseline gap-2">
                         <span className="text-sm font-semibold text-primary">
-                          {formatSavedDuration(savedTime.advanced_minutes)}
+                          {formatSavedDuration(savedTime!.advanced_minutes)}
                         </span>
                         <span className="text-xs text-muted">
                           capacidade adiantada
                         </span>
                       </div>
                     )}
-                    {savedTime.optimization_minutes > 0 && (
+                    {(savedTime?.optimization_minutes ?? 0) > 0 && (
                       <div className="flex items-baseline gap-2">
                         <span className="text-sm font-semibold text-primary">
-                          {formatSavedDuration(savedTime.optimization_minutes)}
+                          {formatSavedDuration(savedTime!.optimization_minutes)}
                         </span>
                         <span className="text-xs text-muted">
                           reorganização feita pelo AXON
@@ -1692,19 +1687,23 @@ export default function Insights() {
                     )}
                   </div>
 
-                  {/* Esta frase não é decoração: é o que torna o número
-                      defensável quando o usuário desconfia dele. */}
+                  {/* A frase de rodapé muda com o estado. Com número > 0 ela
+                      defende o número; com zero ela explica o zero — que é a
+                      pergunta que o usuário realmente faz ao olhar o card. */}
                   <p className="mt-4 border-t border-soft pt-3 text-[0.68rem] leading-5 text-muted">
-                    O AXON nunca conta como economia o tempo de tarefas que você
-                    simplesmente não fez.
+                    {(savedTime?.saved_minutes ?? 0) > 0
+                      ? "O AXON nunca conta como economia o tempo de tarefas que você simplesmente não fez."
+                      : (savedTime?.discarded_days ?? 0) > 0
+                      ? "Nenhum dia deste período terminou antes do previsto. Dias em que o AXON não confirma o horário de término ficam fora da conta."
+                      : "Nenhum dia deste período terminou antes do previsto. Conclua o que planejou dentro do horário e o tempo devolvido aparece aqui."}
                   </p>
 
                   {/* Nota discreta, não alerta: explica um número menor do que o
                       usuário esperava em vez de deixá-lo achar que faltou dado. */}
-                  {savedTime.discarded_days > 0 && (
+                  {(savedTime?.discarded_days ?? 0) > 0 && (
                     <p className="mt-2 text-[0.68rem] leading-5 text-muted">
-                      {savedTime.discarded_days}{" "}
-                      {savedTime.discarded_days === 1 ? "dia" : "dias"} fora da
+                      {savedTime!.discarded_days}{" "}
+                      {savedTime!.discarded_days === 1 ? "dia" : "dias"} fora da
                       conta: o AXON não conseguiu confirmar a que horas você
                       terminou.
                     </p>
@@ -1750,6 +1749,9 @@ export default function Insights() {
 function formatSavedDuration(minutes: number) {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
+  // Zero é "0h", não "0min": é o número PRINCIPAL do card quando não houve
+  // economia, e "0h poupadas" lê como resultado enquanto "0min" lê como erro.
+  if (minutes === 0) return "0h";
   if (h === 0) return `${m}min`;
   if (m === 0) return `${h}h`;
   return `${h}h${String(m).padStart(2, "0")}`;
