@@ -624,6 +624,41 @@ def _period_bounds(today: date, period: str, offset: int = 0) -> tuple[date, dat
     return anchor, last
 
 
+def total_for_range(user_id: str, start: date, end: date) -> int:
+    """
+    Minutos poupados num intervalo QUALQUER — usado pelos relatórios semanais e
+    mensais, cujo período não é a semana/mês de calendário de `summary`.
+
+    Aplica exatamente as mesmas regras do card para os dois números baterem:
+    só dias de confiança alta somam `saved` e `advanced`, e o crédito de
+    otimização do AXON soma sempre (a exceção à Regra 2 do cabeçalho).
+
+    Devolve 0 em qualquer falha: um relatório não pode quebrar por causa de uma
+    métrica secundária, e o card do relatório se esconde sozinho quando é 0.
+    """
+    try:
+        res = (
+            supabase.table("day_closures")
+            .select("saved_minutes, advanced_minutes, optimization_minutes, confidence")
+            .eq("user_id", user_id)
+            .gte("date", str(start))
+            .lte("date", str(end))
+            .execute()
+        )
+        rows = res.data or []
+    except Exception as e:
+        print(f"[saved_time] total_for_range falhou user={user_id}: {e}", flush=True)
+        return 0
+
+    total = 0
+    for row in rows:
+        total += int(row.get("optimization_minutes") or 0)
+        if row.get("confidence") == CONFIDENCE_HIGH:
+            total += int(row.get("saved_minutes") or 0)
+            total += int(row.get("advanced_minutes") or 0)
+    return total
+
+
 def summary(user_id: str, tz_name: str, period: str = "week", offset: int = 0) -> dict:
     """
     O número do card: minutos poupados no período, somando SÓ os dias de

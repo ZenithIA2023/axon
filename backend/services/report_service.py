@@ -27,6 +27,7 @@ from datetime import date, datetime, timedelta
 
 from database import supabase
 from services import claude_service, daily_stats_service, routines_service
+from services import saved_time_service
 from services import user_tz as user_tz_service
 
 _NARRATOR_SYSTEM_PROMPT = """Você é o Axon, assistente pessoal de produtividade. Você recebe um resumo \
@@ -395,9 +396,18 @@ def _collect_period_data(user_id: str, start: date, end: date, tz_name: str) -> 
         "completion_delta": completion_delta,
         "completed_items": completed_items,
         "total_items": total_items,
-        # Sem fórmula validada (completed_at marca quando o usuário MARCOU, não
-        # quando terminou). O frontend esconde o card quando vem None.
-        "time_saved_minutes": None,
+        # Tempo devolvido no período, pelas MESMAS regras do card de Insights
+        # (saved_time_service). O comentário antigo aqui dizia "sem fórmula
+        # validada" e fixava None — isso valia para a métrica descartada em
+        # 2026-08, não para esta: a atual compara o fim PLANEJADO do dia com o
+        # fim real e só conta dias de confiança alta.
+        #
+        # 0 vira None para o card do relatório continuar se escondendo em vez de
+        # exibir "0h poupadas" no meio de um relatório narrativo — diferente do
+        # card de Insights, onde o zero É a informação que o usuário foi buscar.
+        "time_saved_minutes": (
+            saved_time_service.total_for_range(user_id, start, data_end) or None
+        ),
         "most_productive_day": _most_productive_day(snapshots),
         "plan_vs_real": _plan_vs_real(user_id, start, data_end),
         "objectives": _objectives_progress(user_id, start, data_end),
@@ -461,6 +471,15 @@ def generate_weekly_report(user_id: str, tz_name: str, period_start: date | None
         period_end = today
     else:
         period_start, period_end = weekly_period_for(period_start)
+
+    # Guarda de idempotência. O disparo das 20h roda dentro de uma JANELA de 15
+    # min (planning_scheduler._in_window), não num minuto exato — sem esta
+    # checagem cada rodada do scheduler dentro da janela gerava outro relatório
+    # do mesmo período. Media 10–13 duplicatas por domingo, cada uma uma chamada
+    # paga ao Claude. O catch_up já se protegia assim; o disparo pontual não.
+    if _has_report(user_id, "weekly", period_start):
+        return {}
+
     return _generate_report(user_id, "weekly", period_start, period_end, tz_name)
 
 
@@ -472,11 +491,15 @@ def generate_monthly_report(user_id: str, tz_name: str, period_start: date | Non
     """
     if period_start is not None:
         period_start, period_end = monthly_period_for(period_start)
-        return _generate_report(user_id, "monthly", period_start, period_end, tz_name)
+    else:
+        today = datetime.now(user_tz_service.zone(tz_name)).date()
+        period_start = today.replace(day=1)
+        period_end = today
 
-    today = datetime.now(user_tz_service.zone(tz_name)).date()
-    period_start = today.replace(day=1)
-    period_end = today
+    # Mesma guarda do semanal — ver o comentário em generate_weekly_report.
+    if _has_report(user_id, "monthly", period_start):
+        return {}
+
     return _generate_report(user_id, "monthly", period_start, period_end, tz_name)
 
 

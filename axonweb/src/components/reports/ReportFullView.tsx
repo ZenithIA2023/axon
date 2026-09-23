@@ -231,9 +231,10 @@ function SummarySection({
         </p>
       </div>
 
-      {/* Tempo poupado: PLACEHOLDER VISUAL. A métrica não tem fórmula
-          validada (completed_at marca quando o usuário marcou, não quando
-          terminou), então o card é rotulado como estimativa. */}
+      {/* Tempo poupado: número REAL desde 23/09/2026 (saved_time_service).
+          Antes era placeholder e o backend mandava None, então o card nunca
+          aparecia. O backend manda None quando o total é 0, para um relatório
+          narrativo não trazer "0h poupadas" como se fosse notícia. */}
       {data.time_saved_minutes != null && (
         <div className="relative mb-3 flex items-center gap-4 overflow-hidden rounded-[1.5rem] border border-purple-400/70 bg-[radial-gradient(ellipse_at_top_right,#aa27fc,#4c099d_55%,#26094d)] p-5 shadow-[inset_0_1px_0_#ffffff30]">
           <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-purple-400/35 bg-purple-500/10 text-[#cf8aff]">
@@ -247,7 +248,8 @@ function SummarySection({
               poupadas neste período
             </p>
             <p className="text-[0.68rem] text-[#bfb7d2]">
-              Estimativa de tempo poupado com automações.
+              Dias que terminaram antes do previsto, mais o que o AXON
+              reorganizou.
             </p>
           </div>
         </div>
