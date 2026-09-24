@@ -65,13 +65,37 @@ def _build_profile_response(data: dict, current_user: dict) -> ProfileResponse:
         schedule_type=data.get("schedule_type"),
         avatar_url=data.get("avatar_url"),
         has_chronotype=bool(chronotype_key),
+        calendar_setup_choice=_resolve_calendar_setup_choice(data),
     )
+
+
+CALENDAR_SETUP_CHOICES = {"google", "independent"}
+
+
+def _resolve_calendar_setup_choice(data: dict) -> str | None:
+    choice = data.get("calendar_setup_choice")
+    if choice in CALENDAR_SETUP_CHOICES:
+        return choice
+    # Usuários anteriores à Migration 35 tinham a escolha só no localStorage e
+    # nascem com a coluna NULL. Quem já tem refresh token do Google conectou de
+    # verdade — é um fato do servidor, não do navegador — então não perguntamos
+    # de novo. Nunca inferimos a partir do localStorage: o valor local pode ser
+    # justamente o herdado de outra conta, que é o bug que a migration corrige.
+    # O login com Google também grava esse token (o escopo inclui
+    # calendar.events), e o calendar_sync já o usa — então a faixa "Google
+    # Calendar selecionado" diz a verdade para esses usuários também.
+    if data.get("google_refresh_token"):
+        return "google"
+    return None
 
 
 def _fetch_profile_data(user_id: str) -> dict:
     result = (
         supabase.table("profiles")
-        .select("name, email, chronotype, schedule_type, avatar_url")
+        .select(
+            "name, email, chronotype, schedule_type, avatar_url, "
+            "calendar_setup_choice, google_refresh_token"
+        )
         .eq("id", user_id)
         .single()
         .execute()
@@ -95,6 +119,11 @@ def update_profile(body: ProfileUpdate, current_user: dict = Depends(get_current
         if not name:
             raise HTTPException(status_code=422, detail="Nome não pode ser vazio.")
         updates["name"] = name
+
+    if body.calendar_setup_choice is not None:
+        if body.calendar_setup_choice not in CALENDAR_SETUP_CHOICES:
+            raise HTTPException(status_code=400, detail="Opção de calendário inválida.")
+        updates["calendar_setup_choice"] = body.calendar_setup_choice
 
     if updates:
         supabase.table("profiles").update(updates).eq("id", user_id).execute()

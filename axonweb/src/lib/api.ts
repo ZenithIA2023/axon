@@ -9,6 +9,15 @@ const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 const SESSION_KEYS = ["axon_token", "axon_refresh_token", "axon_user", "axon_last_active"] as const;
 
+// Cache de dados da CONTA (não da sessão). Precisa sumir em toda saída de
+// sessão (logout, 401 com refresh inválido, janela de 7 dias), senão a próxima
+// conta a logar neste navegador herda o estado da anterior. Fica fora
+// de SESSION_KEYS porque aquela lista também é usada na troca de storage do
+// "manter-me conectado", onde estas chaves não devem ser movidas.
+// `axon_calendar_setup_choice` não é mais gravada (a escolha vive no perfil);
+// continua aqui para limpar o que sobrou de versões antigas.
+const ACCOUNT_CACHE_KEYS = ["axon_chronotype", "axon_calendar_setup_choice"] as const;
+
 // "Manter-me conectado" decide o storage: localStorage sobrevive ao fechar o
 // navegador, sessionStorage é apagado junto com a aba/janela.
 function isRemembered(): boolean {
@@ -20,6 +29,11 @@ function clearSessionItems() {
     localStorage.removeItem(key);
     sessionStorage.removeItem(key);
   }
+  // O cache da CONTA morre junto com a sessão, seja por logout manual, por 401
+  // com refresh inválido ou pela janela de 7 dias. Antes só o logout limpava, e
+  // uma sessão expirada deixava o cronotipo da conta anterior para a próxima
+  // que logasse neste navegador.
+  for (const key of ACCOUNT_CACHE_KEYS) localStorage.removeItem(key);
 }
 
 /**
@@ -341,7 +355,11 @@ export interface ProfileData {
   schedule_type?: string;
   avatar_url?: string;
   has_chronotype: boolean;
+  // NULL = ainda não escolheu; é o que faz a pergunta aparecer no Planning.
+  calendar_setup_choice: CalendarSetupChoice | null;
 }
+
+export type CalendarSetupChoice = "google" | "independent";
 
 export function getProfile() {
   return request<ProfileData>("/profile");
@@ -351,6 +369,15 @@ export function updateProfile(payload: { name?: string }) {
   return request<ProfileData>("/profile", {
     method: "PATCH",
     body: JSON.stringify(payload),
+  });
+}
+
+// Grava no perfil como o usuário quer usar a agenda. Antes vivia no
+// localStorage, e uma conta nova no mesmo navegador herdava a escolha.
+export function saveCalendarSetupChoice(choice: CalendarSetupChoice) {
+  return request<ProfileData>("/profile", {
+    method: "PATCH",
+    body: JSON.stringify({ calendar_setup_choice: choice }),
   });
 }
 

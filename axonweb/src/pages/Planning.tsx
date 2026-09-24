@@ -38,7 +38,7 @@ import Routines from "./Routines";
 import Goals from "./Goals";
 import * as api from "../lib/api";
 import { openAuthUrl } from "../lib/nativeAuth";
-import type { Task, TaskType, TaskStatus, Subtask, DailyStat } from "../lib/api";
+import type { Task, TaskType, TaskStatus, Subtask, DailyStat, CalendarSetupChoice } from "../lib/api";
 import { shortenedMinutes } from "../lib/api";
 import AppBackground from "../components/layout/AppBackground";
 import PageHeader from "../components/layout/PageHeader";
@@ -221,9 +221,7 @@ const monthNames = [
 
 const weekdayShort = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
-const CALENDAR_SETUP_STORAGE_KEY = "axon_calendar_setup_choice";
 const NOTIFICATIONS_PAGE_SIZE = 10;
-type CalendarSetupChoice = "google" | "independent";
 
 // ===========================================================================
 // HELPERS DE DATA E STATUS
@@ -588,16 +586,17 @@ function AgendaView({
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [carriedCount, setCarriedCount] = useState(0);
   const [isQueueOpen, setIsQueueOpen] = useState(false);
+  // A escolha vem do perfil (backend), não do navegador: no localStorage uma
+  // conta nova herdava a escolha da conta anterior. Como a resposta é
+  // assíncrona, `calendarSetupLoading` segura a tela enquanto não sabemos —
+  // sem ele a pergunta piscaria para quem já escolheu.
   const [calendarSetupChoice, setCalendarSetupChoice] =
-    useState<CalendarSetupChoice | null>(() => {
-      const stored = localStorage.getItem(CALENDAR_SETUP_STORAGE_KEY);
-
-      if (stored === "google" || stored === "independent") {
-        return stored;
-      }
-
-      return null;
-    });
+    useState<CalendarSetupChoice | null>(null);
+  const [calendarSetupLoading, setCalendarSetupLoading] = useState(true);
+  // Se o perfil não carregou, não sabemos se a pessoa já escolheu. Mostrar a
+  // pergunta nesse caso seria perguntar de novo a quem já respondeu; o
+  // calendário aparece sem as faixas e a pergunta volta no próximo carregamento.
+  const [calendarSetupLoadFailed, setCalendarSetupLoadFailed] = useState(false);
   const [isConnectingCalendar, setIsConnectingCalendar] = useState(false);
   const [calendarConnectError, setCalendarConnectError] =
     useState<string | null>(null);
@@ -652,6 +651,28 @@ function AgendaView({
       setLoading(false);
     }
   }, [loadSubtasks]);
+
+  useEffect(() => {
+    // A chave antiga ficou no navegador de quem já usava o app. Ela não é mais
+    // lida (a escolha vive no perfil); remover só evita deixar lixo para trás.
+    localStorage.removeItem("axon_calendar_setup_choice");
+
+    let cancelled = false;
+    api.getProfile()
+      .then((profile) => {
+        if (!cancelled) setCalendarSetupChoice(profile.calendar_setup_choice ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setCalendarSetupLoadFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setCalendarSetupLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     // Primeiro arrasta pendentes de ontem, depois carrega a lista atualizada
@@ -890,16 +911,20 @@ function AgendaView({
     setIsConnectingCalendar(true);
     setCalendarConnectError(null);
 
+    const previous = calendarSetupChoice;
     try {
       const { auth_url } = await api.connectGoogleCalendar();
 
-      localStorage.setItem(CALENDAR_SETUP_STORAGE_KEY, "google");
+      // Grava ANTES de abrir o Google: na web o navegador sai da página e
+      // nada depois do openAuthUrl roda.
       setCalendarSetupChoice("google");
+      await api.saveCalendarSetupChoice("google");
       // A URL já vem pronta do backend (com o state) e aponta para o Google;
       // aqui só decidimos ONDE abrir. A plataforma já foi informada na chamada
       // /connect acima, por isso markPlatform: false.
       await openAuthUrl(auth_url, { markPlatform: false });
     } catch (e) {
+      setCalendarSetupChoice(previous);
       setCalendarConnectError(
         e instanceof Error
           ? e.message
@@ -909,11 +934,25 @@ function AgendaView({
     }
   }
 
-  function handleUseIndependentCalendar() {
-    localStorage.setItem(CALENDAR_SETUP_STORAGE_KEY, "independent");
+  async function handleUseIndependentCalendar() {
+    const previous = calendarSetupChoice;
     setCalendarSetupChoice("independent");
     setCalendarConnectError(null);
+
+    try {
+      await api.saveCalendarSetupChoice("independent");
+    } catch (e) {
+      // Volta a pergunta com o erro: a escolha não foi salva na conta e, sem
+      // isto, sumiria no próximo carregamento sem ninguém entender por quê.
+      setCalendarSetupChoice(previous);
+      setCalendarConnectError(
+        e instanceof Error ? e.message : "Não foi possível salvar sua escolha."
+      );
+    }
   }
+
+  const showCalendarSetup =
+    !calendarSetupLoading && !calendarSetupLoadFailed && !calendarSetupChoice;
 
   // Conteúdo principal da agenda, compartilhado entre modo embutido e página própria.
   const inner = (
@@ -942,13 +981,18 @@ function AgendaView({
               Calendário Diário
             </h1>
             <p className="mt-1 text-sm text-muted">
-              {calendarSetupChoice
-                ? "Suas tarefas, eventos e rotinas do dia de hoje"
-                : "Escolha como deseja usar sua agenda no Axon"}
+              {showCalendarSetup
+                ? "Escolha como deseja usar sua agenda no Axon"
+                : "Suas tarefas, eventos e rotinas do dia de hoje"}
             </p>
           </div>
 
-          {!calendarSetupChoice ? (
+          {calendarSetupLoading ? (
+            <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-muted">
+              <Loader2 className="h-4 w-4 animate-spin text-accent" />
+              Carregando planejamento…
+            </div>
+          ) : showCalendarSetup ? (
             <CalendarSetupCard
               isConnecting={isConnectingCalendar}
               error={calendarConnectError}
@@ -1215,7 +1259,8 @@ function AgendaView({
           progress={progress}
           completedItems={completedItems}
           totalItems={totalItems}
-          calendarSetupChoice={calendarSetupChoice}
+          calendarSetupLoading={calendarSetupLoading}
+          showCalendarSetup={showCalendarSetup}
           isConnectingCalendar={isConnectingCalendar}
           calendarConnectError={calendarConnectError}
           onSelectDate={setSelectedDate}
@@ -1351,7 +1396,8 @@ function DesktopAgendaExperience({
   progress,
   completedItems,
   totalItems,
-  calendarSetupChoice,
+  calendarSetupLoading,
+  showCalendarSetup,
   isConnectingCalendar,
   calendarConnectError,
   onSelectDate,
@@ -1384,7 +1430,8 @@ function DesktopAgendaExperience({
   progress: number;
   completedItems: number;
   totalItems: number;
-  calendarSetupChoice: CalendarSetupChoice | null;
+  calendarSetupLoading: boolean;
+  showCalendarSetup: boolean;
   isConnectingCalendar: boolean;
   calendarConnectError: string | null;
   onSelectDate: (date: Date) => void;
@@ -1492,7 +1539,7 @@ function DesktopAgendaExperience({
               </div>
             </div>
 
-            {!calendarSetupChoice ? (
+            {showCalendarSetup ? (
               <div className="flex min-h-0 flex-1 items-center justify-center p-8">
                 <div className="w-full max-w-xl">
                   <CalendarSetupCard
@@ -1503,7 +1550,7 @@ function DesktopAgendaExperience({
                   />
                 </div>
               </div>
-            ) : loading ? (
+            ) : loading || calendarSetupLoading ? (
               <div className="flex min-h-0 flex-1 items-center justify-center gap-2 text-sm text-muted">
                 <Loader2 className="h-4 w-4 animate-spin text-accent" />
                 Carregando planejamento…
