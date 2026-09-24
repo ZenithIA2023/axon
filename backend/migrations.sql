@@ -1232,3 +1232,26 @@ comment on column public.tasks.planned_start_time is
 create index if not exists subtasks_task_done_at_idx
   on public.subtasks(task_id, done_at)
   where done_at is not null;
+
+-- =============================================
+-- Migration 35: a escolha do calendário pertence à CONTA, não ao navegador
+-- =============================================
+-- A opção entre vincular o Google Calendar e usar o calendário independente
+-- vivia em localStorage (`axon_calendar_setup_choice`). O localStorage é do
+-- navegador: uma conta nova criada na mesma máquina herdava a escolha da conta
+-- anterior e via "Google Calendar selecionado" sem nunca ter conectado nada, e
+-- o mesmo usuário em outro aparelho era perguntado de novo.
+--
+-- NULL = o usuário ainda não escolheu; é o estado que faz a pergunta aparecer.
+alter table public.profiles
+  add column if not exists calendar_setup_choice text;
+
+alter table public.profiles
+  drop constraint if exists profiles_calendar_setup_choice_check;
+
+alter table public.profiles
+  add constraint profiles_calendar_setup_choice_check
+  check (calendar_setup_choice in ('google', 'independent'));
+
+comment on column public.profiles.calendar_setup_choice is
+  'Como o usuário optou por usar a agenda: google, independent ou NULL (ainda não escolheu).';

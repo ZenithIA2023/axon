@@ -103,20 +103,60 @@ Publique como **"Não listado"** e guarde o link.
 Na tela de permissão OAuth → **Publicar aplicativo** → **Preparar para
 verificação**. Justificativa sugerida para o escopo `calendar.events`:
 
+> ⚠️ A justificativa abaixo foi reescrita em 24/09/2026. A versão anterior
+> afirmava que o Axon LÊ os eventos do usuário para evitar conflitos de horário.
+> Isso não corresponde ao código: `google_service.py` tem apenas POST, PATCH e
+> DELETE de evento — não existe nenhum GET, e `calendar_sync.py` só sincroniza
+> no sentido Axon → Google. Declarar leitura numa verificação de escopo sensível
+> sem implementá-la é o tipo de erro que o revisor confirma em um minuto.
+> O plano para implementar a leitura está em
+> `docs/PROMPT_LEITURA_AGENDA_GOOGLE.md`; o texto abaixo diz "atualmente" de
+> propósito, para não precisar ser retificado quando isso acontecer.
+
 ```
-O Axon é um assistente de produtividade que ajuda o usuário a organizar suas
-tarefas respeitando sua rotina e seus compromissos já existentes.
+O Axon é um assistente de produtividade que ajuda o usuário a planejar suas
+tarefas respeitando seu cronotipo e sua rotina.
 
-O escopo calendar.events é usado para:
-1. Ler os eventos do usuário, para que o planejamento diário não sugira tarefas
-   em horários já ocupados por compromissos reais.
-2. Criar e atualizar eventos quando o próprio usuário agenda uma tarefa pelo
-   Axon, mantendo sua agenda como fonte única de verdade.
+O escopo calendar.events é usado para manter o Google Agenda do usuário
+sincronizado com o planejamento que ele faz dentro do Axon:
 
-O acesso é sempre iniciado pelo usuário, que conecta a agenda voluntariamente
-nas configurações e pode desconectar a qualquer momento. Nenhum dado da agenda
-é vendido, usado para publicidade ou compartilhado com terceiros além do
-processamento necessário para as funcionalidades descritas.
+1. Criar um evento no Google Agenda quando o usuário agenda uma tarefa no Axon,
+   para que ele veja seus compromissos no mesmo lugar onde já os consulta.
+2. Atualizar o evento correspondente quando o usuário altera o horário, o título
+   ou a descrição da tarefa no Axon.
+3. Remover o evento quando a tarefa é excluída, para que a agenda não acumule
+   compromissos que não existem mais.
+
+Atualmente a sincronização ocorre do Axon para o Google Agenda, e apenas sobre
+os eventos que o próprio Axon criou a partir das tarefas do usuário.
+
+O acesso é sempre iniciado pelo usuário, que vincula a agenda voluntariamente e
+pode desconectá-la a qualquer momento. Nenhum dado da agenda é vendido, usado
+para publicidade ou compartilhado com terceiros.
+```
+
+Versão em inglês, caso o formulário exija:
+
+```
+Axon is a productivity assistant that helps users plan their tasks according to
+their chronotype and daily routine.
+
+The calendar.events scope is used to keep the user's Google Calendar in sync
+with the schedule they build inside Axon:
+
+1. Create an event in Google Calendar when the user schedules a task in Axon, so
+   their commitments appear in the calendar they already use.
+2. Update the corresponding event when the user changes the task's time, title
+   or description in Axon.
+3. Delete the event when the task is removed, so the calendar does not accumulate
+   commitments that no longer exist.
+
+Currently the synchronization runs from Axon to Google Calendar, and only covers
+events that Axon itself created from the user's tasks.
+
+Access is always initiated by the user, who links the calendar voluntarily and
+can disconnect it at any time. No calendar data is sold, used for advertising or
+shared with third parties.
 ```
 
 ---

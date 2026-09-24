@@ -57,10 +57,14 @@ class ProfileResponse(BaseModel):
     schedule_type: Optional[str] = None
     avatar_url: Optional[str] = None
     has_chronotype: bool = False
+    # "google" | "independent" | None (ainda não escolheu). Migration 35.
+    calendar_setup_choice: Optional[str] = None
 
 
 class ProfileUpdate(BaseModel):
     name: Optional[str] = None
+    # None = não mexer. Não existe "desfazer a escolha" pelo PATCH.
+    calendar_setup_choice: Optional[str] = None
 
 
 # --- Tag preferences ---
