@@ -173,6 +173,27 @@ def exchange_code(code: str) -> dict:
     return resp.json()
 
 
+def revoke_token(refresh_token: str) -> None:
+    """
+    Invalida a autorização no Google (não só no nosso banco).
+
+    Sem isto, "desconectar" apagaria o token daqui mas a concessão continuaria
+    ativa na conta do usuário, e o app seguiria listado em
+    myaccount.google.com/permissions como se tivesse acesso. Quem desconecta
+    espera que o acesso acabe de verdade.
+
+    Sem raise_for_status de propósito: token já expirado ou já revogado devolve
+    400, e isso não pode impedir ninguém de desconectar. Quem chama trata como
+    best-effort.
+    """
+    with httpx.Client() as client:
+        client.post(
+            "https://oauth2.googleapis.com/revoke",
+            data={"token": refresh_token},
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+
+
 def get_user_info(access_token: str) -> dict:
     with httpx.Client() as client:
         resp = client.get(

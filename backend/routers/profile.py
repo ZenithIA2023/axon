@@ -66,6 +66,7 @@ def _build_profile_response(data: dict, current_user: dict) -> ProfileResponse:
         avatar_url=data.get("avatar_url"),
         has_chronotype=bool(chronotype_key),
         calendar_setup_choice=_resolve_calendar_setup_choice(data),
+        google_connected=bool(data.get("google_refresh_token")),
     )
 
 
