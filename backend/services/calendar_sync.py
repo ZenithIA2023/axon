@@ -87,6 +87,48 @@ def _get_sync_profile(user_id: str) -> tuple[str | None, str]:
     return data.get("google_refresh_token"), user_tz.normalize(data.get("timezone")) or user_tz.DEFAULT_TZ
 
 
+def disconnect(user_id: str) -> None:
+    """
+    Desconecta o Google Agenda do usuário: revoga no Google e apaga o token.
+
+    Os eventos que o Axon já criou PERMANECEM na agenda — são compromissos reais
+    do usuário, e apagar dezenas deles como efeito colateral de "desconectar"
+    seria destrutivo. Por isso `tasks.google_event_id` também fica: sem refresh
+    token o `_sync` retorna cedo e não chama o Google, e se o usuário reconectar
+    a MESMA conta os ids continuam válidos.
+
+    Limitação conhecida: reconectar uma conta Google DIFERENTE deixa os
+    `google_event_id` antigos apontando para eventos que não existem nela. As
+    atualizações dessas tarefas falham em silêncio (o `_sync` engole exceções
+    de propósito). Não tratado por enquanto.
+
+    Idempotente: sem token, só grava o estado final.
+    """
+    res = (
+        supabase.table("profiles")
+        .select("google_refresh_token")
+        .eq("id", user_id)
+        .single()
+        .execute()
+    )
+    refresh_token = (res.data or {}).get("google_refresh_token")
+
+    if refresh_token:
+        try:
+            google_service.revoke_token(refresh_token)
+        except Exception:
+            # O usuário pediu para desconectar; deixar o token gravado porque o
+            # Google não respondeu seria o pior dos dois mundos (continuaríamos
+            # sincronizando contra a vontade dele). Apagar daqui é o que importa.
+            pass
+
+    # "independent", não NULL: NULL é "ainda não escolheu" e faria a pergunta
+    # do Planning reaparecer. Quem desconecta escolheu não usar o Google.
+    supabase.table("profiles").update(
+        {"google_refresh_token": None, "calendar_setup_choice": "independent"}
+    ).eq("id", user_id).execute()
+
+
 def _sync(user_id: str, task: dict, action: str) -> None:
     """Executado dentro da thread. Best-effort, engole erros."""
     try:

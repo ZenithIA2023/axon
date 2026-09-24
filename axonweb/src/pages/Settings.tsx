@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ElementType, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ElementType, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -24,6 +24,7 @@ import { results, type ChronotypeResultKey } from "../data/results";
 import Sidebar from "../components/layout/Sidebar";
 import * as api from "../lib/api";
 import * as push from "../lib/push";
+import { openAuthUrl } from "../lib/nativeAuth";
 import { AppBackground } from "../components/layout/AppBackground";
 import PageHeader from "../components/layout/PageHeader";
 import ConfirmDialog from "../components/ui/ConfirmDialog";
@@ -83,6 +84,15 @@ export default function Settings() {
   const [showDeleteFirstModal, setShowDeleteFirstModal] = useState(false);
   const [showDeleteFinalModal, setShowDeleteFinalModal] = useState(false);
 
+  // Google Agenda: null enquanto o perfil não chegou (a linha não afirma nada
+  // que ainda não sabemos).
+  const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
+  const [showDisconnectGoogleModal, setShowDisconnectGoogleModal] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const [googleError, setGoogleError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<number | null>(null);
+
   const [silentMode, setSilentMode] = useState(true);
   const [dailyPlanningNotifications, setDailyPlanningNotifications] =
     useState(true);
@@ -141,9 +151,67 @@ export default function Settings() {
       .then((profile) => {
         setUserName(profile.name || "Usuário");
         setUserEmail(profile.email);
+        setGoogleConnected(profile.google_connected);
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    };
+  }, []);
+
+  function showToast(message: string) {
+    setToast(message);
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(null), 2800);
+  }
+
+  async function handleDisconnectGoogle() {
+    if (googleBusy) return;
+    setGoogleBusy(true);
+    setGoogleError(null);
+
+    try {
+      const profile = await api.disconnectGoogleCalendar();
+      setGoogleConnected(profile.google_connected);
+      setShowDisconnectGoogleModal(false);
+      showToast("Google Agenda desconectado");
+    } catch (e) {
+      // O estado só muda com a resposta do servidor: se a chamada falhou, a
+      // conta continua conectada e a linha não pode dizer o contrário.
+      setShowDisconnectGoogleModal(false);
+      setGoogleError(
+        e instanceof Error ? e.message : "Não foi possível desconectar o Google Agenda."
+      );
+    } finally {
+      setGoogleBusy(false);
+    }
+  }
+
+  // Sem conexão, a linha inicia a vinculação aqui mesmo. Levar ao Planning não
+  // resolveria: quem já escolheu (ou desconectou) vê lá só a faixa do calendário
+  // independente, que diz justamente que a conexão se faz pelas configurações.
+  // O callback do backend grava a escolha "google" ao concluir; se a pessoa
+  // desistir no meio, nada muda.
+  async function handleConnectGoogle() {
+    if (googleBusy) return;
+    setGoogleBusy(true);
+    setGoogleError(null);
+
+    try {
+      const { auth_url } = await api.connectGoogleCalendar();
+      // A plataforma já foi informada na chamada /connect acima.
+      await openAuthUrl(auth_url, { markPlatform: false });
+    } catch (e) {
+      setGoogleError(
+        e instanceof Error ? e.message : "Não foi possível iniciar a conexão com o Google Agenda."
+      );
+    } finally {
+      setGoogleBusy(false);
+    }
+  }
 
   const resultKey = useMemo<ChronotypeResultKey>(() => {
     const stored = localStorage.getItem("axon_chronotype");
@@ -257,9 +325,27 @@ export default function Settings() {
               <SettingRow
                 icon={Link2}
                 title="Integrações"
-                description="Calendário, tarefas e ferramentas externas."
-                value="Em breve"
+                description="Google Agenda: suas tarefas viram eventos na sua agenda."
+                value={
+                  googleConnected === null
+                    ? undefined
+                    : googleConnected
+                      ? "Conectado"
+                      : "Não conectado"
+                }
+                onClick={
+                  googleConnected === null || googleBusy
+                    ? undefined
+                    : googleConnected
+                      ? () => setShowDisconnectGoogleModal(true)
+                      : handleConnectGoogle
+                }
               />
+              {googleError && (
+                <p role="alert" className="px-1 text-xs leading-5 text-red-600 dark:text-red-200">
+                  {googleError}
+                </p>
+              )}
 
               <SettingRow
                 icon={Shield}
@@ -351,6 +437,18 @@ export default function Settings() {
       />
 
       <ConfirmDialog
+        isOpen={showDisconnectGoogleModal}
+        title="Desconectar o Google Agenda?"
+        description="O Axon deixará de criar e atualizar eventos na sua agenda. Os eventos já criados permanecem no Google Agenda."
+        confirmLabel="Desconectar"
+        variant="danger"
+        icon={Link2}
+        loading={googleBusy}
+        onConfirm={handleDisconnectGoogle}
+        onClose={() => setShowDisconnectGoogleModal(false)}
+      />
+
+      <ConfirmDialog
         isOpen={showDeleteFirstModal}
         title="Excluir sua conta?"
         description="Essa ação é permanente e removerá seu acesso ao Axon."
@@ -407,6 +505,15 @@ export default function Settings() {
         }
         onClose={() => setNotifSettingsOpen(false)}
       />
+
+      {toast && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[120] flex justify-center px-4">
+          <div className="flex items-center gap-2 rounded-full border border-soft bg-surface-elevated px-4 py-2.5 text-sm font-medium text-primary shadow-soft backdrop-blur-xl">
+            <Check className="h-4 w-4 text-accent" />
+            {toast}
+          </div>
+        </div>
+      )}
     </main>
   );
 }

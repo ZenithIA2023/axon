@@ -1004,8 +1004,8 @@ function AgendaView({
               {calendarSetupChoice === "independent" && (
                 <div className="mb-4 rounded-[1.4rem] border border-soft bg-surface-muted p-3">
                   <p className="text-xs leading-5 text-muted">
-                    Você está usando o calendário independente do Axon. Depois será
-                    possível conectar o Google Calendar pelas configurações.
+                    Você está usando o calendário independente do Axon. Se quiser,
+                    conecte o Google Calendar em Configurações &gt; Integrações.
                   </p>
                 </div>
               )}

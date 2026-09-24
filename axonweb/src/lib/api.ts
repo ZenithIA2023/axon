@@ -214,6 +214,12 @@ export function connectGoogleCalendar() {
   return request<{ auth_url: string }>(withPlatform("/auth/google/connect"));
 }
 
+// Desconecta o Google Agenda: o backend revoga no Google e apaga o token. Os
+// eventos já criados permanecem na agenda. Devolve o perfil atualizado.
+export function disconnectGoogleCalendar() {
+  return request<ProfileData>("/auth/google/connection", { method: "DELETE" });
+}
+
 export function refreshSession(refreshToken: string) {
   return request<AuthResponse>("/auth/refresh", {
     method: "POST",
@@ -357,6 +363,8 @@ export interface ProfileData {
   has_chronotype: boolean;
   // NULL = ainda não escolheu; é o que faz a pergunta aparecer no Planning.
   calendar_setup_choice: CalendarSetupChoice | null;
+  // Só o booleano: o refresh token do Google nunca sai do backend.
+  google_connected: boolean;
 }
 
 export type CalendarSetupChoice = "google" | "independent";

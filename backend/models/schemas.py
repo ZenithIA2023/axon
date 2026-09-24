@@ -59,6 +59,8 @@ class ProfileResponse(BaseModel):
     has_chronotype: bool = False
     # "google" | "independent" | None (ainda não escolheu). Migration 35.
     calendar_setup_choice: Optional[str] = None
+    # Só o booleano; o refresh token nunca sai do backend.
+    google_connected: bool = False
 
 
 class ProfileUpdate(BaseModel):
