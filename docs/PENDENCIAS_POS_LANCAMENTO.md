@@ -10,8 +10,8 @@ Convenção: **[B]** Bernardo, **[F]** frontend (colega), **[BF]** os dois, **[V
 
 Bloqueiam uma experiência confiável. Fazer antes de divulgar.
 
-- [ ] **[B] Recuperação de senha de verdade (SEC-002).** As telas `ForgotPassword` e `ResetPassword` simulam sucesso e não fazem nada. Passos: registrar `https://axonapp.tech/reset-password` em Supabase → Authentication → URL Configuration → Redirect URLs; criar `POST /auth/forgot-password` (usa `supabase_auth.auth.reset_password_for_email`) e `POST /auth/reset-password` (usa `admin.update_user_by_id`); ligar as duas telas. Enquanto não existir, o mínimo honesto é a tela avisar que a recuperação ainda não está disponível.
-- [ ] **[B] Página de Termos de Uso.** O link no cadastro aponta para `#`. Falta o texto. Quando existir, salvar em `axonweb/public/legal/termos.html` e apontar o link em `Signup.tsx`.
+- [ ] **[B] Recuperação de senha (SEC-002) — validada no Codespace em 25/09/2026, falta o deploy.** Endpoints e telas prontos; Site URL e Redirect URLs configuradas no Supabase; SMTP próprio via Resend (`noreply@axonapp.tech`, domínio verificado). Testado pelo Bernardo com 2 contas (uma fora da equipe do Supabase): e-mail chega, senha nova entra, antiga não. Depois do deploy, repetir pedir link → trocar → entrar em `https://axonapp.tech`.
+- [ ] **[B] Página de Termos de Uso.** Rascunho criado em `axonweb/public/legal/termos.html` e link do cadastro ligado. Falta o Bernardo revisar o texto e decidir os pontos deixados como comentário HTML no topo da página (foro e data; idade já decidida: 13+, com autorização dos pais até 17; CNPJ ainda não existe) e fazer o deploy do site.
 - [ ] **[VPS] Conferir o `.env` de produção.** Precisa ter `ENV=production` e `FRONTEND_URL=https://axonapp.tech`. Se `ENV` estiver como `development`, o `/docs` fica aberto e o CORS aceita qualquer Codespace.
   ```
   grep -E "^(ENV|FRONTEND_URL|CORS_ORIGINS)=" /opt/axon-app/backend/.env

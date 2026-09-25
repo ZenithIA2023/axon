@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 
 import AuthGlow from "../components/auth/AuthGlow";
+import * as api from "../lib/api";
 
 // ===========================================================================
 // PÁGINA — ESQUECI MINHA SENHA
@@ -32,12 +33,14 @@ export default function ForgotPassword() {
     setLoading(true);
 
     try {
-      // Exemplo futuro: await api.forgotPassword(email);
-      await new Promise((resolve) => setTimeout(resolve, 900));
-
+      await api.forgotPassword(email.trim());
       setSent(true);
     } catch {
-      setError("Não foi possível enviar o link. Tente novamente.");
+      // Só chega aqui por rede ou pelo limite de tentativas (3 por hora): o
+      // backend nunca diz se o e-mail existe, e esta mensagem também não.
+      setError(
+        "Não foi possível enviar o link agora. Aguarde alguns minutos e tente novamente."
+      );
     } finally {
       setLoading(false);
     }
@@ -162,9 +165,9 @@ function SentConfirmationState({
 
         <div className="mt-5 rounded-2xl border border-[#7b2cbf]/20 bg-[#fbf8ff] p-4 dark:border-white/10 dark:bg-[#191722]">
           <p className="text-[0.68rem] leading-5 text-[#6d28d9] dark:text-[#d8b4fe]/68 dark:text-white/62">
-            Enviamos as instruções para{" "}
-            <span className="font-black text-[#6d28d9] dark:text-[#d8b4fe]">{email}</span>.
-            Verifique também sua caixa de spam ou promoções.
+            Confira a caixa de entrada de{" "}
+            <span className="font-black text-[#6d28d9] dark:text-[#d8b4fe]">{email}</span>,
+            e também o spam e as promoções. O link expira em pouco tempo.
           </p>
         </div>
       </div>

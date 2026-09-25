@@ -14,6 +14,12 @@ import {
 import GoogleAuthButton from "../components/auth/GoogleAuthButton";
 import AuthGlow from "../components/auth/AuthGlow";
 import * as api from "../lib/api";
+import { isNative } from "../lib/nativeAuth";
+
+// Na web, as páginas legais saem do próprio site (assim o link funciona também
+// no dev e no preview, antes do deploy). No app, a WebView serve o bundle em
+// localhost e abriria a página por cima do cadastro; lá vai o endereço público.
+const LEGAL_BASE = isNative() ? "https://axonapp.tech" : "";
 
 // ===========================================================================
 // CAMPOS DO FORMULÁRIO
@@ -234,12 +240,17 @@ export default function Signup() {
 
               <span className="text-[0.62rem] leading-4 text-[#6d28d9] dark:text-[#d8b4fe]/68 dark:text-white/62">
                 Li e concordo com os{" "}
-                <a href="#" className="font-black text-[#6d28d9] dark:text-[#d8b4fe] hover:text-[#7b2cbf] dark:text-[#d8b4fe]">
+                <a
+                  href={`${LEGAL_BASE}/legal/termos.html`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-black text-[#6d28d9] dark:text-[#d8b4fe] hover:text-[#7b2cbf] dark:text-[#d8b4fe]"
+                >
                   Termos de Uso
                 </a>{" "}
                 e a{" "}
                 <a
-                  href="https://axonapp.tech/legal/privacidade.html"
+                  href={`${LEGAL_BASE}/legal/privacidade.html`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="font-black text-[#6d28d9] dark:text-[#d8b4fe] hover:text-[#7b2cbf] dark:text-[#d8b4fe]"

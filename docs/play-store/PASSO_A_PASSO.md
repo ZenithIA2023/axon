@@ -222,7 +222,9 @@ Dá para fazer no Canva. **Sem texto pequeno** — ele aparece reduzido.
 3. **Classificação de conteúdo**: responda o questionário. Para o Axon são
    "não" para violência, sexo, drogas e jogos. **Declare que o app tem
    interação com IA generativa.**
-4. **Público-alvo**: 18+ (evita as exigências extras de apps para crianças)
+4. **Público-alvo**: marque **13–15, 16–17 e 18+** (nunca faixas abaixo de 13,
+   que colocam o app nas exigências do programa Famílias). Os Termos e a
+   Política aceitam adolescentes a partir de 13 com autorização dos pais.
 5. **Segurança dos dados**: use as respostas de `DATA_SAFETY.md`
 6. **Acesso ao app**: marque "Todas as funcionalidades exigem login" e informe
    a conta de teste do passo 5, com estas instruções:

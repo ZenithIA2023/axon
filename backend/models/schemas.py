@@ -23,6 +23,20 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    access_token: str = Field(max_length=4_000)
+    # 72 é o limite do bcrypt: acima disso a senha é truncada em silêncio.
+    password: str = Field(min_length=6, max_length=72)
+
+
+class MessageResponse(BaseModel):
+    message: str
+
+
 class AuthResponse(BaseModel):
     access_token: str
     refresh_token: str
