@@ -92,7 +92,14 @@ imune, mas trabalhamos para proteger seus dados.
 ## Menores de idade
 
 O Axon não se destina a menores de 13 anos, e não coletamos dados de crianças
-conscientemente.
+conscientemente. Se soubermos que uma conta pertence a alguém com menos de 13
+anos, ela será excluída.
+
+Adolescentes de 13 a 17 anos podem usar o Axon com a autorização dos pais ou do
+responsável legal. Os dados deles são tratados apenas para o funcionamento do
+app, no melhor interesse do adolescente, e nunca para publicidade. Pais e
+responsáveis podem pedir acesso aos dados ou a exclusão da conta pelo e-mail
+equipe.zenith2023@gmail.com.
 
 ## Mudanças
 

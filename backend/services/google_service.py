@@ -11,7 +11,23 @@ SCOPES = " ".join([
     "https://www.googleapis.com/auth/calendar.events",
 ])
 
-_STATE_TTL = 600    # 10 min para o usuário completar o login no Google
+_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events"
+
+
+def granted_calendar(tokens: dict) -> bool:
+    """
+    O usuário concedeu o acesso à agenda?
+
+    O Google mostra o escopo do calendário como uma caixa SEPARADA na tela de
+    consentimento, e o login conclui normalmente com ela desmarcada — devolvendo
+    um refresh token válido só para os escopos básicos. Guardar esse token como
+    se fosse conexão de agenda faz o app dizer "Conectado" e sincronizar contra
+    um 403 silencioso.
+    """
+    return _CALENDAR_SCOPE in (tokens.get("scope") or "").split()
+
+
+_STATE_TTL = 600   # 10 min para o usuário completar o login no Google
 _SESSION_TTL = 300  # 5 min para o frontend trocar o código pelos tokens
 
 _pending_states: dict[str, tuple[str, float]] = {}       # state -> (plataforma, timestamp)

@@ -202,6 +202,33 @@ export function login(email: string, password: string) {
   });
 }
 
+export interface MessageResponse {
+  message: string;
+}
+
+// Público (sem login). O backend responde a mesma coisa exista ou não a conta,
+// para não revelar quem tem cadastro — a tela também não deve distinguir.
+export function forgotPassword(email: string) {
+  return request<MessageResponse>("/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+// `accessToken` é o token do link de recuperação, não o da sessão guardada.
+// Token inválido volta 400 (nunca 401), então o request() não força logout.
+export async function resetPassword(accessToken: string, password: string) {
+  const res = await request<MessageResponse>("/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ access_token: accessToken, password }),
+  });
+  // A troca de senha encerra TODAS as sessões no Supabase. Uma sessão antiga
+  // guardada neste navegador já não vale; apagá-la evita que o login tente
+  // usá-la e pisque o dashboard antes de cair no 401.
+  clearSessionItems();
+  return res;
+}
+
 // Usado no callback do Google para transformar o code em sessão do AXON.
 export function exchangeGoogleSession(code: string) {
   return request<AuthResponse>(`/auth/google/session?code=${encodeURIComponent(code)}`);

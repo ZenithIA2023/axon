@@ -6,9 +6,10 @@ import {
   useState,
 } from "react";
 import type { CSSProperties, ElementType, ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
+  AlertCircle,
   Bell,
   CalendarDays,
   CheckCircle2,
@@ -18,6 +19,7 @@ import {
   Circle,
   Clock,
   Edit3,
+  Info,
   ListTodo,
   Loader2,
   Plus,
@@ -548,6 +550,51 @@ export default function Planning({
 // ===========================================================================
 // VISÃO DE AGENDA
 // ===========================================================================
+// Aviso ao voltar do fluxo "conectar agenda": o backend redireciona para
+// /planning?google=connected|denied|error. Recusar a permissão é escolha
+// legítima, não falha — por isso "denied" tem tom informativo, não de erro.
+type GoogleReturnNotice = {
+  tone: "success" | "info" | "danger";
+  text: string;
+};
+
+function googleReturnNotice(code: string | null): GoogleReturnNotice | null {
+  switch (code) {
+    case "connected":
+      return {
+        tone: "success",
+        text: "Google Calendar conectado. As próximas tarefas com horário vão aparecer na sua agenda.",
+      };
+    case "denied":
+      return {
+        tone: "info",
+        text: "Você não autorizou o acesso à agenda. O Axon segue funcionando com o calendário independente — dá para conectar depois nas Configurações.",
+      };
+    case "error":
+      return {
+        tone: "danger",
+        text: "Não foi possível conectar o Google Calendar. Tente de novo em Configurações > Integrações.",
+      };
+    default:
+      return null;
+  }
+}
+
+const GOOGLE_NOTICE_STYLE: Record<
+  GoogleReturnNotice["tone"],
+  { box: string; icon: ElementType }
+> = {
+  success: {
+    box: "border-[var(--success)]/30 text-[var(--success)]",
+    icon: CheckCircle2,
+  },
+  info: { box: "border-accent-soft text-accent", icon: Info },
+  danger: {
+    box: "border-[var(--danger)]/30 text-[var(--danger)]",
+    icon: AlertCircle,
+  },
+};
+
 // Pode funcionar embutida no hub ou como página independente.
 function AgendaView({
   embedded = false,
@@ -582,6 +629,14 @@ function AgendaView({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Lido no estado inicial, não num efeito: o hub monta duas AgendaView
+  // (celular e desktop) e a primeira a limpar a URL apagaria o código antes de
+  // a outra ler. useSearchParams porque no app (HashRouter) a query fica
+  // depois do "#", onde location.search não enxerga.
+  const [googleNotice, setGoogleNotice] = useState<GoogleReturnNotice | null>(
+    () => googleReturnNotice(searchParams.get("google"))
+  );
   const toastTimer = useRef<number | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [carriedCount, setCarriedCount] = useState(0);
@@ -651,6 +706,21 @@ function AgendaView({
       setLoading(false);
     }
   }, [loadSubtasks]);
+
+  // Tira o ?google= da URL para o aviso não voltar ao recarregar a página.
+  useEffect(() => {
+    if (!searchParams.has("google")) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete("google");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  // Some sozinho depois de um tempo, mas é longo o bastante para ler a frase.
+  useEffect(() => {
+    if (!googleNotice) return;
+    const timer = window.setTimeout(() => setGoogleNotice(null), 9000);
+    return () => window.clearTimeout(timer);
+  }, [googleNotice]);
 
   useEffect(() => {
     // A chave antiga ficou no navegador de quem já usava o app. Ela não é mais
@@ -1227,6 +1297,32 @@ function AgendaView({
           onToggle={handleToggleDone}
         />
       )}
+
+      {googleNotice && (() => {
+        const style = GOOGLE_NOTICE_STYLE[googleNotice.tone];
+        const Icon = style.icon;
+        return (
+          <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[120] flex justify-center px-4">
+            <div
+              role="status"
+              className={`pointer-events-auto flex w-full max-w-[400px] items-start gap-3 rounded-2xl border bg-surface-elevated px-4 py-3 shadow-soft backdrop-blur-xl ${style.box}`}
+            >
+              <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+              <p className="flex-1 text-sm font-medium leading-5">
+                {googleNotice.text}
+              </p>
+              <button
+                type="button"
+                onClick={() => setGoogleNotice(null)}
+                className="shrink-0 opacity-60 transition active:scale-95"
+                aria-label="Fechar aviso"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {toast && (
         <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[120] flex justify-center px-4">
