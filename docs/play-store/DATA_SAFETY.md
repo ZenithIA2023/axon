@@ -1,7 +1,14 @@
 # Data Safety — respostas para o formulário da Play Console
 
-> Levantado do código em 2026-08-20. Declaração incorreta é motivo de rejeição
-> e de suspensão posterior, então cada linha aqui tem origem verificável.
+> Levantado do código em 2026-08-20, **revisado em 2026-09-28**. Declaração
+> incorreta é motivo de rejeição e de suspensão posterior, então cada linha aqui
+> tem origem verificável.
+>
+> **A revisão de 28/09 acrescentou o ÁUDIO.** A versão de agosto foi escrita
+> antes de a página de voz existir e não declarava nada sobre gravação. Hoje o
+> app tem a rota `/voz`, o `AndroidManifest.xml` pede `RECORD_AUDIO`, e o áudio
+> sai para a OpenAI e a ElevenLabs. A Play Console cruza as permissões do
+> manifesto com o formulário — declarar de menos aqui seria pego.
 
 ## Resumo
 
@@ -35,6 +42,22 @@ Cobre tarefas, rotinas, objetivos, registros diários, conversas com o assistent
 e eventos de agenda. **Compartilhado** porque parte desse conteúdo é enviada à
 API da Anthropic (Claude) para gerar respostas, sugestões e relatórios.
 
+### Áudio
+| Tipo | Coletado | Compartilhado | Obrigatório | Finalidade |
+|---|---|---|---|---|
+| Gravações de voz | Sim | **Sim** | Não | Funcionalidade do app |
+
+O usuário fala com o Axon na rota `/voz` e pelo botão de voz do chat
+(`RECORD_AUDIO` no `AndroidManifest.xml`, linha 59). O áudio é enviado à
+**OpenAI** para transcrição e volta como texto; o texto da resposta vai à
+**ElevenLabs** para virar voz.
+
+**Marque "processado temporariamente" e NÃO "coletado", se a Console oferecer
+essa distinção** — o áudio não é gravado em nenhuma tabela nossa: atravessa o
+backend e é descartado. Só a transcrição em texto é guardada, e ela já está
+declarada como conteúdo do usuário. Confirme no código antes de responder, e
+não marque "coletado" por precaução: declarar de mais também é errado.
+
 ### Identificadores do dispositivo
 | Tipo | Coletado | Compartilhado | Obrigatório | Finalidade |
 |---|---|---|---|---|
@@ -58,6 +81,8 @@ mantido fora do projeto.
 | **Supabase** | todos os dados da conta | banco de dados e autenticação |
 | **Google (OAuth + Calendar)** | e-mail, nome, eventos de agenda | login e sincronização da agenda |
 | **Google (FCM)** | token do aparelho e texto da notificação | entregar push |
+| **OpenAI** | áudio da fala do usuário | transcrever voz em texto |
+| **ElevenLabs** | texto da resposta do Axon | gerar a voz falada |
 
 ## Exclusão de dados
 
@@ -69,5 +94,4 @@ por 60 dias, para bloquear recadastro imediato. É o único dado que sobrevive �
 exclusão, e a política de privacidade precisa dizer isso.
 
 A Play Console pede uma **URL de exclusão de conta** acessível sem instalar o
-app. Como hoje a exclusão só existe dentro do app, é preciso uma página web
-explicando o procedimento — ou um formulário. **Item em aberto.**
+app. ✅ Resolvido: `https://axonapp.tech/legal/excluir-conta.html`.
