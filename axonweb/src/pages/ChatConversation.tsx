@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type ElementType, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ElementType, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
-  Archive,
   ArrowLeft,
-  AudioLines,
   Brain,
   Check,
   Edit3,
@@ -13,13 +11,9 @@ import {
   Loader2,
   Menu,
   MoreVertical,
-  PanelLeft,
-  Plus,
   Send,
   Sparkles,
   Trash2,
-  Volume2,
-  VolumeX,
   X,
   Eraser,
   Bell,
@@ -29,16 +23,14 @@ import {
 } from "lucide-react";
 
 import { results, type ChronotypeResultKey } from "../data/results";
-import { useSpeech } from "../lib/voice/useSpeech";
-import { useVoiceSession } from "../lib/voice/useVoiceSession";
-import type { VoiceRecording } from "../lib/voice/recorder";
-import { VoiceButton } from "../components/chat/VoiceButton";
 import Sidebar from "../components/layout/Sidebar";
 import * as api from "../lib/api";
 import AppBackground from "../components/layout/AppBackground";
 import ConfirmDialog from "../components/ui/ConfirmDialog";
 import EmptyState from "../components/ui/EmptyState";
 import { ScrollArea } from "../components/ui/ScrollArea";
+
+const CHAT_METADATA_UPDATED_EVENT = "axon:chat-metadata-updated";
 
 // ============================================================================
 // Tipos e contratos locais
@@ -59,24 +51,6 @@ type Message = {
   tools?: ToolActivity[];
 };
 
-// Reduz um evento de tool (running/done) sobre o estado atual da bolha — usado
-// pelo chat digitado e pela voz, que recebem exatamente o mesmo formato de
-// evento SSE (`api.ToolEvent`).
-function nextToolsState(current: ToolActivity[] | undefined, event: api.ToolEvent): ToolActivity[] {
-  const tools = [...(current ?? [])];
-  if (event.status === "running") {
-    tools.push({ tool: event.tool, label: event.label ?? event.tool, status: "running" });
-    return tools;
-  }
-  for (let i = tools.length - 1; i >= 0; i--) {
-    if (tools[i].tool === event.tool && tools[i].status === "running") {
-      tools[i] = { ...tools[i], status: "done", ok: event.ok, summary: event.summary };
-      break;
-    }
-  }
-  return tools;
-}
-
 type NotificationItem = {
   id: number;
   title: string;
@@ -88,7 +62,7 @@ type NotificationItem = {
   actionPath?: string;
 };
 
-type ConfirmAction = "clear" | "archive" | "delete" | null;
+type ConfirmAction = "clear" | "delete" | null;
 
 // Configuração dinâmica por ação para o modal de confirmação da conversa.
 const CONVERSATION_ACTION_CONFIG = {
@@ -99,14 +73,6 @@ const CONVERSATION_ACTION_CONFIG = {
     confirmLabel: "Limpar",
     variant: "default" as const,
     icon: Eraser,
-  },
-  archive: {
-    title: "Arquivar conversa?",
-    description:
-      "Esta conversa sairá da lista principal. Você poderá recuperá-la futuramente.",
-    confirmLabel: "Arquivar",
-    variant: "default" as const,
-    icon: Archive,
   },
   delete: {
     title: "Excluir conversa?",
@@ -183,8 +149,6 @@ type ChatConversationPanelProps = {
   embedded?: boolean;
   onBack?: () => void;
   onOpenSidebar?: () => void;
-  // No mobile a conversa é a própria tela /chat: o histórico vem de uma gaveta
-  // lateral e a criação acontece aqui no header, sem passar por uma lista.
   onOpenChatList?: () => void;
   onCreateConversation?: () => void;
 };
@@ -194,8 +158,6 @@ export function ChatConversationPanel({
   embedded = false,
   onBack,
   onOpenSidebar,
-  onOpenChatList,
-  onCreateConversation,
 }: ChatConversationPanelProps = {}) {
   const navigate = useNavigate();
   const { chatId } = useParams();
@@ -218,23 +180,13 @@ export function ChatConversationPanel({
   // Aplica o efeito de digitação apenas na resposta recém-gerada pelo Axon.
   const [streamingMessageId, setStreamingMessageId] = useState<number | null>(null);
 
-  // Leitura em voz alta da resposta (a fala começa na 1ª frase, sem esperar o
-  // fim do streaming). Desligada por padrão — o usuário liga no botão do header.
-  const speech = useSpeech();
-
-  // Push-to-talk: grava, envia para /voice/message e entra no mesmo fluxo de
-  // streaming do chat digitado. Mensagem FALADA sempre é respondida falando
-  // (speech.begin(true)), independente do toggle de leitura em voz alta.
-  const voiceSession = useVoiceSession({
-    onRecordingReady: (recording) => handleVoiceRecordingReady(recording),
-    onError: (message) => {
-      setMessages((prev) => [...prev, { id: Date.now(), sender: "axon", text: message }]);
-    },
-  });
-
   // Histórico compacto enviado ao backend e marcador usado para rolar até o fim.
   const historyRef = useRef<api.ChatMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const pageRef = useRef<HTMLElement | null>(null);
+
+  // Estado visual do teclado mobile.
+  const [isMobileKeyboardOpen, setIsMobileKeyboardOpen] = useState(false);
 
   // Dados da conversa atual usados no título e na movimentação entre projetos.
   const [conversation, setConversation] = useState<api.ConversationData | null>(
@@ -246,8 +198,14 @@ export function ChatConversationPanel({
     if (!conversationId || conversationId === "axon-notifications") return;
 
     api
-      .getConversation(conversationId)
-      .then((currentConversation) => {
+      .getConversations()
+      .then((items) => {
+        const currentConversation = items.find(
+          (item) => item.id === conversationId
+        );
+
+        if (!currentConversation) return;
+
         setConversation(currentConversation);
         setChatTitle(currentConversation.title);
         setDraftTitle(currentConversation.title);
@@ -353,8 +311,6 @@ export function ChatConversationPanel({
     setStreamingMessageId(axonId);
     setMessages((prev) => [...prev, { id: axonId, sender: "axon", text: "" }]);
 
-    speech.begin();
-
     api.streamChat(
       text,
       history,
@@ -362,11 +318,9 @@ export function ChatConversationPanel({
         setMessages((prev) =>
           prev.map((m) => (m.id === axonId ? { ...m, text: m.text + chunk } : m))
         );
-        speech.push(chunk);
       },
       () => {
         setIsSending(false);
-        speech.finish();
         setMessages((prev) => {
           const axonMsg = prev.find((m) => m.id === axonId);
           if (axonMsg) {
@@ -385,7 +339,6 @@ export function ChatConversationPanel({
       },
       () => {
         setIsSending(false);
-        speech.stop();
         setMessages((prev) =>
           prev.map((m) =>
             m.id === axonId
@@ -401,105 +354,30 @@ export function ChatConversationPanel({
       conversationId,
       (event) => {
         setMessages((prev) =>
-          prev.map((m) => (m.id === axonId ? { ...m, tools: nextToolsState(m.tools, event) } : m))
-        );
-      }
-    );
-  }
-
-  // Envio por voz: a gravação já pronta (voiceSession.onRecordingReady) vira
-  // uma chamada a /voice/message. O transcript chega como primeiro evento do
-  // stream, então as duas bolhas (usuário + Axon) só nascem quando ele chegar
-  // — antes disso só o TypingIndicator (isSending) aparece.
-  function handleVoiceRecordingReady(recording: VoiceRecording) {
-    if (!conversationId) {
-      voiceSession.finishProcessing();
-      return;
-    }
-
-    const history = historyRef.current;
-    const axonId = Date.now() + 1;
-    let userMsgId: number | null = null;
-
-    setIsSending(true);
-    // Força a fala mesmo com o toggle de leitura desligado — quem falou quer
-    // ouvir de volta, mesmo que normalmente prefira ler.
-    speech.begin(true);
-
-    const ext = recording.mimeType.includes("mp4")
-      ? "m4a"
-      : recording.mimeType.includes("ogg")
-      ? "ogg"
-      : "webm";
-
-    api.streamVoiceMessage(
-      recording.blob,
-      `voz.${ext}`,
-      history,
-      conversationId,
-      (transcript) => {
-        userMsgId = Date.now();
-        setMessages((prev) => [
-          ...prev,
-          { id: userMsgId!, sender: "user", text: transcript },
-          { id: axonId, sender: "axon", text: "" },
-        ]);
-        setStreamingMessageId(axonId);
-      },
-      (chunk) => {
-        setMessages((prev) =>
-          prev.map((m) => (m.id === axonId ? { ...m, text: m.text + chunk } : m))
-        );
-        speech.push(chunk);
-      },
-      () => {
-        setIsSending(false);
-        speech.finish();
-        voiceSession.finishProcessing();
-        setMessages((prev) => {
-          const userMsg = prev.find((m) => m.id === userMsgId);
-          const axonMsg = prev.find((m) => m.id === axonId);
-          if (userMsg && axonMsg) {
-            historyRef.current = [
-              ...history,
-              { role: "user", content: userMsg.text },
-              { role: "assistant", content: axonMsg.text },
-            ];
-          }
-          return prev;
-        });
-
-        window.setTimeout(() => {
-          setStreamingMessageId(null);
-        }, 3500);
-      },
-      (err) => {
-        setIsSending(false);
-        speech.stop();
-        voiceSession.finishProcessing();
-        setMessages((prev) => {
-          // Erro antes até de transcrever (quota, provedor fora do ar, áudio
-          // vazio): não há bolhas ainda, então cria uma só do Axon com o erro.
-          if (userMsgId === null) {
-            return [
-              ...prev,
-              { id: axonId, sender: "axon", text: err.message || "Não consegui processar o áudio. Tente novamente." },
-            ];
-          }
-          return prev.map((m) =>
-            m.id === axonId
-              ? { ...m, text: m.text || "Erro ao obter resposta. Tente novamente." }
-              : m
-          );
-        });
-
-        window.setTimeout(() => {
-          setStreamingMessageId(null);
-        }, 1200);
-      },
-      (event) => {
-        setMessages((prev) =>
-          prev.map((m) => (m.id === axonId ? { ...m, tools: nextToolsState(m.tools, event) } : m))
+          prev.map((m) => {
+            if (m.id !== axonId) return m;
+            const tools = [...(m.tools ?? [])];
+            if (event.status === "running") {
+              tools.push({
+                tool: event.tool,
+                label: event.label ?? event.tool,
+                status: "running",
+              });
+            } else {
+              for (let i = tools.length - 1; i >= 0; i--) {
+                if (tools[i].tool === event.tool && tools[i].status === "running") {
+                  tools[i] = {
+                    ...tools[i],
+                    status: "done",
+                    ok: event.ok,
+                    summary: event.summary,
+                  };
+                  break;
+                }
+              }
+            }
+            return { ...m, tools };
+          })
         );
       }
     );
@@ -515,6 +393,7 @@ export function ChatConversationPanel({
 
     if (conversationId) {
       await api.updateConversation(conversationId, { title: newTitle }).catch(() => null);
+      window.dispatchEvent(new Event(CHAT_METADATA_UPDATED_EVENT));
     }
   }
 
@@ -535,17 +414,9 @@ export function ChatConversationPanel({
         return;
       }
 
-      if (confirmAction === "archive") {
-        await api
-          .updateConversation(conversationId, { archived: true })
-          .catch(() => null);
-        setConfirmAction(null);
-        handleBack();
-        return;
-      }
-
       if (confirmAction === "delete") {
         await api.deleteConversation(conversationId).catch(() => null);
+        window.dispatchEvent(new Event(CHAT_METADATA_UPDATED_EVENT));
         setConfirmAction(null);
         handleBack();
         return;
@@ -572,23 +443,77 @@ export function ChatConversationPanel({
           }
         : prev
     );
+
+    window.dispatchEvent(new Event(CHAT_METADATA_UPDATED_EVENT));
   }
 
   // Mantém o usuário no final do histórico ao abrir ou receber novas mensagens.
-  function scrollToBottom(behavior: ScrollBehavior = "smooth") {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     requestAnimationFrame(() => {
       messagesEndRef.current?.scrollIntoView({
         behavior,
         block: "end",
       });
     });
-  }
+  }, []);
+
+  const resetMobileViewportPosition = useCallback(() => {
+    if (embedded) return;
+
+    requestAnimationFrame(() => {
+      window.scrollTo(0, 0);
+      pageRef.current?.scrollTo({
+        top: 0,
+        left: 0,
+        behavior: "auto",
+      });
+    });
+  }, [embedded]);
+
+  useEffect(() => {
+    if (embedded) return;
+
+    const pageElement = pageRef.current;
+    const viewport = window.visualViewport;
+
+    if (!pageElement) return;
+
+    const chatPageElement: HTMLElement = pageElement;
+
+    function updateViewportState() {
+      const visualHeight = viewport?.height ?? window.innerHeight;
+      const keyboardOpen = viewport
+        ? visualHeight < window.innerHeight - 90
+        : false;
+
+      chatPageElement.style.setProperty("--axon-chat-height", `${visualHeight}px`);
+      setIsMobileKeyboardOpen(keyboardOpen);
+
+      if (!keyboardOpen) {
+        resetMobileViewportPosition();
+      }
+    }
+
+    updateViewportState();
+
+    viewport?.addEventListener("resize", updateViewportState);
+    viewport?.addEventListener("scroll", updateViewportState);
+    window.addEventListener("resize", updateViewportState);
+    window.addEventListener("orientationchange", updateViewportState);
+
+    return () => {
+      viewport?.removeEventListener("resize", updateViewportState);
+      viewport?.removeEventListener("scroll", updateViewportState);
+      window.removeEventListener("resize", updateViewportState);
+      window.removeEventListener("orientationchange", updateViewportState);
+    };
+  }, [embedded, resetMobileViewportPosition]);
 
   useEffect(() => {
     if (!loadingHistory) {
       scrollToBottom("auto");
     }
-  }, [loadingHistory, conversationId]);
+  }, [loadingHistory, conversationId, scrollToBottom]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -596,15 +521,21 @@ export function ChatConversationPanel({
     }, 50);
 
     return () => clearTimeout(timeout);
-  }, [messages, isSending]);
+  }, [messages, isSending, scrollToBottom]);
 
   // Layout principal: header fixo, histórico scrollável, composer e modais globais.
   return (
     <main
+      ref={pageRef}
+      style={
+        embedded
+          ? undefined
+          : ({ "--axon-chat-height": "100dvh" } as CSSProperties)
+      }
       className={
         embedded
           ? "relative h-full overflow-hidden bg-transparent text-primary"
-          : "relative h-[100dvh] overflow-hidden bg-app text-primary"
+          : "fixed inset-0 h-[var(--axon-chat-height,100dvh)] w-full overflow-hidden bg-app text-primary"
       }
     >
       {!embedded && <AppBackground />}
@@ -613,26 +544,19 @@ export function ChatConversationPanel({
         className={
           embedded
             ? "relative z-10 flex h-full flex-col px-4 pb-4 pt-4"
-            : "relative z-10 flex h-full flex-col px-4 pb-4 pt-5"
+            : "relative z-10 flex h-full flex-col px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-5"
         }
       >
-        <header className="mb-4 shrink-0">
+        <header
+          className={`-mx-4 shrink-0 overflow-hidden border-b border-soft bg-app/95 px-4 shadow-[0_18px_50px_rgba(0,0,0,0.12)] backdrop-blur-xl transition-all duration-200 ${
+            isMobileKeyboardOpen
+              ? "mb-0 max-h-0 -translate-y-3 pb-0 pt-0 opacity-0"
+              : "mb-4 max-h-28 translate-y-0 pb-4 pt-1 opacity-100"
+          }`}
+        >
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
-              {/* Mobile: a conversa É a tela, então o canto esquerdo abre o
-                  histórico em vez de voltar para uma lista que não existe. */}
-              {!embedded && onOpenChatList && (
-                <button
-                  type="button"
-                  onClick={onOpenChatList}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-soft bg-surface-muted text-secondary transition active:scale-[0.96]"
-                  aria-label="Abrir suas conversas"
-                >
-                  <PanelLeft className="h-5 w-5" />
-                </button>
-              )}
-
-              {!embedded && !onOpenChatList && (
+              {!embedded && (
                 <button
                   type="button"
                   onClick={handleBack}
@@ -643,87 +567,25 @@ export function ChatConversationPanel({
                 </button>
               )}
 
-              {/* No mobile o título sai do header: a identidade já está no
-                  ícone, e o nome da conversa vive na gaveta. */}
-              {!onOpenChatList && (
-                <div className="min-w-0">
-                  <p className="truncate text-base font-black leading-tight tracking-[-0.035em] text-primary">
-                    {chatTitle}
-                  </p>
-                  <p className="truncate text-xs text-muted">
-                    Conversa com o Axon
-                  </p>
-                </div>
-              )}
+              <div className="min-w-0">
+                <p className="truncate text-base font-black leading-tight tracking-[-0.035em] text-primary">
+                  {chatTitle}
+                </p>
+                <p className="truncate text-xs text-muted">
+                  Conversa com o Axon
+                </p>
+              </div>
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
-              {/* Mobile: apenas criar conversa e abrir o menu. As ações de voz
-                  e de conversa moram no menu de opções e na gaveta. */}
-              {onCreateConversation && (
-                <button
-                  type="button"
-                  onClick={onCreateConversation}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--accent-strong)] text-white transition active:scale-[0.96]"
-                  aria-label="Nova conversa"
-                >
-                  <Plus className="h-5 w-5" />
-                </button>
-              )}
-
-              {!onOpenChatList && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const ligando = !speech.enabled;
-                      speech.setEnabled(ligando);
-                      // Destravar o áudio precisa acontecer DENTRO do clique: o
-                      // navegador só libera som que nasce de um gesto do usuário.
-                      if (ligando) speech.warmup();
-                    }}
-                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border shadow-card backdrop-blur-2xl transition active:scale-[0.96] ${
-                      speech.enabled
-                        ? "border-accent-soft bg-accent-soft text-accent"
-                        : "border-soft bg-surface-muted text-secondary"
-                    }`}
-                    aria-label={
-                      speech.enabled ? "Desativar leitura em voz alta" : "Ler respostas em voz alta"
-                    }
-                    aria-pressed={speech.enabled}
-                    title={
-                      speech.enabled && !speech.available
-                        ? "Nenhuma voz disponível — veja Configurações › Voz do Axon"
-                        : undefined
-                    }
-                  >
-                    {speech.enabled ? (
-                      <Volume2 className={`h-5 w-5 ${speech.speaking ? "animate-pulse" : ""}`} />
-                    ) : (
-                      <VolumeX className="h-5 w-5" />
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => navigate("/voz")}
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-soft bg-surface-muted text-secondary shadow-card backdrop-blur-2xl transition active:scale-[0.96]"
-                    aria-label="Conversar por voz"
-                    title="Conversar por voz"
-                  >
-                    <AudioLines className="h-5 w-5" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsOptionsOpen(true)}
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-soft bg-surface-muted text-secondary shadow-card backdrop-blur-2xl transition active:scale-[0.96]"
-                    aria-label="Opções da conversa"
-                  >
-                    <MoreVertical className="h-5 w-5" />
-                  </button>
-                </>
-              )}
+              <button
+                type="button"
+                onClick={() => setIsOptionsOpen(true)}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-soft bg-surface-muted text-secondary shadow-card backdrop-blur-2xl transition active:scale-[0.96]"
+                aria-label="Opções da conversa"
+              >
+                <MoreVertical className="h-5 w-5" />
+              </button>
 
               <button
                 type="button"
@@ -740,19 +602,6 @@ export function ChatConversationPanel({
         <ScrollArea className="min-h-0 flex-1" contentClassName="pr-1 pb-4">
           <div className="space-y-3 pb-4">
             {messages.length === 0 ? (
-              onOpenChatList ? (
-                // Mobile: a tela vazia é só o convite. Sem card, sem ícone —
-                // o que precisa de atenção é o campo de texto logo abaixo.
-                <div className="flex min-h-[56vh] flex-col items-center justify-center px-6 text-center">
-                  <h2 className="max-w-[16ch] text-2xl font-bold leading-tight text-primary">
-                    Envie qualquer mensagem para começar o Chat
-                  </h2>
-
-                  <p className="mt-3 text-sm text-muted">
-                    Axon está pronto para te ajudar
-                  </p>
-                </div>
-              ) : (
               <div className="flex min-h-[56vh] items-center justify-center">
                 <div className="relative w-full overflow-hidden rounded-[2rem] border border-soft bg-surface-elevated p-6 text-center text-primary shadow-soft backdrop-blur-2xl">
                   <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,var(--accent-soft),transparent_58%)]" />
@@ -773,7 +622,6 @@ export function ChatConversationPanel({
                   </div>
                 </div>
               </div>
-              )
             ) : (
               <>
                 {messages
@@ -794,71 +642,46 @@ export function ChatConversationPanel({
           </div>
         </ScrollArea>
 
-        <footer className="shrink-0 pt-3">
+        <footer
+          className={`shrink-0 transition-[padding] duration-200 ${
+            isMobileKeyboardOpen ? "pt-2" : "pt-3"
+          }`}
+        >
           <form
             onSubmit={(e) => handleSend(e)}
-            className={
-              onOpenChatList
-                ? "flex min-h-[58px] items-end gap-1 rounded-[1.9rem] bg-surface-muted p-2"
-                : "flex min-h-[58px] items-end gap-2 rounded-[1.7rem] border border-soft bg-surface-elevated p-2 shadow-soft backdrop-blur-2xl"
-            }
+            className="flex min-h-[58px] items-end gap-2 rounded-[1.7rem] border border-soft bg-surface-elevated p-2 shadow-soft backdrop-blur-2xl"
           >
-            {onOpenChatList && (
-              <button
-                type="button"
-                onClick={onCreateConversation}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted transition active:scale-[0.96]"
-                aria-label="Nova conversa"
-              >
-                <Plus className="h-5 w-5" />
-              </button>
-            )}
-
             <textarea
               value={message}
               onChange={(event) => setMessage(event.target.value)}
+              onFocus={() => {
+                window.setTimeout(() => {
+                  scrollToBottom("smooth");
+                }, 250);
+              }}
+              onBlur={() => {
+                window.setTimeout(resetMobileViewportPosition, 120);
+              }}
               onKeyDown={(event) => {
-                if (
-                  event.key === "Enter" &&
-                  !event.shiftKey &&
-                  window.innerWidth >= 768
-                ) {
+                if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
                   handleSend();
                 }
               }}
-              placeholder={onOpenChatList ? "Mensagem Axon" : "Mensagem para o Axon..."}
+              enterKeyHint="send"
+              placeholder="Mensagem para o Axon..."
               rows={1}
               className="max-h-28 min-h-[42px] flex-1 resize-none overflow-y-auto bg-transparent px-3 py-2 text-sm leading-6 text-primary outline-none placeholder:text-soft"
             />
 
-            {/* Mobile: com o campo vazio, o ícone de voz leva para a conversa
-                falada com o Axon; ao digitar, o mesmo lugar vira Enviar. */}
-            {onOpenChatList && !message.trim() ? (
-              <button
-                type="button"
-                onClick={() => navigate("/voz")}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-secondary transition active:scale-[0.96]"
-                aria-label="Conversar por voz com o Axon"
-              >
-                <AudioLines className="h-5 w-5" />
-              </button>
-            ) : !onOpenChatList && !message.trim() && voiceSession.available ? (
-              <VoiceButton
-                session={voiceSession}
-                disabled={isSending}
-                onWarmup={() => speech.warmup()}
-              />
-            ) : (
-              <button
-                type="submit"
-                disabled={!message.trim()}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--accent-strong)] text-white shadow-card transition active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-45"
-                aria-label="Enviar mensagem"
-              >
-                <Send className="h-4.5 w-4.5" />
-              </button>
-            )}
+            <button
+              type="submit"
+              disabled={!message.trim()}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--accent-strong)] text-white shadow-card transition active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-45"
+              aria-label="Enviar mensagem"
+            >
+              <Send className="h-4.5 w-4.5" />
+            </button>
           </form>
         </footer>
       </div>
@@ -886,10 +709,6 @@ export function ChatConversationPanel({
         onClear={() => {
           setIsOptionsOpen(false);
           setConfirmAction("clear");
-        }}
-        onArchive={() => {
-          setIsOptionsOpen(false);
-          setConfirmAction("archive");
         }}
         onDelete={() => {
           setIsOptionsOpen(false);
@@ -943,7 +762,6 @@ function ChatOptionsSheet({
   onRename,
   onMoveProject,
   onClear,
-  onArchive,
   onDelete,
 }: {
   isOpen: boolean;
@@ -951,7 +769,6 @@ function ChatOptionsSheet({
   onRename: () => void;
   onMoveProject: () => void;
   onClear: () => void;
-  onArchive: () => void;
   onDelete: () => void;
 }) {
   if (!isOpen) return null;
@@ -1008,13 +825,6 @@ function ChatOptionsSheet({
               title="Limpar mensagens"
               description="Remove as mensagens, mas mantém a conversa."
               onClick={onClear}
-            />
-
-            <OptionButton
-              icon={Archive}
-              title="Arquivar"
-              description="Remove da lista principal."
-              onClick={onArchive}
             />
 
             <OptionButton
@@ -1257,12 +1067,18 @@ function MessageBubble({
   return (
     <div className={`animate-[messageIn_0.25s_ease-out] flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`rounded-[1.6rem] px-4 py-3 text-sm leading-6 ${
+        className={`max-w-[84%] rounded-[1.45rem] px-4 py-3 text-sm leading-6 shadow-card ${
           isUser
-            ? "max-w-[84%] rounded-br-lg bg-[var(--accent-strong)] font-medium text-white"
-            : "max-w-[94%] rounded-bl-lg bg-surface-muted text-primary"
+            ? "rounded-br-md bg-[var(--accent-strong)] text-white"
+            : "rounded-bl-md border border-soft bg-surface-elevated text-secondary backdrop-blur-2xl"
         }`}
       >
+        {!isUser && (
+          <div className="mb-2 flex items-center gap-2">
+            <Brain className="h-3.5 w-3.5 text-accent" />
+            <p className="text-xs font-semibold text-accent">Axon</p>
+          </div>
+        )}
 
         {!isUser && message.tools && message.tools.length > 0 && (
           <div className="mb-2 flex flex-col gap-1.5">

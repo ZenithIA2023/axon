@@ -3,7 +3,7 @@
  * criação rápida e navegação para a conversa interna.
  * ========================================================================== */
 
-import { useEffect, useMemo, useState, type ElementType } from "react";
+import { useEffect, useMemo, useRef, useState, type ElementType, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Bell,
@@ -139,6 +139,7 @@ const CHAT_INTRO_HIDE_AFTER_MS =
   CHAT_INTRO_VISIBLE_DAYS * 24 * 60 * 60 * 1000;
 
 const CHAT_LAST_ACCESS_STORAGE_KEY = "axon:chat:last-accessed-by-id";
+const CHAT_METADATA_UPDATED_EVENT = "axon:chat-metadata-updated";
 
 type LastAccessMap = Record<string, string>;
 
@@ -268,11 +269,9 @@ export default function Chat() {
   }
 
   /* --------------------------------------------------------------------------
-   * Carregamento sob demanda dos projetos
+   * Carregamento dos projetos
    * -------------------------------------------------------------------------- */
   useEffect(() => {
-    if (view !== "projects") return;
-
     setLoadingProjects(true);
 
     api
@@ -280,7 +279,33 @@ export default function Chat() {
       .then(setProjects)
       .catch(() => setProjects([]))
       .finally(() => setLoadingProjects(false));
-  }, [view]);
+  }, []);
+
+  useEffect(() => {
+    function handleChatMetadataUpdated() {
+      api
+        .getConversations()
+        .then(setConversations)
+        .catch(() => null);
+
+      api
+        .getChatProjects()
+        .then(setProjects)
+        .catch(() => null);
+    }
+
+    window.addEventListener(
+      CHAT_METADATA_UPDATED_EVENT,
+      handleChatMetadataUpdated
+    );
+
+    return () => {
+      window.removeEventListener(
+        CHAT_METADATA_UPDATED_EVENT,
+        handleChatMetadataUpdated
+      );
+    };
+  }, []);
 
   /* --------------------------------------------------------------------------
    * Dados da Sidebar
@@ -561,6 +586,8 @@ export default function Chat() {
         setSelectedProjectId(null);
       }
 
+      window.dispatchEvent(new Event(CHAT_METADATA_UPDATED_EVENT));
+
       setProjectToDelete(null);
     } catch {
       // Mantém a tela estável se a exclusão falhar; o tratamento visual pode entrar depois.
@@ -570,44 +597,105 @@ export default function Chat() {
   }
 
   function renderDesktopChatItems() {
-    return (
-      <section className="space-y-2.5">
-        {loadingConversations || (view === "projects" && loadingProjects) ? (
-          <div className="rounded-[1.5rem] border border-soft bg-surface-muted p-5 text-center shadow-card">
-            <p className="text-sm text-muted">
-              {view === "projects"
-                ? "Carregando projetos..."
-                : "Carregando conversas..."}
-            </p>
-          </div>
-        ) : view === "projects" ? (
-          selectedProjectId && selectedProject ? (
-            <>
-              <SelectedProjectHeader
-                project={selectedProject}
-                conversationCount={activeConversationList.length}
-                onBack={() => setSelectedProjectId(null)}
-                onCreateConversation={() =>
-                  openCreateConversationModal(selectedProject.id)
-                }
-              />
+    const visibleLooseConversations = filteredConversations.slice(0, visibleCount);
+    const hasMoreLooseConversations = filteredConversations.length > visibleCount;
 
-              {activeConversationList.length === 0 ? (
-                <EmptyState
-                  icon={MessageCircle}
-                  title="Nenhuma conversa neste projeto"
-                  description="Quando conversas forem adicionadas a este projeto, elas aparecerão aqui."
-                  actionLabel="Criar conversa"
-                  onAction={() => {
-                    if (selectedProjectId) {
-                      openCreateConversationModal(selectedProjectId);
-                    }
-                  }}
+    return (
+      <div className="space-y-5">
+        {loadingConversations ? (
+          <DesktopChatSidebarLoading label="Carregando conversas..." />
+        ) : (
+          <>
+            {axonDirectConversation && (
+              <DesktopChatSidebarSection title="Principal">
+                <DesktopSidebarConversationItem
+                  conversation={axonDirectConversation}
+                  lastAccessedAt={lastAccessByConversation[axonDirectConversation.id]}
+                  isSelected={desktopConversationId === axonDirectConversation.id}
+                  isAxon
+                  onClick={() => openConversation(axonDirectConversation.id)}
+                />
+              </DesktopChatSidebarSection>
+            )}
+
+            <DesktopChatSidebarSection title="Projetos" count={filteredProjects.length}>
+              {loadingProjects ? (
+                <DesktopChatSidebarLoading label="Carregando projetos..." compact />
+              ) : filteredProjects.length === 0 ? (
+                <DesktopSidebarEmpty
+                  icon={Briefcase}
+                  title="Nenhum projeto"
+                  description={
+                    search.trim()
+                      ? "Nenhum projeto encontrado com essa busca."
+                      : "Agrupe conversas por assunto, cliente ou objetivo."
+                  }
+                  actionLabel="Criar projeto"
+                  onAction={() => openCreateConversationModal(null, "project")}
                 />
               ) : (
-                <>
-                  {visibleConversations.map((conversation) => (
-                    <ConversationCard
+                <div className="space-y-1.5">
+                  {filteredProjects.map((project) => {
+                    const conversationsInsideProject = sortConversationsByRecent(
+                      projectConversations.filter((conversation) => {
+                        const belongsToProject =
+                          getConversationProjectId(conversation) === project.id;
+                        const query = search.toLowerCase();
+                        const matchesSearch =
+                          !query ||
+                          conversation.title.toLowerCase().includes(query) ||
+                          (conversation.last_message ?? "")
+                            .toLowerCase()
+                            .includes(query);
+
+                        return belongsToProject && matchesSearch;
+                      })
+                    );
+
+                    const isOpen = selectedProjectId === project.id;
+
+                    return (
+                      <DesktopSidebarProjectItem
+                        key={project.id}
+                        project={project}
+                        conversations={conversationsInsideProject}
+                        isOpen={isOpen}
+                        activeConversationId={desktopConversationId}
+                        lastAccessByConversation={lastAccessByConversation}
+                        onToggle={() => {
+                          setView("projects");
+                          setSelectedProjectId(isOpen ? null : project.id);
+                        }}
+                        onSelectConversation={openConversation}
+                        onCreateConversation={() =>
+                          openCreateConversationModal(project.id, "conversation")
+                        }
+                        onEdit={() => setProjectToEdit(project)}
+                        onDelete={() => setProjectToDelete(project)}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </DesktopChatSidebarSection>
+
+            <DesktopChatSidebarSection title="Conversas" count={filteredConversations.length}>
+              {filteredConversations.length === 0 ? (
+                <DesktopSidebarEmpty
+                  icon={MessageCircle}
+                  title="Nenhuma conversa"
+                  description={
+                    search.trim()
+                      ? "Nenhuma conversa solta encontrada com essa busca."
+                      : "Conversas de projetos aparecem dentro de cada projeto."
+                  }
+                  actionLabel="Criar conversa"
+                  onAction={() => openCreateConversationModal(null, "conversation")}
+                />
+              ) : (
+                <div className="space-y-1.5">
+                  {visibleLooseConversations.map((conversation) => (
+                    <DesktopSidebarConversationItem
                       key={conversation.id}
                       conversation={conversation}
                       lastAccessedAt={lastAccessByConversation[conversation.id]}
@@ -616,100 +704,21 @@ export default function Chat() {
                     />
                   ))}
 
-                  {hasMoreConversations && (
+                  {hasMoreLooseConversations && (
                     <button
                       type="button"
                       onClick={() => setVisibleCount((current) => current + 8)}
-                      className="mt-2 inline-flex min-h-11 w-full items-center justify-center rounded-2xl border border-soft bg-surface-muted px-5 text-xs font-black text-secondary transition active:scale-[0.98]"
+                      className="mt-2 inline-flex min-h-10 w-full items-center justify-center rounded-2xl border border-soft bg-surface-muted px-4 text-xs font-black text-secondary transition active:scale-[0.98]"
                     >
                       Ver mais conversas
                     </button>
                   )}
-                </>
+                </div>
               )}
-            </>
-          ) : filteredProjects.length === 0 ? (
-            <EmptyState
-              icon={Briefcase}
-              title="Nenhum projeto encontrado"
-              description="Crie projetos para reunir conversas relacionadas em um mesmo contexto."
-              actionLabel="Criar projeto"
-              onAction={() => openCreateConversationModal(null)}
-            />
-          ) : (
-            filteredProjects.map((project) => {
-              const localCount = projectConversations.filter(
-                (conversation) => getConversationProjectId(conversation) === project.id
-              ).length;
-
-              const count = project.conversation_count ?? localCount;
-
-              return (
-                <ProjectFolderCard
-                  key={project.id}
-                  project={project}
-                  count={count}
-                  onClick={() => setSelectedProjectId(project.id)}
-                  onCreateConversation={() => openCreateConversationModal(project.id)}
-                  onEdit={() => setProjectToEdit(project)}
-                  onDelete={() => setProjectToDelete(project)}
-                />
-              );
-            })
-          )
-        ) : activeConversationList.length === 0 && !axonDirectConversation ? (
-          <EmptyState
-            icon={MessageCircle}
-            title="Nenhuma conversa solta encontrada"
-            description="Conversas que pertencem a projetos aparecem apenas na aba Projetos."
-            actionLabel="Criar conversa"
-            onAction={() => openCreateConversationModal(null)}
-          />
-        ) : (
-          <>
-            {axonDirectConversation && (
-              <div className="space-y-2.5">
-                <AxonDirectConversationCard
-                  conversation={axonDirectConversation}
-                  lastAccessedAt={lastAccessByConversation[axonDirectConversation.id]}
-                  isSelected={desktopConversationId === axonDirectConversation.id}
-                  onClick={() => openConversation(axonDirectConversation.id)}
-                />
-
-                {visibleConversations.length > 0 && (
-                  <div className="flex items-center gap-3 px-1 py-1">
-                    <div className="h-px flex-1 bg-[var(--border-soft)]" />
-                    <span className="text-[0.58rem] font-black uppercase tracking-[0.16em] text-soft">
-                      Conversas regulares
-                    </span>
-                    <div className="h-px flex-1 bg-[var(--border-soft)]" />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {visibleConversations.map((conversation) => (
-              <ConversationCard
-                key={conversation.id}
-                conversation={conversation}
-                lastAccessedAt={lastAccessByConversation[conversation.id]}
-                isSelected={desktopConversationId === conversation.id}
-                onClick={() => openConversation(conversation.id)}
-              />
-            ))}
-
-            {hasMoreConversations && (
-              <button
-                type="button"
-                onClick={() => setVisibleCount((current) => current + 8)}
-                className="mt-2 inline-flex min-h-11 w-full items-center justify-center rounded-2xl border border-soft bg-surface-muted px-5 text-xs font-black text-secondary transition active:scale-[0.98]"
-              >
-                Ver mais conversas
-              </button>
-            )}
+            </DesktopChatSidebarSection>
           </>
         )}
-      </section>
+      </div>
     );
   }
 
@@ -762,65 +771,66 @@ export default function Chat() {
       />
 
 
-      <div className="relative z-10 hidden h-full grid-cols-[360px_minmax(0,1fr)] gap-4 px-5 py-5 lg:grid xl:grid-cols-[390px_minmax(0,1fr)]">
-        <aside className="flex min-h-0 flex-col overflow-hidden rounded-[2rem] border border-soft bg-surface-elevated text-primary shadow-soft backdrop-blur-2xl">
-          <div className="border-b border-[var(--border-soft)] px-4 pb-4 pt-4">
-            <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="relative z-10 hidden h-full grid-cols-[320px_minmax(0,1fr)] gap-2.5 px-2.5 py-2.5 lg:grid xl:grid-cols-[340px_minmax(0,1fr)]">
+        <aside className="relative flex min-h-0 flex-col overflow-hidden rounded-[1.45rem] border border-soft bg-surface-elevated text-primary shadow-soft backdrop-blur-2xl">
+          <div className="shrink-0 border-b border-[var(--border-soft)] px-3.5 py-3">
+            <div className="mb-3 flex items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={() => navigate("/dashboard")}
-                className="flex min-w-0 items-center gap-3 text-left transition active:scale-[0.98]"
+                className="flex min-w-0 items-center gap-2.5 text-left transition active:scale-[0.98]"
               >
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-accent-soft bg-accent-soft text-accent shadow-card">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-accent-soft bg-accent-soft text-accent shadow-card">
                   <img
                     src="/axon-logo.svg"
                     alt="Axon"
-                    className="h-8 w-8 object-contain"
+                    className="h-7 w-7 object-contain"
                   />
                 </div>
 
                 <div className="min-w-0">
                   <p className="truncate text-sm font-black text-primary">
-                    Chat
+                    AXON
                   </p>
                   <p className="truncate text-xs text-muted">
-                    Conversas e projetos
+                    Chat e projetos
                   </p>
                 </div>
               </button>
 
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex shrink-0 items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() =>
                     openCreateConversationModal(
-                      view === "projects" ? selectedProjectId : null
+                      view === "projects" && selectedProjectId ? selectedProjectId : null,
+                      "conversation"
                     )
                   }
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--accent-strong)] text-white shadow-card transition active:scale-[0.96]"
-                  aria-label="Nova conversa ou projeto"
+                  className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[var(--accent-strong)] text-white shadow-card transition active:scale-[0.96]"
+                  aria-label="Nova conversa"
+                  title="Nova conversa"
                 >
-                  <Plus className="h-5 w-5" />
+                  <Plus className="h-4.5 w-4.5" />
                 </button>
-
               </div>
             </div>
 
             <ChatSearchPanel
               search={search}
               view={view}
-              isInsideProject={view === "projects" && Boolean(selectedProjectId)}
+              isInsideProject={Boolean(selectedProjectId)}
               onSearchChange={setSearch}
               onViewChange={setView}
             />
           </div>
 
-          <ScrollArea className="min-h-0 flex-1" contentClassName="px-4 py-4">
+          <ScrollArea className="min-h-0 flex-1" contentClassName="px-3 py-3">
             {renderDesktopChatItems()}
           </ScrollArea>
         </aside>
 
-        <section className="min-h-0 overflow-hidden rounded-[2rem] border border-soft bg-surface-elevated shadow-soft backdrop-blur-2xl">
+        <section className="min-h-0 overflow-hidden rounded-[1.55rem] border border-soft bg-surface-elevated shadow-soft backdrop-blur-2xl">
           {desktopConversationId ? (
             <ChatConversationPanel
               key={desktopConversationId}
@@ -860,8 +870,16 @@ export default function Chat() {
           } as ConversationData;
 
           setConversations((prev) => [conversationWithProject, ...prev]);
+
+          if (createConversationProjectId) {
+            setView("projects");
+            setSelectedProjectId(createConversationProjectId);
+          }
+
           setIsCreateModalOpen(false);
           setCreateConversationProjectId(null);
+
+          window.dispatchEvent(new Event(CHAT_METADATA_UPDATED_EVENT));
 
           if (isDesktopChatViewport()) {
             setDesktopConversationId(conv.id);
@@ -875,6 +893,7 @@ export default function Chat() {
           setSelectedProjectId(project.id);
           setIsCreateModalOpen(false);
           setCreateConversationProjectId(null);
+          window.dispatchEvent(new Event(CHAT_METADATA_UPDATED_EVENT));
         }}
       />
 
@@ -888,6 +907,8 @@ export default function Chat() {
               project.id === updatedProject.id ? updatedProject : project
             )
           );
+
+          window.dispatchEvent(new Event(CHAT_METADATA_UPDATED_EVENT));
 
           setProjectToEdit(null);
         }}
@@ -907,6 +928,352 @@ export default function Chat() {
     </main>
   );
 
+}
+
+
+/* ==========================================================================
+ * Sidebar desktop estilo ChatGPT
+ * ========================================================================== */
+function DesktopChatSidebarSection({
+  title,
+  count,
+  children,
+}: {
+  title: string;
+  count?: number;
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-2">
+      <div className="flex items-center gap-2 px-1">
+        <p className="truncate text-[0.62rem] font-black uppercase tracking-[0.14em] text-soft">
+          {title}
+        </p>
+
+        {typeof count === "number" && (
+          <span className="rounded-full border border-soft bg-surface-muted px-2 py-0.5 text-[0.58rem] font-black text-muted">
+            {count}
+          </span>
+        )}
+      </div>
+
+      {children}
+    </section>
+  );
+}
+
+function DesktopSidebarConversationItem({
+  conversation,
+  lastAccessedAt,
+  isSelected = false,
+  isAxon = false,
+  compact = false,
+  onClick,
+}: {
+  conversation: ConversationData;
+  lastAccessedAt?: string;
+  isSelected?: boolean;
+  isAxon?: boolean;
+  compact?: boolean;
+  onClick: () => void;
+}) {
+  const Icon = isAxon
+    ? Bell
+    : getConversationIcon(conversation.type as ConversationType);
+  const formattedDate = useMemo(
+    () => getConversationDisplayDate(conversation, lastAccessedAt),
+    [conversation, lastAccessedAt]
+  );
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group flex w-full min-w-0 items-center gap-2.5 rounded-2xl border px-2.5 py-2 text-left transition active:scale-[0.99] ${
+        isSelected
+          ? "border-accent-soft bg-accent-soft shadow-card"
+          : "border-transparent bg-transparent hover:border-soft hover:bg-surface-muted"
+      } ${compact ? "pl-2" : ""}`}
+    >
+      <span
+        className={`relative flex shrink-0 items-center justify-center rounded-xl border ${
+          compact ? "h-8 w-8" : "h-9 w-9"
+        } ${
+          isAxon
+            ? "border-accent-soft bg-[var(--accent-strong)] text-white shadow-card"
+            : isSelected
+            ? "border-accent-soft bg-surface-elevated text-accent"
+            : "border-soft bg-surface-elevated text-muted group-hover:text-accent"
+        }`}
+      >
+        {isAxon ? (
+          <img src="/axon-logo.svg" alt="Axon" className="h-6 w-6 object-contain" />
+        ) : (
+          <Icon className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
+        )}
+      </span>
+
+      <span className="min-w-0 flex-1">
+        <span className="flex min-w-0 items-center justify-between gap-2">
+          <span className="truncate text-xs font-black text-primary">
+            {isAxon ? "Axon" : conversation.title}
+          </span>
+
+          <span className="shrink-0 text-[0.58rem] font-semibold text-soft">
+            {formattedDate}
+          </span>
+        </span>
+
+        <span className="mt-0.5 block truncate text-[0.68rem] leading-4 text-muted">
+          {isAxon
+            ? "Conversa principal"
+            : conversation.last_message ||
+              (conversation.type === "planning"
+                ? "Planejamento"
+                : conversation.type === "focus"
+                ? "Foco"
+                : conversation.type === "project"
+                ? "Projeto"
+                : "Geral")}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function DesktopSidebarProjectItem({
+  project,
+  conversations,
+  isOpen,
+  activeConversationId,
+  lastAccessByConversation,
+  onToggle,
+  onSelectConversation,
+  onCreateConversation,
+  onEdit,
+  onDelete,
+}: {
+  project: ProjectFolder;
+  conversations: ConversationData[];
+  isOpen: boolean;
+  activeConversationId: string | null;
+  lastAccessByConversation: LastAccessMap;
+  onToggle: () => void;
+  onSelectConversation: (conversationId: string) => void;
+  onCreateConversation: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const projectMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isMenuOpen) return;
+
+    function handleOutsidePointerDown(event: PointerEvent) {
+      const target = event.target as Node | null;
+
+      if (target && projectMenuRef.current?.contains(target)) {
+        return;
+      }
+
+      setIsMenuOpen(false);
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handleOutsidePointerDown);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("pointerdown", handleOutsidePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isMenuOpen]);
+
+  function closeMenu() {
+    setIsMenuOpen(false);
+  }
+
+  return (
+    <div ref={projectMenuRef} className="relative">
+      <div
+        className={`group relative overflow-visible rounded-2xl border transition ${
+          isOpen
+            ? "border-accent-soft bg-accent-soft"
+            : "border-transparent hover:border-soft hover:bg-surface-muted"
+        }`}
+      >
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex w-full min-w-0 items-center gap-2.5 px-2.5 py-2 pr-20 text-left transition active:scale-[0.99]"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-soft bg-surface-elevated text-accent">
+            <Briefcase className="h-4 w-4" />
+          </span>
+
+          <span className="min-w-0 flex-1">
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-xs font-black text-primary">
+                {project.name}
+              </span>
+
+            </span>
+
+            <span className="mt-0.5 block truncate text-[0.68rem] leading-4 text-muted">
+              {project.description || "Projeto de conversas"}
+            </span>
+          </span>
+        </button>
+
+        <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              setIsMenuOpen((current) => !current);
+            }}
+            className={`flex h-8 w-8 items-center justify-center rounded-xl border transition active:scale-[0.96] ${
+              isMenuOpen
+                ? "border-accent-soft bg-[var(--accent-strong)] text-white shadow-card"
+                : "border-soft bg-surface-elevated text-secondary hover:border-accent-soft hover:text-accent"
+            }`}
+            aria-label="Ações do projeto"
+            title="Ações do projeto"
+          >
+            <MoreVertical className="h-4.5 w-4.5" />
+          </button>
+
+          <ChevronRight
+            className={`h-4 w-4 text-soft transition ${
+              isOpen ? "rotate-90 text-accent" : ""
+            }`}
+          />
+        </div>
+
+        {isMenuOpen && (
+          <div className="absolute right-2 top-[calc(100%+8px)] z-50 w-56 overflow-hidden rounded-2xl border border-soft bg-surface-elevated p-1 shadow-soft backdrop-blur-2xl">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                closeMenu();
+                onCreateConversation();
+              }}
+              className="flex min-h-10 w-full items-center gap-2.5 rounded-xl px-3 text-left text-xs font-bold text-secondary transition hover:bg-surface-muted"
+            >
+              <Plus className="h-3.5 w-3.5 text-accent" />
+              Nova conversa
+            </button>
+
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                closeMenu();
+                onEdit();
+              }}
+              className="flex min-h-10 w-full items-center gap-2.5 rounded-xl px-3 text-left text-xs font-bold text-secondary transition hover:bg-surface-muted"
+            >
+              <Edit3 className="h-3.5 w-3.5 text-accent" />
+              Editar projeto
+            </button>
+
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                closeMenu();
+                onDelete();
+              }}
+              className="flex min-h-10 w-full items-center gap-2.5 rounded-xl px-3 text-left text-xs font-bold text-red-600 transition hover:bg-red-500/10 dark:text-red-200/80"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Excluir projeto
+            </button>
+          </div>
+        )}
+      </div>
+
+      {isOpen && (
+        <div className="ml-4 mt-2 space-y-1.5 border-l border-[var(--border-soft)] pl-2.5">
+          {conversations.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-soft bg-surface-muted px-3 py-2 text-[0.68rem] leading-4 text-muted">
+              Nenhuma conversa neste projeto.
+            </p>
+          ) : (
+            conversations.map((conversation) => (
+              <DesktopSidebarConversationItem
+                key={conversation.id}
+                conversation={conversation}
+                lastAccessedAt={lastAccessByConversation[conversation.id]}
+                isSelected={activeConversationId === conversation.id}
+                onClick={() => onSelectConversation(conversation.id)}
+              />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DesktopSidebarEmpty({
+  icon: Icon,
+  title,
+  description,
+  actionLabel,
+  onAction,
+}: {
+  icon: ElementType;
+  title: string;
+  description: string;
+  actionLabel: string;
+  onAction: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-dashed border-soft bg-surface-muted px-3 py-4 text-center">
+      <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-2xl border border-accent-soft bg-accent-soft text-accent">
+        <Icon className="h-4 w-4" />
+      </div>
+
+      <p className="text-xs font-black text-primary">{title}</p>
+      <p className="mx-auto mt-1 max-w-[14rem] text-[0.68rem] leading-4 text-muted">
+        {description}
+      </p>
+
+      <button
+        type="button"
+        onClick={onAction}
+        className="mt-3 inline-flex min-h-9 items-center justify-center rounded-xl bg-[var(--accent-strong)] px-3 text-[0.68rem] font-black text-white transition active:scale-[0.98]"
+      >
+        {actionLabel}
+      </button>
+    </div>
+  );
+}
+
+function DesktopChatSidebarLoading({
+  label,
+  compact = false,
+}: {
+  label: string;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-2xl border border-soft bg-surface-muted text-center text-xs text-muted ${
+        compact ? "p-3" : "p-5"
+      }`}
+    >
+      {label}
+    </div>
+  );
 }
 
 /* ==========================================================================
@@ -960,10 +1327,8 @@ function ChatIntroCard({ onHide }: { onHide: () => void }) {
  * ========================================================================== */
 function ChatSearchPanel({
   search,
-  view,
   isInsideProject,
   onSearchChange,
-  onViewChange,
 }: {
   search: string;
   view: "all" | "projects";
@@ -972,47 +1337,32 @@ function ChatSearchPanel({
   onViewChange: (value: "all" | "projects") => void;
 }) {
   return (
-    <section className="mb-4 shrink-0 space-y-3">
-      <label className="flex min-h-13 items-center gap-3 rounded-[1.55rem] border border-soft bg-surface-elevated px-4 shadow-card backdrop-blur-2xl">
+    <section className="shrink-0">
+      <label className="flex min-h-10 items-center gap-2.5 rounded-2xl border border-soft bg-surface-muted px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-2xl">
         <Search className="h-4 w-4 text-soft" />
 
         <input
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
           placeholder={
-            isInsideProject ? "Buscar neste projeto..." : "Buscar conversa..."
+            isInsideProject
+              ? "Buscar conversas e projetos..."
+              : "Buscar conversas..."
           }
-          className="w-full bg-transparent text-sm text-primary outline-none placeholder:text-soft"
+          className="w-full bg-transparent text-xs font-semibold text-primary outline-none placeholder:text-soft"
         />
+
+        {search ? (
+          <button
+            type="button"
+            onClick={() => onSearchChange("")}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl text-soft transition hover:bg-surface-elevated hover:text-secondary active:scale-[0.96]"
+            aria-label="Limpar busca"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
       </label>
-
-      {!isInsideProject && (
-        <div className="flex rounded-[1.45rem] border border-soft bg-surface-elevated p-1 shadow-card backdrop-blur-2xl">
-          <button
-            type="button"
-            onClick={() => onViewChange("all")}
-            className={`min-h-10 flex-1 rounded-[1rem] text-xs font-semibold transition active:scale-[0.98] ${
-              view === "all"
-                ? "bg-[var(--accent-strong)] text-white shadow-card"
-                : "text-muted"
-            }`}
-          >
-            Todas
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onViewChange("projects")}
-            className={`min-h-10 flex-1 rounded-[1rem] text-xs font-semibold transition active:scale-[0.98] ${
-              view === "projects"
-                ? "bg-[var(--accent-strong)] text-white shadow-card"
-                : "text-muted"
-            }`}
-          >
-            Projetos
-          </button>
-        </div>
-      )}
     </section>
   );
 }
