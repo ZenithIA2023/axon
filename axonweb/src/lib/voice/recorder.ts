@@ -52,6 +52,22 @@ export interface VoiceRecorderEvents {
 }
 
 export interface VoiceRecorder {
+  /**
+   * Abre o microfone ANTES do toque, para que `start()` seja instantâneo.
+   *
+   * No Android o `getUserMedia` leva de 200 a 600ms, e a UI já sinalizava
+   * "gravando" nesse intervalo: o usuário falava e as primeiras palavras se
+   * perdiam. Com o stream pronto, `start()` só cria o MediaRecorder.
+   *
+   * Reutiliza o stream existente de propósito — dois `getUserMedia` simultâneos
+   * acendem dois ícones de microfone e, em alguns aparelhos, o segundo falha.
+   *
+   * Só faz sentido na página de voz: enquanto o stream está aberto o ícone do
+   * sistema fica aceso, então chame `release()` ao sair da tela.
+   */
+  prewarm(): Promise<void>;
+  /** Fecha o microfone pré-aquecido, se não estiver gravando. */
+  release(): void;
   start(): Promise<void>;
   /**
    * O stream do microfone, enquanto grava.
@@ -158,6 +174,18 @@ export function createVoiceRecorder(events: VoiceRecorderEvents = {}): VoiceReco
       return stream;
     },
 
+    async prewarm() {
+      // Gravando, o stream já existe e é o mesmo — nada a fazer.
+      if (recording || stream) return;
+      stream = await requestMicStream();
+    },
+
+    release() {
+      // Nunca fecha no meio de uma gravação: isso mataria o áudio em curso.
+      if (recording) return;
+      cleanupStream();
+    },
+
     async start() {
       if (recording) return;
       cancelled = false;
@@ -165,7 +193,8 @@ export function createVoiceRecorder(events: VoiceRecorderEvents = {}): VoiceReco
       chunks = [];
       totalBytes = 0;
 
-      stream = await requestMicStream();
+      // Já pré-aquecido? Então não há espera nenhuma aqui — é esse o ponto.
+      if (!stream) stream = await requestMicStream();
 
       const mimeType = pickMimeType();
       mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);

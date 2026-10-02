@@ -8,6 +8,8 @@ Leia este arquivo inteiro antes de mudar qualquer coisa. Ele existe para que fut
 
 O AXON é um assistente pessoal de produtividade baseado em cronobiologia. O usuário responde um questionário, recebe um cronotipo, e a partir daí o app organiza tarefas, rotinas e objetivos respeitando os blocos de energia dele. Um agente (Claude, com tool use) conversa por texto e por voz e executa ações no calendário. Registros diários alimentam insights, calibração de energia e relatórios narrativos.
 
+**Texto e voz são telas separadas, de propósito** (decidido em 02/10/2026): o chat (`/chat`) é exclusivamente digitado e a conversa falada vive na página de voz (`/voz`). Ver a seção 11.
+
 Plataformas: site (`axonapp.tech`) e app Android (Capacitor, mesmo bundle). Backend único em `api.axonapp.tech`.
 
 ## 2. Stack
@@ -135,6 +137,7 @@ Tokens em `axonweb/src/styles/index.css` (`:root` claro, `.dark` escuro):
 - **Inputs:** borda `border-[#7b2cbf]/20`, fundo `#fbf8ff` / `#191722`, foco `border-[#7b2cbf]/45`.
 - **Modais/sheets:** `components/ui/BottomSheet.tsx` e `ConfirmDialog.tsx`. Use-os; não crie um modal novo.
 - **Ícones:** lucide-react, tamanho `h-4 w-4` em linha, `h-5 w-5` em botões.
+- **Chat é só texto; voz tem página própria.** Decidido em 02/10/2026, depois de o app chegar a ter dois compositores empilhados na tela — um dentro da conversa (que gravava áudio) e o do `BottomNav` (que navega para `/voz`). Ficou **apenas o do `BottomNav`**, e o botão de microfone dele **leva para `/voz`**, nunca grava. Não reintroduza gravação dentro da conversa achando que é melhoria: foram duas funcionalidades concorrentes para a mesma ação, e a decisão é separar os modos. O `isComposerMode` do `BottomNav` existe para isso.
 - **Animações:** Framer Motion; entradas com `opacity`+`y`, duração 0,25 a 0,5s, `easeOut`.
 - **Loading/empty/error:** `components/ui/EmptyState.tsx` para vazio; skeletons e spinners locais por página.
 - **Prefira os tokens (`text-[var(--accent)]`, classes semânticas) a hex hardcoded.** O código atual tem centenas de `#7b2cbf` literais; não aumente esse número.

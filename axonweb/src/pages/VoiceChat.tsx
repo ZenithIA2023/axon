@@ -13,7 +13,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft, Home, Keyboard, Square } from "lucide-react";
+import { ChevronLeft, Home, Keyboard, Square, X } from "lucide-react";
 
 import * as api from "../lib/api";
 import { AxonOrb, type OrbState } from "../components/voice/AxonOrb";
@@ -374,6 +374,23 @@ export default function VoiceChat() {
     return speech.speaking ? "speaking" : "idle";
   }, [voiceSession.status, speech.speaking]);
 
+  // Gravando: o botão da esquerda vira cancelamento e o microfone vira "parar".
+  const gravando = voiceSession.status === "recording";
+
+  // Pré-aquece o microfone ao abrir a tela. No Android o `getUserMedia` leva de
+  // 200 a 600ms, e a UI sinalizava "gravando" antes de o MediaRecorder existir:
+  // quem falava imediatamente perdia as primeiras palavras. Aqui o stream já
+  // está pronto quando o dedo toca o botão.
+  //
+  // Só nesta página: enquanto o stream está aberto o ícone de microfone do
+  // sistema fica aceso, e falar é a ação principal daqui. Ao sair, solta.
+  useEffect(() => {
+    void voiceSession.prewarmMic();
+
+    return () => voiceSession.releaseMic();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- montagem/desmonte
+  }, []);
+
   // Contador de gravação. O recorder já corta sozinho em 60s; isto é só o que
   // aparece no selo.
   useEffect(() => {
@@ -444,7 +461,7 @@ export default function VoiceChat() {
         return {
           topo: "gravando",
           pill: `Ouvindo · ${mmss(segundos)}`,
-          dica: "Solte para enviar · deslize para cancelar",
+          dica: "Toque para enviar · X para cancelar",
         };
       case "thinking":
         return {
@@ -456,19 +473,19 @@ export default function VoiceChat() {
         return {
           topo: "falando",
           pill: toolLabel ?? "Axon está falando",
-          dica: "Segure para responder",
+          dica: "Toque para responder",
         };
       default:
         return {
           // Lendo o histórico, o topo diz o que a tela é agora — e a dica para
-          // de mandar segurar o botão, que não é o que a pessoa está fazendo.
+          // de mandar tocar no botão, que não é o que a pessoa está fazendo.
           topo: carregando
             ? "abrindo a conversa…"
             : modoRegistro
             ? "conversa inteira"
             : "pronto para ouvir",
-          pill: "Segure para falar",
-          dica: modoRegistro ? "Role para voltar à conversa" : "Segure o botão para falar",
+          pill: "Toque para falar",
+          dica: modoRegistro ? "Role para voltar à conversa" : "Toque no botão para falar",
         };
     }
   }, [estado, segundos, toolLabel, carregando, modoRegistro]);
@@ -807,18 +824,35 @@ export default function VoiceChat() {
         </p>
 
         <div className="grid w-full grid-cols-[46px_1fr_46px] items-center gap-4.5">
+          {/* Com toggle não há mais "deslizar para fora" para desistir, então
+              este botão assume o cancelamento ENQUANTO grava: o áudio é
+              descartado sem transcrever, sem enviar e sem gastar cota. Fora da
+              gravação ele volta a ser o caminho para o início. */}
           <button
             type="button"
-            onClick={() => navigate("/dashboard")}
-            aria-label="Ir para o início"
-            className="grid h-[46px] w-[46px] place-items-center rounded-2xl border backdrop-blur-lg"
+            onClick={() => {
+              if (gravando) {
+                // `true` = descarta. Cancelar é intenção, não falha: nenhuma
+                // mensagem de erro aparece e a orb volta ao repouso sozinha.
+                voiceSession.release(true);
+                return;
+              }
+
+              navigate("/dashboard");
+            }}
+            aria-label={gravando ? "Cancelar gravação" : "Ir para o início"}
+            className="grid h-[46px] w-[46px] place-items-center rounded-2xl border backdrop-blur-lg transition-colors"
             style={{
-              borderColor: "rgba(255,255,255,0.1)",
-              background: "rgba(255,255,255,0.055)",
-              color: "rgba(255,255,255,0.72)",
+              borderColor: gravando
+                ? "rgba(251, 113, 133, 0.44)"
+                : "rgba(255,255,255,0.1)",
+              background: gravando
+                ? "rgba(251, 113, 133, 0.18)"
+                : "rgba(255,255,255,0.055)",
+              color: gravando ? "#fb7185" : "rgba(255,255,255,0.72)",
             }}
           >
-            <Home className="h-5 w-5" />
+            {gravando ? <X className="h-5 w-5" /> : <Home className="h-5 w-5" />}
           </button>
 
           <div className="justify-self-center">
