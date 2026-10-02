@@ -25,8 +25,8 @@ export interface UseVoiceSessionOptions {
   /** Erro de permissão/gravação, com mensagem já em português. */
   onError?: (message: string) => void;
   /**
-   * Liga a transcrição ao vivo. Desligado por padrão: só a página de voz a usa,
-   * e o botão do chat de texto não deve abrir WebSocket nenhum.
+   * Liga a transcrição ao vivo. Desligado por padrão: hoje só a página de voz
+   * grava áudio — o chat é exclusivamente texto e não consome este hook.
    */
   live?: boolean;
   /** Texto parcial enquanto a pessoa fala. Só chamado com `live`. */
@@ -51,6 +51,14 @@ export interface UseVoiceSession {
   release: (shouldCancel: boolean) => void;
   /** Cancela no meio do gesto (ex.: dedo saiu longe demais da área do botão). */
   cancelNow: () => void;
+  /**
+   * Abre o microfone antes do primeiro toque, para que `press()` comece a
+   * gravar na hora. Use na página de voz e chame `releaseMic()` ao sair —
+   * enquanto o stream está aberto o ícone do sistema fica aceso.
+   */
+  prewarmMic: () => Promise<void>;
+  /** Fecha o microfone pré-aquecido (não interrompe uma gravação em curso). */
+  releaseMic: () => void;
   /** Chamar quando o backend terminou de responder (sucesso ou erro). */
   finishProcessing: () => void;
 }
@@ -252,6 +260,22 @@ export function useVoiceSession(options: UseVoiceSessionOptions): UseVoiceSessio
     setStatusBoth("idle");
   }, [setStatusBoth]);
 
+  const prewarmMic = useCallback(async () => {
+    if (!available) return;
+
+    try {
+      await ensureRecorder().prewarm();
+    } catch {
+      // Falhar aqui não é erro para o usuário: ele nem pediu para gravar ainda.
+      // O pedido de permissão (e a mensagem de falha) acontece no primeiro
+      // toque, em `press()`, que é onde ele espera ver resposta.
+    }
+  }, [available, ensureRecorder]);
+
+  const releaseMic = useCallback(() => {
+    recorderRef.current?.release();
+  }, []);
+
   // Troca de tela / desmonte com gravação em andamento: cancela, não deixa o
   // microfone ligado nem uma gravação órfã sendo processada.
   useEffect(() => {
@@ -259,6 +283,9 @@ export function useVoiceSession(options: UseVoiceSessionOptions): UseVoiceSessio
       pcmRef.current?.stop();
       liveRef.current?.cancel();
       recorderRef.current?.cancel();
+      // `cancel()` não fecha um stream que foi pré-aquecido e nunca gravou:
+      // sem isto o ícone de microfone do sistema ficaria aceso após sair.
+      recorderRef.current?.release();
     };
   }, []);
 
@@ -279,5 +306,15 @@ export function useVoiceSession(options: UseVoiceSessionOptions): UseVoiceSessio
     };
   }, [cancelNow]);
 
-  return { status, level, available, press, release, cancelNow, finishProcessing };
+  return {
+    status,
+    level,
+    available,
+    press,
+    release,
+    cancelNow,
+    prewarmMic,
+    releaseMic,
+    finishProcessing,
+  };
 }
