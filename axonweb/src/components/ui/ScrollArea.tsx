@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 
 type ScrollAreaProps = {
   children: ReactNode;
@@ -6,6 +6,8 @@ type ScrollAreaProps = {
   contentClassName?: string;
   fadeTop?: boolean;
   fadeBottom?: boolean;
+  /** Acesso ao elemento que realmente rola — para rolar por código. */
+  viewportRef?: RefObject<HTMLDivElement | null>;
 };
 
 export function ScrollArea({
@@ -14,6 +16,7 @@ export function ScrollArea({
   contentClassName = "",
   fadeTop = false,
   fadeBottom = false,
+  viewportRef,
 }: ScrollAreaProps) {
   return (
     <div className={`relative flex min-h-0 flex-col ${className}`}>
@@ -28,6 +31,7 @@ export function ScrollArea({
       )}
 
       <div
+        ref={viewportRef}
         className={`custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain ${contentClassName}`}
       >
         {children}

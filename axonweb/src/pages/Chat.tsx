@@ -4,7 +4,7 @@
  * ========================================================================== */
 
 import { useEffect, useMemo, useState, type ElementType } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   Bell,
   Briefcase,
@@ -174,6 +174,8 @@ const validKeys: ChronotypeResultKey[] = [
 
 export default function Chat() {
   const navigate = useNavigate();
+  // /chat/:chatId abre direto naquela conversa; /chat usa a principal do Axon.
+  const { chatId: chatIdDaUrl } = useParams();
 
   /* --------------------------------------------------------------------------
    * Estados da lista e layout
@@ -477,6 +479,7 @@ export default function Chat() {
 
   // Mobile: /chat abre direto na conversa principal do Axon. Se ela ainda não
   // existir (conta nova), cai na conversa mais recente disponível.
+  // Com /chat/:chatId, abre a conversa daquele link.
   useEffect(() => {
     if (isDesktopChatViewport()) return;
     if (loadingConversations) return;
@@ -488,9 +491,20 @@ export default function Chat() {
           conversation.id === mobileConversationId && !conversation.archived
       );
 
-    if (stillExists) return;
+    // Um :chatId diferente do que está aberto é uma troca pedida pela URL e
+    // precisa vencer a conversa atual — senão um link para outra conversa não
+    // faria nada enquanto já houvesse uma aberta.
+    const urlPedeOutra = !!chatIdDaUrl && chatIdDaUrl !== mobileConversationId;
+
+    if (stillExists && !urlPedeOutra) return;
+
+    // A conversa pedida na URL ganha de tudo: é um link direto para ela.
+    const daUrl = chatIdDaUrl
+      ? conversations.find((conversation) => conversation.id === chatIdDaUrl)
+      : undefined;
 
     const fallback =
+      daUrl ??
       axonDirectConversation ??
       sortConversationsByRecent(
         conversations.filter((conversation) => !conversation.archived)
@@ -499,6 +513,7 @@ export default function Chat() {
     setMobileConversationId(fallback?.id ?? null);
   }, [
     axonDirectConversation,
+    chatIdDaUrl,
     conversations,
     loadingConversations,
     mobileConversationId,
