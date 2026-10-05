@@ -228,7 +228,7 @@ export function ChatConversationPanel({
 
   // Histórico compacto enviado ao backend e marcador usado para rolar até o fim.
   const historyRef = useRef<api.ChatMessage[]>([]);
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const scrollViewportRef = useRef<HTMLDivElement | null>(null);
 
   // Dados da conversa atual usados no título e na movimentação entre projetos.
   const [conversation, setConversation] = useState<api.ConversationData | null>(
@@ -497,12 +497,17 @@ export function ChatConversationPanel({
   }
 
   // Mantém o usuário no final do histórico ao abrir ou receber novas mensagens.
+  //
+  // Rola o PRÓPRIO container, e não `scrollIntoView` na âncora: o
+  // `scrollIntoView` sobe todos os ancestrais roláveis até a âncora aparecer, e
+  // no app isso arrastava a tela inteira para cima — a conversa ficava cortada
+  // sob o cabeçalho e sobrava um vão preto acima do BottomNav.
   function scrollToBottom(behavior: ScrollBehavior = "smooth") {
     requestAnimationFrame(() => {
-      messagesEndRef.current?.scrollIntoView({
-        behavior,
-        block: "end",
-      });
+      const viewport = scrollViewportRef.current;
+      if (!viewport) return;
+
+      viewport.scrollTo({ top: viewport.scrollHeight, behavior });
     });
   }
 
@@ -521,8 +526,17 @@ export function ChatConversationPanel({
   }, [messages, isSending]);
 
   // Layout principal: header fixo, histórico scrollável, composer e modais globais.
+  //
+  // Embutido, a raiz é uma <div> e NÃO um <main>: as regras de página do
+  // index.css (`.is-native main`, a reserva do BottomNav) miram o seletor
+  // `main` e seriam aplicadas uma segunda vez aqui dentro, sobre um elemento
+  // que já vive dentro do <main> da página. Com `border-box` esse padding é
+  // descontado POR DENTRO da altura — era isso que comia o histórico e deixava
+  // o vão preto no app. Quem trata altura e safe area é só o contêiner externo.
+  const Raiz = embedded ? "div" : "main";
+
   return (
-    <main
+    <Raiz
       className={
         embedded
           ? "relative h-full overflow-hidden bg-transparent text-primary"
@@ -659,7 +673,11 @@ export function ChatConversationPanel({
           </div>
         </header>
 
-        <ScrollArea className="min-h-0 flex-1" contentClassName="pr-1 pb-4">
+        <ScrollArea
+          className="min-h-0 flex-1"
+          contentClassName="pr-1 pb-4"
+          viewportRef={scrollViewportRef}
+        >
           <div className="space-y-3 pb-4">
             {messages.length === 0 ? (
               onOpenChatList ? (
@@ -712,7 +730,6 @@ export function ChatConversationPanel({
               </>
             )}
 
-            <div ref={messagesEndRef} className="h-1" />
           </div>
         </ScrollArea>
 
@@ -785,6 +802,23 @@ export function ChatConversationPanel({
           </form>
         </footer>
         )}
+
+        {/* O compositor vive no BottomNav, que é `fixed` e flutua sobre o
+            conteúdo. Reserva aqui a altura REAL da barra: 3.75rem da pílula +
+            0.75rem do `pb-3` do container.
+
+            Esta é a ÚNICA reserva para a barra nesta tela: a raiz embutida é
+            uma <div>, então a regra `main:not(.h-[100dvh])` do index.css não a
+            alcança — de propósito, para o espaço não ser contado duas vezes.
+
+            NÃO somar `env(safe-area-inset-bottom)`: a barra recebe esse inset
+            como padding (`.is-native .fixed.bottom-0`), e o <main> da página já
+            reserva o mesmo inset — somar aqui abriria um vão preto.
+
+            NÃO usar os 5.75rem do index.css: aquele valor embute uma folga de
+            respiro para páginas roláveis, e aqui cada rem reservado sai da
+            área visível da conversa. */}
+        {temComposerNativo && <div aria-hidden className="h-[4.5rem] shrink-0" />}
       </div>
 
       {!embedded && !onOpenSidebar && (
@@ -849,7 +883,7 @@ export function ChatConversationPanel({
         onClose={() => setIsProjectSheetOpen(false)}
         onMove={handleMoveConversationToProject}
       />
-    </main>
+    </Raiz>
   );
 }
 

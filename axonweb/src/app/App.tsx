@@ -31,7 +31,6 @@ import DayClosureQuestion from "../components/notifications/DayClosureQuestion";
 // App
 import Dashboard from "../pages/Dashboard";
 import Chat from "../pages/Chat";
-import ChatConversation from "../pages/ChatConversation";
 import VoiceChat from "../pages/VoiceChat";
 import Planning from "../pages/Planning";
 import Insights from "../pages/Insights";
@@ -108,8 +107,13 @@ export default function App() {
 
         {/* App interno */}
         <Route path="/dashboard" element={<Dashboard />} />
+        {/* As duas rotas montam a MESMA tela: `Chat` resolve qual conversa
+            abrir (pelo :chatId, ou a principal do Axon) e é quem dá o cabeçalho
+            com a gaveta de conversas. Montar `ChatConversation` direto aqui
+            fazia /chat/:id cair num cabeçalho antigo e diferente — os ícones do
+            topo mudavam conforme o caminho usado para chegar. */}
         <Route path="/chat" element={<Chat />} />
-        <Route path="/chat/:chatId" element={<ChatConversation />} />
+        <Route path="/chat/:chatId" element={<Chat />} />
         <Route path="/voz" element={<VoiceChat />} />
         <Route path="/planning" element={<Planning initialView="agenda" />} />
         <Route path="/insights" element={<Insights />} />

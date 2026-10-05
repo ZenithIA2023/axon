@@ -439,10 +439,15 @@ body {
 }
 
 /* Telas de altura travada (Chat, Focus) usam 100dvh, que conta a tela INTEIRA,
-   incluindo as barras do sistema. Com o padding acima, o conteúdo passaria a
-   transbordar; descontar os insets da altura devolve o espaço certo. */
+   incluindo as barras do sistema.
+
+   Com `box-sizing: border-box` (global, no topo deste arquivo) o padding da
+   regra acima JÁ está contido em `height`, então 100dvh basta: a área de
+   conteúdo vira `100dvh - insets`, que é exatamente o desejado. Descontar os
+   insets da altura de novo tirava esse espaço DUAS vezes e encolhia a tela —
+   no chat isso comia o histórico e abria um vão preto acima do BottomNav. */
 .is-native main.h-\[100dvh\] {
-  height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  height: 100dvh;
 }
 
 /* A página de voz é escura SEMPRE, independente do tema claro/escuro do app.
