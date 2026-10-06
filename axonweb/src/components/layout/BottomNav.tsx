@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { isNative } from "../../lib/nativeAuth";
+import { useTheme } from "../theme/ThemeProvider";
 // Versão reduzida (192px) do rosto: a barra aparece em todas as telas do app,
 // e o original de 1080px pesa 687KB para ser exibido a 44px.
 import axonHead from "../../assets/axon/axon-head-happy-sm.png";
@@ -95,6 +96,55 @@ const appRoutes = [
 const HOLD_MS = 400;
 
 // ===========================================================================
+// FUNDO E SOMBRA DAS CAIXAS, POR TEMA
+// ===========================================================================
+// O resto da barra (textos, ícones, fundo da aba ativa) usa os tokens do design
+// system, que já trocam sozinhos com a classe `.dark` no <html>. Estas quatro
+// combinações vêm do JS por dois motivos:
+//
+//  1. O fundo e a sombra da caixa direita são ANIMADOS pelo framer-motion por
+//     `style` inline, que tem precedência sobre classe — um `dark:bg-...` ali
+//     seria ignorado.
+//  2. As sombras são strings de quatro camadas. Como valor arbitrário de
+//     Tailwind elas não sobrevivem (o parser não gera a classe), e repetidas no
+//     className cobrariam duas linhas cada uma.
+//
+// As quatro variantes têm as MESMAS quatro camadas (anel + contato + corpo +
+// halo): o framer-motion interpola sombra camada a camada, e com contagens
+// diferentes a transição salta em vez de deslizar.
+//
+// O anel `inset` é o que separa a barra do fundo no tema claro, onde ela é
+// branca sobre o quase-branco do app (--app-bg: #f7f2ff). No escuro ele fica
+// quase invisível, só marcando a quina de cima.
+
+type NavPalette = {
+  /** Superfície da barra: as abas, e a caixa direita no modo composer. */
+  surface: string;
+  surfaceShadow: string;
+  /** A bolinha do Axon é roxa nos dois temas: é identidade, não cor de tema. */
+  orb: string;
+  orbShadow: string;
+};
+
+const LIGHT_NAV: NavPalette = {
+  surface: "#ffffff",
+  surfaceShadow:
+    "inset 0 0 0 1px rgba(123,44,191,0.12), 0 2px 8px rgba(48,26,82,0.08), 0 12px 28px rgba(48,26,82,0.10), 0 24px 60px rgba(48,26,82,0.14)",
+  orb: "#7c34b8",
+  orbShadow:
+    "inset 0 0 0 1px rgba(123,44,191,0.18), 0 2px 8px rgba(48,26,82,0.10), 0 12px 28px rgba(48,26,82,0.14), 0 20px 48px rgba(123,44,191,0.30)",
+};
+
+const DARK_NAV: NavPalette = {
+  surface: "#1F1E2A",
+  surfaceShadow:
+    "inset 0 0 0 1px rgba(255,255,255,0.04), 0 2px 8px rgba(0,0,0,0.45), 0 12px 28px rgba(0,0,0,0.6), 0 24px 60px rgba(0,0,0,0.75)",
+  orb: "#7c34b8",
+  orbShadow:
+    "inset 0 0 0 1px rgba(255,255,255,0.06), 0 2px 8px rgba(0,0,0,0.45), 0 12px 28px rgba(0,0,0,0.6), 0 20px 48px rgba(123,44,191,0.35)",
+};
+
+// ===========================================================================
 // BARRA DE NAVEGAÇÃO INFERIOR (MOBILE)
 // ===========================================================================
 // Substitui a Sidebar no app instalado. A web continua na Sidebar: numa tela
@@ -103,6 +153,8 @@ const HOLD_MS = 400;
 export default function BottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { resolvedTheme } = useTheme();
+  const palette = resolvedTheme === "dark" ? DARK_NAV : LIGHT_NAV;
 
   // ---------------------------------------------------------------------------
   // Estado interno
@@ -349,14 +401,6 @@ export default function BottomNav() {
   // Com pixels explícitos nos dois lados, o encolher de um e o crescer do outro
   // acontecem no MESMO quadro — a soma das larguras nunca muda.
 
-  // Sombras em camadas: contato curto, corpo médio e um halo amplo. A terceira
-  // camada é o que muda entre os dois estados — roxa sob a bolinha, preta sob
-  // as superfícies escuras.
-  const DARK_SHADOW =
-    "0 2px 8px rgba(0,0,0,0.45), 0 12px 28px rgba(0,0,0,0.6), 0 24px 60px rgba(0,0,0,0.75)";
-  const ORB_SHADOW =
-    "0 2px 8px rgba(0,0,0,0.45), 0 12px 28px rgba(0,0,0,0.6), 0 20px 48px rgba(123,44,191,0.35)";
-
   // 3.75rem do círculo e 0.625rem (gap-2.5) de respiro, em pixels.
   const rootFontSize = 16;
   const ORB_PX = 3.75 * rootFontSize;
@@ -391,6 +435,9 @@ export default function BottomNav() {
     <motion.nav
       ref={railRef}
       data-bottom-nav
+      // Fica fora da regra genérica de rodapé do index.css, que anularia o
+      // respiro acima dos botões do sistema (ver o comentário lá).
+      data-own-safe-bottom
       initial={{ y: "130%" }}
       animate={{ y: 0 }}
       transition={{ type: "spring", stiffness: 320, damping: 32 }}
@@ -403,9 +450,13 @@ export default function BottomNav() {
       <motion.div
         animate={isMeasured ? { width: leftWidth } : undefined}
         transition={morph}
-        style={isMeasured ? { width: leftWidth } : undefined}
+        style={{
+          ...(isMeasured ? { width: leftWidth } : {}),
+          backgroundColor: palette.surface,
+          boxShadow: palette.surfaceShadow,
+        }}
         initial={false}
-        className={`relative h-[3.75rem] shrink-0 overflow-hidden rounded-[1.875rem] bg-[#1F1E2A] shadow-[0_2px_8px_rgba(0,0,0,0.45),0_12px_28px_rgba(0,0,0,0.6),0_24px_60px_rgba(0,0,0,0.75)] ${
+        className={`relative h-[3.75rem] shrink-0 overflow-hidden rounded-[1.875rem] ${
           isMeasured ? "" : "flex-1"
         }`}
       >
@@ -423,6 +474,16 @@ export default function BottomNav() {
           }}
           className="absolute inset-y-0 left-0 flex items-center gap-0.5 p-1.5"
         >
+          {/* Cores das abas, medidas em contraste WCAG sobre a superfície de
+              cada tema (o label tem 0,6rem, então vale o mínimo de 4,5:1):
+
+              · Inativa usa --text-secondary (claro 6,3:1, escuro 8,2:1).
+                --text-muted seria o token mais óbvio, mas dá 4,2:1 no claro —
+                reprova para texto deste tamanho.
+              · Ativa usa --accent no claro (7,1:1) e mantém o #c084fc no
+                escuro. Deixar o token nos dois parecia mais limpo, mas o
+                --accent escuro (#a855f7) cai para 4,2:1 contra os 6,2:1 do
+                #c084fc: seria trocar contraste por elegância de código. */}
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = isTabActive(tab);
@@ -436,7 +497,9 @@ export default function BottomNav() {
                 aria-hidden={isComposerMode}
                 tabIndex={isComposerMode ? -1 : 0}
                 className={`relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-[1.45rem] px-1 pb-1.5 pt-2 transition-colors active:scale-[0.94] ${
-                  isActive ? "text-[#c084fc]" : "text-white/55"
+                  isActive
+                    ? "text-[var(--accent)] dark:text-[#c084fc]"
+                    : "text-[var(--text-secondary)]"
                 }`}
               >
                 {/* Fundo da aba ativa pintado em CADA aba, revelado por
@@ -445,7 +508,7 @@ export default function BottomNav() {
                     barra. */}
                 <span
                   aria-hidden
-                  className={`absolute inset-0 -z-10 rounded-[1.45rem] bg-white/[0.07] transition-opacity duration-200 ${
+                  className={`absolute inset-0 -z-10 rounded-[1.45rem] bg-[var(--surface-muted)] transition-opacity duration-200 ${
                     isActive ? "opacity-100" : "opacity-0"
                   }`}
                 />
@@ -475,7 +538,7 @@ export default function BottomNav() {
             width: ORB_PX,
             pointerEvents: isComposerMode ? "auto" : "none",
           }}
-          className="absolute inset-y-0 right-0 flex items-center justify-center text-white/70"
+          className="absolute inset-y-0 right-0 flex items-center justify-center text-[var(--text-secondary)]"
         >
           <ReturnIcon className="h-5 w-5 shrink-0" />
         </motion.button>
@@ -490,13 +553,15 @@ export default function BottomNav() {
           isMeasured
             ? {
                 width: rightWidth,
-                backgroundColor: isComposerMode ? "#1F1E2A" : "#7c34b8",
+                backgroundColor: isComposerMode ? palette.surface : palette.orb,
                 // A sombra acompanha o que a caixa É naquele momento: halo roxo
                 // enquanto ela é a bolinha do Axon, sombra preta quando vira o
                 // campo de texto. Deixá-la fixa no className projetava um brilho
                 // roxo atrás de um campo escuro, sem nada na tela que o
                 // justificasse.
-                boxShadow: isComposerMode ? DARK_SHADOW : ORB_SHADOW,
+                boxShadow: isComposerMode
+                  ? palette.surfaceShadow
+                  : palette.orbShadow,
               }
             : undefined
         }
@@ -506,9 +571,11 @@ export default function BottomNav() {
           isMeasured
             ? {
                 width: rightWidth,
-                boxShadow: isComposerMode ? DARK_SHADOW : ORB_SHADOW,
+                boxShadow: isComposerMode
+                  ? palette.surfaceShadow
+                  : palette.orbShadow,
               }
-            : { width: ORB_PX, boxShadow: ORB_SHADOW }
+            : { width: ORB_PX, boxShadow: palette.orbShadow }
         }
         className="relative h-[3.75rem] shrink-0 overflow-hidden rounded-[1.875rem]"
       >
@@ -540,7 +607,7 @@ export default function BottomNav() {
             onClick={() => navigate("/chat")}
             aria-label="Nova conversa"
             tabIndex={isComposerMode ? 0 : -1}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white/55 transition active:scale-[0.92]"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] transition active:scale-[0.92]"
           >
             <Plus className="h-5 w-5" />
           </button>
@@ -551,7 +618,7 @@ export default function BottomNav() {
             onChange={(event) => setMessage(event.target.value)}
             placeholder="Mensagem AXON"
             tabIndex={isComposerMode ? 0 : -1}
-            className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/35"
+            className="min-w-0 flex-1 bg-transparent text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-soft)]"
           />
 
           {/* Sem texto o botão oferece a voz; com texto, o envio. Mesmo padrão
@@ -571,7 +638,7 @@ export default function BottomNav() {
               onClick={() => navigate("/voz")}
               aria-label="Conversar por voz"
               tabIndex={isComposerMode ? 0 : -1}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white/70 transition active:scale-[0.92]"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[var(--text-secondary)] transition active:scale-[0.92]"
             >
               <AudioLines className="h-5 w-5" />
             </button>

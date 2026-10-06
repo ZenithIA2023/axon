@@ -108,7 +108,16 @@ export default function DayClosureQuestion() {
     // para nunca cobrir a navegação nem competir com um toast.
     // pointer-events-none no container + auto no cartão: o resto da tela segue
     // clicável, então a pergunta não bloqueia o app.
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[80] px-4 pb-[calc(env(safe-area-inset-bottom)+5.5rem)]">
+    // `data-own-safe-bottom` mantém este padding vivo: a regra genérica de
+    // rodapé do index.css é unlayered e sobrepujava o utilitário, deixando o
+    // cartão colado no fundo, atrás da barra. O rodapé é medido a partir do
+    // mesmo `--bottom-nav-gap` da barra mais a altura dela (3.75rem) e um
+    // respiro, então o cartão acompanha quando a barra se move. O fallback de
+    // 1rem é para a web, onde a barra não existe e a variável não é definida.
+    <div
+      data-own-safe-bottom
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-[80] px-4 pb-[calc(var(--bottom-nav-gap,1rem)+4.5rem)]"
+    >
       <div className="pointer-events-auto mx-auto max-w-md rounded-[1.5rem] border border-soft bg-surface-elevated p-4 shadow-card backdrop-blur-2xl">
         <div className="flex items-start gap-3">
           <Clock className="mt-0.5 h-5 w-5 shrink-0 text-accent" />

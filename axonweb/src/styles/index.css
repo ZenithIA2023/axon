@@ -466,7 +466,15 @@ body {
   bottom: calc(1.5rem + env(safe-area-inset-bottom));
 }
 
-.is-native .fixed.bottom-0 {
+/* `:not([data-own-safe-bottom])` não é detalhe: esta regra é unlayered e tem
+   especificidade (0,3,0), então ela VENCE tanto a regra própria da BottomNav
+   (0,2,0, também unlayered) quanto qualquer utilitário do Tailwind (que vive em
+   `@layer utilities`, e layer nenhuma ganha de unlayered). Sem a exclusão ela
+   anulava em silêncio o padding de quem calcula o próprio rodapé — era por isso
+   que a barra encostava nos botões do sistema apesar de pedir respiro, e que o
+   `pb-[...]` do cartão de fechamento do dia nunca valia. Quem cuida do próprio
+   inset marca `data-own-safe-bottom` e fica fora daqui. */
+.is-native .fixed.bottom-0:not([data-own-safe-bottom]) {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
@@ -494,20 +502,53 @@ body {
    deixaria um vão morto no rodapé de toda página.
 
    A barra é `fixed`, então não herda o padding de safe area que o <main> ganha
-   acima: precisa se afastar da barra do sistema por conta própria. */
+   acima: precisa se afastar da barra do sistema por conta própria.
+
+   `--bottom-nav-gap` é a distância entre a barra e o fim da tela. Ela existe
+   como variável porque o padding do <main> (regra abaixo) é derivado dela: os
+   dois têm que andar juntos, senão o último card da página fica escondido
+   atrás da barra.
+
+   Duas partes, e as duas são necessárias:
+
+   · `1.25rem + env(safe-area-inset-bottom)` — o respiro acima da área
+     reservada do sistema. Com 0.75rem a barra encostava nos botões de
+     navegação do Android: tecnicamente fora da safe area, mas sem folga
+     nenhuma, parecendo grudada neles.
+   · `max(..., 2rem)` — piso para quando o `env()` vem ZERO. O WebView do
+     Android nem sempre reporta o inset das system bars (historicamente ele só
+     expõe o recorte da tela, não as barras), e com targetSdk 36 o app é
+     edge-to-edge obrigatório: sem piso, naquele aparelho a barra cairia em
+     cima dos botões. Quando o `env()` é reportado de verdade ele é maior que
+     o piso e vence, então o piso não afasta a barra à toa. */
+.is-native {
+  /* O respiro acima da safe area, isolado: as telas de altura travada (Chat)
+     reservam espaço DENTRO de uma área que já descontou o inset, então para
+     elas só esta parte conta — somar o inset de novo abriria um vão preto. */
+  --bottom-nav-lift: 1.25rem;
+  --bottom-nav-gap: max(
+    2rem,
+    calc(var(--bottom-nav-lift) + env(safe-area-inset-bottom))
+  );
+}
+
 .is-native [data-bottom-nav] {
-  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  padding-bottom: var(--bottom-nav-gap);
 }
 
 /* O conteúdo das páginas precisa terminar ACIMA da barra, senão o último card
-   fica embaixo dela. A altura da barra (bolinha de 3.75rem + o padding do
-   container) mais uma folga de respiro. Só as telas roláveis: as de altura
-   travada (Chat, Focus) escondem a barra ou tratam o rodapé por conta própria.
+   fica embaixo dela. São 3.75rem da altura da barra mais 2rem de folga de
+   respiro, somados ao mesmo `--bottom-nav-gap` que afasta a barra do fim da
+   tela — derivar da variável é o que mantém os dois em sincronia quando o
+   respiro muda. A folga é 2rem, e não 1.25rem, para o conteúdo das páginas
+   ficar exatamente onde já estava: só a barra muda de lugar neste ajuste.
+   Só as telas roláveis: as de altura travada (Chat, Focus) escondem a barra
+   ou tratam o rodapé por conta própria.
 
    `:has()` limita a regra às telas que REALMENTE têm a barra: sem isso, login,
    onboarding e a landing ganhariam a folga sem precisar dela. */
 .is-native body:has([data-bottom-nav]) main:not(.h-\[100dvh\]) {
-  padding-bottom: calc(5.75rem + env(safe-area-inset-bottom));
+  padding-bottom: calc(5.75rem + var(--bottom-nav-gap));
 }
 
 /* O "puxar além do fim" do WebView denuncia que é um site dentro de uma

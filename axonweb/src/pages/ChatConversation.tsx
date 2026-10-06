@@ -804,8 +804,10 @@ export function ChatConversationPanel({
         )}
 
         {/* O compositor vive no BottomNav, que é `fixed` e flutua sobre o
-            conteúdo. Reserva aqui a altura REAL da barra: 3.75rem da pílula +
-            0.75rem do `pb-3` do container.
+            conteúdo. Reserva aqui a altura REAL da barra: 3.75rem da pílula
+            mais `--bottom-nav-lift`, que é o quanto a barra sobe ACIMA da safe
+            area (o `pb-3` do className nunca valeu — a regra de rodapé do
+            index.css o sobrepujava; ver o comentário de lá).
 
             Esta é a ÚNICA reserva para a barra nesta tela: a raiz embutida é
             uma <div>, então a regra `main:not(.h-[100dvh])` do index.css não a
@@ -818,7 +820,12 @@ export function ChatConversationPanel({
             NÃO usar os 5.75rem do index.css: aquele valor embute uma folga de
             respiro para páginas roláveis, e aqui cada rem reservado sai da
             área visível da conversa. */}
-        {temComposerNativo && <div aria-hidden className="h-[4.5rem] shrink-0" />}
+        {temComposerNativo && (
+          <div
+            aria-hidden
+            className="h-[calc(3.75rem+var(--bottom-nav-lift,0.75rem))] shrink-0"
+          />
+        )}
       </div>
 
       {!embedded && !onOpenSidebar && (
