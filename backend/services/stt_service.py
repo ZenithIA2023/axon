@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 import httpx
 
 from database import supabase
-from services import gcp_auth, stt_vocabulary
+from services import gcp_auth, stt_vocabulary, usage_service
 
 # A transcrição entra no caminho da conversa falada — um provedor lento trava
 # a resposta do Axon antes mesmo dela começar.
@@ -68,6 +68,16 @@ def _provider() -> str:
 
 def _model() -> str:
     return os.getenv("VOICE_STT_MODEL", _DEFAULT_MODEL)
+
+
+def _active_model() -> str:
+    """Nome do modelo que o provedor ativo de fato usa — é o que vai para o registro de uso."""
+    p = _provider()
+    if p == "openai":
+        return os.getenv("OPENAI_STT_MODEL", _DEFAULT_OPENAI_MODEL)
+    if p == "openrouter":
+        return os.getenv("OPENROUTER_STT_MODEL", _DEFAULT_OPENROUTER_MODEL)
+    return _model()
 
 
 def _usa_hints() -> bool:
@@ -487,10 +497,18 @@ def transcribe_billed(
     return resultado
 
 
-def record_usage(user_id: str, seconds: float) -> None:
-    """Soma `seconds` ao contador do mês corrente. Idempotente pela PK composta."""
+def record_usage(user_id: str, seconds: float, feature: str = "voz_transcricao") -> None:
+    """
+    Soma `seconds` ao contador do mês corrente (idempotente pela PK composta) e
+    registra o evento em `api_usage_events`.
+
+    O contador mensal continua sendo a cota; o evento é a medição de custo, que
+    separa a transcrição por gravação (`voz_transcricao`) da ao vivo
+    (`voz_transcricao_ao_vivo`).
+    """
     if seconds <= 0:
         return
+    usage_service.record_stt(user_id, feature, _provider(), _active_model(), seconds)
     mes = _year_month()
     usado = seconds_used_this_month(user_id)
     supabase.table("voice_stt_usage").upsert(

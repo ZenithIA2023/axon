@@ -36,7 +36,7 @@ import anthropic
 from database import supabase
 from services import chronotype as chronotype_service
 from services import notification_analyzer, notification_service
-from services import saved_time_service, tasks_service, user_tz
+from services import saved_time_service, tasks_service, usage_service, user_tz
 
 _MODEL = notification_analyzer._MODEL
 
@@ -451,7 +451,7 @@ def _default_reason(kind, task, day, slot, swap_with) -> str:
 
 # ── Motivos pelo Claude ─────────────────────────────────────────────────────
 
-def _write_reasons(moves: list[dict], user_name: str) -> None:
+def _write_reasons(user_id: str, moves: list[dict], user_name: str) -> None:
     """
     Pede ao Claude frases curtas por movimento. Os horários NÃO são enviados
     para ele decidir — já estão decididos; ele só descreve. Se falhar, ficam os
@@ -476,6 +476,7 @@ Retorne APENAS JSON válido: {{"reasons": ["motivo 0", "motivo 1", ...]}} com ex
         resp = client.messages.create(
             model=_MODEL, max_tokens=600, messages=[{"role": "user", "content": prompt}]
         )
+        usage_service.record_claude(user_id, "rotina_motivos", _MODEL, resp.usage)
         parsed = notification_analyzer._parse_json(resp.content[0].text)
         reasons = parsed.get("reasons") or []
         if len(reasons) == len(moves):
@@ -581,7 +582,7 @@ def analyze(user_id: str, tz_name: str, target_date: date, source: str = "manual
             "message": "Sua agenda já está bem distribuída — não encontrei nada que valesse mudar.",
         }
 
-    _write_reasons(moves, ctx.get("user_name") or "você")
+    _write_reasons(user_id, moves, ctx.get("user_name") or "você")
 
     row = {
         "user_id": user_id,

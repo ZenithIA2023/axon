@@ -483,7 +483,7 @@ def _parse_written_findings(text: str) -> list[dict]:
     return out
 
 
-def write_findings(findings: list[dict]) -> list[dict]:
+def write_findings(findings: list[dict], user_id: str | None = None) -> list[dict]:
     """
     Faz a curadoria e a escrita das descobertas já calculadas por
     find_correlations, via Claude. O modelo escolhe quais mostrar e redige as
@@ -502,6 +502,8 @@ def write_findings(findings: list[dict]) -> list[dict]:
     text = claude_service.call_chat(
         messages=[{"role": "user", "content": _findings_to_user_message(findings)}],
         system_prompt=_WRITER_SYSTEM_PROMPT,
+        user_id=user_id,
+        feature="descobertas",
     )
     written = _parse_written_findings(text)
 

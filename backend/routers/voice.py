@@ -39,6 +39,7 @@ from services import (
     stt_service,
     stt_vocabulary,
     tts_service,
+    usage_service,
 )
 
 router = APIRouter(prefix="/voice", tags=["voice"])
@@ -148,6 +149,12 @@ def synthesize(
         # 502: quem falhou foi o provedor, não o pedido do usuário. O app trata
         # isso caindo para o texto na tela em vez de quebrar a conversa.
         raise HTTPException(status_code=502, detail=str(e))
+
+    if not do_cache:
+        # Só o que foi sintetizado de fato: áudio do cache não foi cobrado.
+        voz_id = body.voice_id or tts_service.DEFAULT_VOICE
+        provedor, _, voz = voz_id.partition(":")
+        usage_service.record_tts(current_user["id"], provedor, voz, len(body.text.strip()))
 
     return Response(
         content=audio,
@@ -452,7 +459,9 @@ async def realtime(ws: WebSocket):
         # senão uma queda no fim viraria transcrição de graça.
         if segundos_enviados > 0:
             try:
-                stt_service.record_usage(user_id, round(segundos_enviados, 1))
+                stt_service.record_usage(
+                    user_id, round(segundos_enviados, 1), feature="voz_transcricao_ao_vivo"
+                )
             except Exception:
                 pass
         try:

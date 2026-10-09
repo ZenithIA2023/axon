@@ -230,7 +230,7 @@ def is_fresh(generated_at: str | None, now: datetime, ttl_hours: int = CACHE_TTL
     return (now - gen) < timedelta(hours=ttl_hours)
 
 
-def generate_insights(rows: list[dict]) -> list[dict]:
+def generate_insights(rows: list[dict], user_id: str | None = None) -> list[dict]:
     """
     Chama o Claude e devolve a lista de insights já parseada.
 
@@ -248,6 +248,8 @@ def generate_insights(rows: list[dict]) -> list[dict]:
         system_prompt=SYSTEM_PROMPT,
         thinking=False,
         max_tokens=8192,
+        user_id=user_id,
+        feature="insights",
     )
     return parse_insights(text)
 

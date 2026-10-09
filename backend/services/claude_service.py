@@ -4,7 +4,7 @@ import anthropic
 
 # Reexportado por compatibilidade: a montagem do prompt agora vive em services/prompts.py
 from services.prompts import build_agent_prompt
-from services import agent_tools
+from services import agent_tools, usage_service
 
 _MODEL = "claude-sonnet-4-6"
 # Teto de rodadas de tool use numa mesma requisição, para evitar laço infinito.
@@ -22,6 +22,8 @@ def call_chat(
     *,
     thinking: bool = True,
     max_tokens: int = 4096,
+    user_id: str | None = None,
+    feature: str = "outro",
 ) -> str:
     """
     Chamada simples ao Claude, devolvendo só o texto.
@@ -33,6 +35,10 @@ def call_chat(
     14), porque o orçamento de tokens é compartilhado entre pensar e escrever —
     o raciocínio chegava a esgotá-lo antes da resposta começar, e a aba exibia
     "não foi possível gerar insights". O chat mantém o padrão (thinking ligado).
+
+    `user_id` e `feature` identificam quem gastou e onde, no registro de uso
+    (services/usage_service.py). `user_id` None é aceito para chamadas sem
+    usuário, mas toda chamada feita em nome de alguém deve passá-lo.
     """
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     kwargs = {"thinking": {"type": "adaptive"}} if thinking else {}
@@ -43,6 +49,7 @@ def call_chat(
         messages=messages,
         **kwargs,
     )
+    usage_service.record_claude(user_id, feature, _MODEL, response.usage)
     if response.stop_reason == "refusal":
         return "Desculpe, não consigo ajudar com esse pedido específico. Podemos tentar outra coisa?"
 
@@ -125,6 +132,12 @@ def stream_chat_with_tools(
             for text in stream.text_stream:
                 yield _sse({"text": text})
             final = stream.get_final_message()
+
+        # Uma linha por rodada: cada rodada de ferramenta é uma cobrança
+        # separada, que reenvia o prompt e o histórico inteiros.
+        usage_service.record_claude(
+            user_id, "voz_conversa" if voice else "chat", _MODEL, final.usage
+        )
 
         # Se max_tokens foi atingido, a geração foi cortada. Pode ter acontecido
         # no meio de um bloco tool_use (a ferramenta nunca seria chamada) ou no
