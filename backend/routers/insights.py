@@ -501,7 +501,7 @@ def get_pattern_insights(
     # como 500 e a aba quebrava; aqui ela cai no mesmo fallback do parse vazio,
     # que devolve o último cache bom.
     try:
-        insights = insights_service.generate_insights(rows)
+        insights = insights_service.generate_insights(rows, user_id=user_id)
     except Exception as e:
         print(f"[insights] geração de patterns falhou user={user_id}: {e}", flush=True)
         insights = []
@@ -631,7 +631,7 @@ def get_discoveries(
     # curadoria/escrita chama o modelo — ver comentário no /patterns.
     raw_findings = correlations_service.find_correlations(rows)
     try:
-        findings = correlations_service.write_findings(raw_findings)
+        findings = correlations_service.write_findings(raw_findings, user_id=user_id)
     except Exception as e:
         print(f"[insights] curadoria de discoveries falhou user={user_id}: {e}", flush=True)
         findings = []

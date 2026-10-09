@@ -76,7 +76,9 @@ def chat(
     history = [{"role": m.role, "content": m.content} for m in body.history[-_MAX_HISTORY:]]
     history.append({"role": "user", "content": body.message})
 
-    response_text = claude_service.call_chat(history, system_prompt)
+    response_text = claude_service.call_chat(
+        history, system_prompt, user_id=user_id, feature="chat_sem_streaming"
+    )
 
     base_row = {"user_id": user_id}
     if body.conversation_id:

@@ -427,6 +427,8 @@ def _generate_report(user_id: str, period_type: str, start: date, end: date, tz_
     narrative = claude_service.call_chat(
         messages=[{"role": "user", "content": _period_summary_message(data)}],
         system_prompt=_NARRATOR_SYSTEM_PROMPT,
+        user_id=user_id,
+        feature=f"relatorio_{period_type}",
     ).strip()
 
     payload = {

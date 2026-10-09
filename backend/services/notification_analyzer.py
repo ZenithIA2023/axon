@@ -16,7 +16,7 @@ from datetime import date, datetime, timedelta
 import anthropic
 
 from database import supabase
-from services import notification_service
+from services import notification_service, usage_service
 from services import tasks_service, memory_service
 from services import chronotype as chronotype_service, user_tz
 
@@ -456,6 +456,7 @@ def _ensure_free_slot(user_id: str, ctx: dict, action: dict) -> dict | None:
 
 
 def _rewrite_suggestion_text(
+    user_id: str,
     ctx: dict,
     task_id: str | None,
     new_date: str | None,
@@ -511,6 +512,7 @@ Regras:
 
 Retorne APENAS JSON válido: {{"title": "título curto", "body": "2 frases"}}"""}],
         )
+        usage_service.record_claude(user_id, "notificacao_reescrita", _MODEL, response.usage)
         parsed = _parse_json(response.content[0].text)
         title = (parsed.get("title") or "").strip()
         body = (parsed.get("body") or "").strip()
@@ -823,6 +825,7 @@ def analyze_and_notify(user_id: str, tz_header: str | None = None) -> dict | Non
             max_tokens=512,
             messages=[{"role": "user", "content": prompt}],
         )
+        usage_service.record_claude(user_id, "notificacao_analise", _MODEL, response.usage)
         result = _parse_json(response.content[0].text)
     except Exception as e:
         # NÃO silenciar: sem este log, "conta sem créditos" e "JSON inválido"
@@ -898,6 +901,7 @@ def analyze_and_notify(user_id: str, tz_header: str | None = None) -> dict | Non
         relaxed = action.pop("_relaxed", False)
         if slot_changed:
             title, body = _rewrite_suggestion_text(
+                user_id=user_id,
                 ctx=ctx,
                 task_id=action.get("task_id"),
                 new_date=action.get("new_date"),
@@ -975,6 +979,7 @@ Retorne APENAS JSON válido:
             max_tokens=200,
             messages=[{"role": "user", "content": prompt}],
         )
+        usage_service.record_claude(user_id, "notificacao_alteracao", _MODEL, response.usage)
         data = _parse_json(response.content[0].text)
         title = data.get("title", "Axon atualizou sua agenda")
         body = data.get("body", f"O horário de '{task_title}' foi ajustado.")

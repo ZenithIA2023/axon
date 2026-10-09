@@ -1255,3 +1255,57 @@ alter table public.profiles
 
 comment on column public.profiles.calendar_setup_choice is
   'Como o usuário optou por usar a agenda: google, independent ou NULL (ainda não escolheu).';
+
+-- =============================================
+-- Migration 36: api_usage_events — uso de APIs pagas por usuário e funcionalidade
+-- ---------------------------------------------
+-- Antes do lançamento precisamos saber quanto cada usuário custa e em qual
+-- funcionalidade. Até aqui só a transcrição tinha contador (Migration 25), e
+-- mesmo ele guarda só o total do mês; Claude e síntese de voz apareciam apenas
+-- somados na fatura de cada provedor, sem dizer quem nem o quê.
+--
+-- Uma linha por chamada (não um contador agregado) de propósito: a análise de
+-- custo precisa da distribuição — quantas mensagens por dia, quantas rodadas de
+-- ferramenta por mensagem, quanto o cache economiza —, e isso o agregado perde.
+-- As cotas por plano podem somar daqui por usuário e mês.
+--
+-- As UNIDADES (tokens, segundos, caracteres) são a fonte da verdade. `cost_usd`
+-- é gravado já calculado com a tabela de preços de services/usage_service.py
+-- no momento da chamada; se um preço mudar, recalcule a partir das unidades.
+-- NULL em cost_usd = modelo sem preço cadastrado.
+--
+-- `user_id` aceita NULL para chamadas que não são feitas em nome de ninguém;
+-- hoje todas são, mas uma linha sem dono é melhor que uma linha perdida.
+--
+-- RLS ligada e sem política: só o backend (service_role) lê e escreve. Não há
+-- tela que consulte isto, e o consumo de outros usuários nunca deve vazar.
+-- =============================================
+
+create table if not exists public.api_usage_events (
+  id                 bigint generated always as identity primary key,
+  user_id            uuid references auth.users(id) on delete cascade,
+  feature            text not null,
+  provider           text not null,
+  model              text not null,
+  input_tokens       integer not null default 0,
+  output_tokens      integer not null default 0,
+  cache_read_tokens  integer not null default 0,
+  cache_write_tokens integer not null default 0,
+  audio_seconds      numeric(10,1) not null default 0,
+  characters         integer not null default 0,
+  cost_usd           numeric(12,6),
+  created_at         timestamptz not null default now()
+);
+
+alter table public.api_usage_events enable row level security;
+
+-- Consulta típica: o consumo de um usuário num período (cota e custo por usuário).
+create index if not exists api_usage_events_user_created_idx
+  on public.api_usage_events(user_id, created_at desc);
+
+-- Consulta típica da análise: custo de uma funcionalidade num período.
+create index if not exists api_usage_events_feature_created_idx
+  on public.api_usage_events(feature, created_at desc);
+
+comment on table public.api_usage_events is
+  'Uma linha por chamada a API paga (Claude, transcrição, síntese). Unidades são a fonte da verdade; cost_usd é estimativa no momento da chamada.';
