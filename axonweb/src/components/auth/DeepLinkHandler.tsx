@@ -6,7 +6,7 @@ import { initPushListeners } from "../../lib/push";
 
 /**
  * Traz o app de volta ao lugar certo quando o Android o reabre por deep link
- * (`com.axon.app:///#/auth/callback?session_code=...`), que é como o OAuth do
+ * (`tech.axonapp.app:///#/auth/callback?session_code=...`), que é como o OAuth do
  * Google retorna no app.
  *
  * Precisa ficar DENTRO do Router para poder navegar. Na web não faz nada — lá

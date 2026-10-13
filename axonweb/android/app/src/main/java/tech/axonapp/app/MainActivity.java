@@ -1,4 +1,4 @@
-package com.axon.app;
+package tech.axonapp.app;
 
 import com.getcapacitor.BridgeActivity;
 

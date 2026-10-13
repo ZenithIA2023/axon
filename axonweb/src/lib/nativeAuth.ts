@@ -14,7 +14,7 @@ import { Browser } from "@capacitor/browser";
 
 // Precisa casar com MOBILE_SCHEME no backend e com o intent-filter do
 // AndroidManifest.xml.
-const DEEP_LINK_SCHEME = "com.axon.app";
+const DEEP_LINK_SCHEME = "tech.axonapp.app";
 
 export function isNative(): boolean {
   return Capacitor.isNativePlatform();
@@ -54,7 +54,7 @@ export async function openAuthUrl(
 }
 
 /**
- * Converte o deep link de volta (`com.axon.app:///#/rota?query`) na rota interna
+ * Converte o deep link de volta (`tech.axonapp.app:///#/rota?query`) na rota interna
  * correspondente, ou null se a URL não for nossa.
  *
  * O backend já manda o caminho com "#" porque o app roda em HashRouter, então

@@ -8,7 +8,7 @@ import { KeyboardResize } from "@capacitor/keyboard";
 const devServerUrl = process.env.CAP_SERVER_URL;
 
 const config: CapacitorConfig = {
-  appId: "com.axon.app",
+  appId: "tech.axonapp.app",
   appName: "Axon",
   webDir: "dist",
   server: {

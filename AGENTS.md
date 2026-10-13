@@ -38,7 +38,7 @@ Decisões que devem ser preservadas:
 - **O cliente Supabase do backend usa `service_role` e ignora RLS de propósito** (ver `backend/database.py`). Toda função de serviço recebe `user_id` explicitamente e filtra por ele. Sem esse filtro, a query devolve dados de todos os usuários.
 - **Dois clientes Supabase separados** (`supabase` para dados, `supabase_auth` para auth) com `auto_refresh_token=False`. Não unifique: o cliente de auth muta sessão e o timer de refresh já causou deslogamento em massa uma vez.
 - **Um único worker em produção.** O `planning_scheduler` roda dentro do processo; dois workers duplicariam notificações. Se precisar escalar, o scheduler sai para um processo próprio antes.
-- **HashRouter no app, BrowserRouter na web**, decidido em runtime (`App.tsx`). Deep links do OAuth usam `com.axon.app:///#/rota`.
+- **HashRouter no app, BrowserRouter na web**, decidido em runtime (`App.tsx`). Deep links do OAuth usam `tech.axonapp.app:///#/rota`.
 - **Fuso horário do usuário** vem do header `X-Timezone` e é persistido em `profiles.timezone`. Todo cálculo de "hoje" usa `services/user_tz`.
 - **Backend calcula, Claude escreve.** Insights, correlações e relatórios fazem a matemática em Python e usam o modelo só para redigir. Não peça ao modelo para fazer aritmética sobre dados brutos.
 

@@ -6,7 +6,7 @@ Dados do projeto, para consulta rápida:
 
 | | |
 |---|---|
-| App ID | `com.axon.app` |
+| App ID | `tech.axonapp.app` |
 | Site | https://axonapp.tech |
 | API | https://api.axonapp.tech |
 | Política | https://axonapp.tech/legal/privacidade.html |

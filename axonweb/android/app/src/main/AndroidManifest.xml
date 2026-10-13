@@ -21,7 +21,7 @@
 
             <!--
                 Deep link do OAuth: o Google autentica no navegador do sistema e
-                o backend redireciona para com.axon.app://..., que o Android
+                o backend redireciona para tech.axonapp.app://..., que o Android
                 entrega de volta a esta activity (launchMode singleTask reusa a
                 instância já aberta em vez de empilhar outra).
                 O esquema precisa casar com MOBILE_SCHEME no backend e com
@@ -31,7 +31,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="com.axon.app" />
+                <data android:scheme="tech.axonapp.app" />
             </intent-filter>
         </activity>
 
