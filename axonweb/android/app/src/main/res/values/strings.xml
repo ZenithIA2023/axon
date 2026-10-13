@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">Axon</string>
     <string name="title_activity_main">Axon</string>
-    <string name="package_name">com.axon.app</string>
-    <string name="custom_url_scheme">com.axon.app</string>
+    <string name="package_name">tech.axonapp.app</string>
+    <string name="custom_url_scheme">tech.axonapp.app</string>
 </resources>

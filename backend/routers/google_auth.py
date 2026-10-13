@@ -12,8 +12,8 @@ from services import calendar_sync, google_service
 router = APIRouter(prefix="/auth/google", tags=["google-auth"])
 
 # Esquema de deep link do app Android. Tem que casar com o intent-filter do
-# AndroidManifest.xml e com o applicationId (com.axon.app).
-MOBILE_SCHEME = "com.axon.app"
+# AndroidManifest.xml e com o applicationId (tech.axonapp.app).
+MOBILE_SCHEME = "tech.axonapp.app"
 
 
 def _base_for(platform: str) -> str:

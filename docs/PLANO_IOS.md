@@ -71,8 +71,8 @@ Bernardo se ainda não souber.
 ### Identificadores
 
 ```
-Bundle ID / App ID:  com.axon.app      (imutável, o mesmo do Android)
-Deep link scheme:    com.axon.app      (backend: MOBILE_SCHEME em google_auth.py:16)
+Bundle ID / App ID:  tech.axonapp.app      (imutável, o mesmo do Android)
+Deep link scheme:    tech.axonapp.app      (backend: MOBILE_SCHEME em google_auth.py:16)
 Site:                https://axonapp.tech
 API:                 https://api.axonapp.tech
 Repositório:         github.com/ZenithIA2023/AxonWeb  (privado)
@@ -89,7 +89,7 @@ sistema (`Browser.open`) e o backend redireciona de volta por deep link:
 ```
 app → Browser.open(url + "?platform=mobile")
     → Google autentica no navegador de verdade
-    → backend redireciona para com.axon.app:///#/rota
+    → backend redireciona para tech.axonapp.app:///#/rota
     → deepLinkToRoute() converte em rota do HashRouter
 ```
 
@@ -168,7 +168,7 @@ com transferência futura — o mesmo caminho adotado na Play Console.
 
 1. ~~Criar a conta Apple Developer com a conta Apple da Zenith, não a pessoal.~~
    **Solicitada em 28/09/2026, em análise.** Os itens abaixo esperam a aprovação.
-2. Registrar o App ID `com.axon.app` no portal, habilitando as capabilities:
+2. Registrar o App ID `tech.axonapp.app` no portal, habilitando as capabilities:
    **Sign in with Apple**, **Push Notifications**, **Associated Domains**.
 3. Criar um **Services ID** (necessário para o Sign in with Apple na web).
    No Services ID, em "Sign in with Apple → Configure", cadastrar:
@@ -187,7 +187,7 @@ com transferência futura — o mesmo caminho adotado na Play Console.
    Apple por um refresh token e para **revogar** o acesso na exclusão de conta
    (1.5). Também só baixa uma vez.
 
-> O bundle ID é imutável depois da primeira publicação. `com.axon.app` mantém as
+> O bundle ID é imutável depois da primeira publicação. `tech.axonapp.app` mantém as
 > duas lojas coerentes.
 
 ---
@@ -214,7 +214,7 @@ configuração do Supabase (1.1).
 Painel do Supabase → Authentication → Providers → Apple.
 
 - **Client IDs:** os **dois** identificadores, separados por vírgula — o
-  **Services ID** (tokens emitidos na web) e **`com.axon.app`** (tokens emitidos
+  **Services ID** (tokens emitidos na web) e **`tech.axonapp.app`** (tokens emitidos
   pela folha nativa do iOS). O `aud` do `id_token` é diferente em cada caso; com
   só um cadastrado, o outro fluxo é recusado.
 - Team ID, Key ID e chave `.p8`: saem da Fase 0 (item 7).
@@ -258,7 +258,7 @@ supabase_session = supabase_auth.auth.sign_in_with_id_token({
   **guardado** — é ele que permite revogar o acesso na exclusão de conta (1.5).
   A troca exige um *client secret*: um JWT ES256 assinado com a `.p8` da Fase 0
   (item 7), com `iss` = Team ID, `sub` = client ID (Services ID na web,
-  `com.axon.app` no nativo), `aud` = `https://appleid.apple.com`. Gere-o sob
+  `tech.axonapp.app` no nativo), `aud` = `https://appleid.apple.com`. Gere-o sob
   demanda com validade curta, em vez de guardar um fixo (o máximo aceito pela
   Apple são 6 meses, e um fixo vence em silêncio). Verifique se `PyJWT` com
   `cryptography` já está no ambiente antes de adicionar dependência.
@@ -339,7 +339,7 @@ resultado direto.
 O plugin devolve `identityToken`, `authorizationCode` e, só na primeira vez,
 `givenName`/`familyName` e `email`. Envie os três ao backend num endpoint próprio
 (ex.: `POST /auth/apple/native`) — o backend valida o token pelo Supabase, troca
-o `authorizationCode` pelo refresh token (com `sub` = `com.axon.app` no client
+o `authorizationCode` pelo refresh token (com `sub` = `tech.axonapp.app` no client
 secret) e grava o nome só se veio preenchido, exatamente como na web. O nonce é
 gerado no frontend (hash para o plugin, cru para o backend).
 
@@ -383,7 +383,7 @@ APPLE_TEAM_ID
 APPLE_KEY_ID
 APPLE_PRIVATE_KEY        conteúdo da .p8 (item 7 da Fase 0)
 APPLE_SERVICES_ID        client ID da web
-APPLE_BUNDLE_ID          com.axon.app, client ID do nativo
+APPLE_BUNDLE_ID          tech.axonapp.app, client ID do nativo
 ```
 
 No VPS, o `.env` de produção também precisa delas antes do deploy do backend.
