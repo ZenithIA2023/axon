@@ -458,6 +458,66 @@ def find_conflicting_task(
     return None
 
 
+# Margem do "agora": quem pede "marca reunião às 14h" às 14h05 está falando do
+# compromisso que começa agora, não de um horário vencido. 15 min cobre o tempo
+# entre pensar, falar e o pedido chegar, sem deixar passar "hoje às 8h" pedido
+# à tarde.
+PAST_TOLERANCE_MIN = 15
+
+
+def is_in_past(
+    scheduled_date: str | None,
+    start_time: str | None,
+    end_time: str | None,
+    now: datetime,
+) -> bool:
+    """
+    True se o compromisso já terminou, no fuso do usuário (`now` é local). Pura.
+
+    - data anterior a hoje: passado, com ou sem horário;
+    - hoje sem horário: não é passado (é uma tarefa "do dia");
+    - hoje com horário: passado se o FIM (ou o início, sem fim) ficou mais de
+      PAST_TOLERANCE_MIN para trás. Mesmo critério das rotinas: um compromisso
+      14h–15h pedido às 14h30 ainda está acontecendo e é aceito.
+
+    Existe porque o modelo do agente não é confiável nisso: na avaliação de
+    modelos de 07/10/2026, só um de quatro percebeu que "hoje às 14h30", pedido
+    às 20h44, já tinha passado. A regra tem de valer para qualquer modelo.
+    """
+    if not scheduled_date:
+        return False
+    try:
+        day = datetime.fromisoformat(str(scheduled_date)[:10]).date()
+    except ValueError:
+        return False
+    today = now.date()
+    if day != today:
+        return day < today
+    start = _to_minutes(start_time)
+    end = _to_minutes(end_time)
+    if start is not None and end is not None and end <= start:
+        end += 24 * 60  # atravessa a meia-noite (23h–00h30): o fim é amanhã
+    ref = end if end is not None else start
+    if ref is None:
+        return False
+    return ref < now.hour * 60 + now.minute - PAST_TOLERANCE_MIN
+
+
+def get_task_schedule(user_id: str, task_id: str) -> dict:
+    """Data e horários atuais de uma tarefa do usuário. ValueError se não for dele."""
+    res = (
+        supabase.table("tasks")
+        .select("scheduled_date, start_time, end_time")
+        .eq("id", task_id)
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    if not res.data:
+        raise ValueError("Tarefa não encontrada.")
+    return _stringify_dates(res.data[0])
+
+
 # Janela em que uma tarefa idêntica é tratada como repetição da MESMA intenção,
 # não como um segundo pedido do usuário.
 _DUPLICATE_WINDOW_SEC = 120
