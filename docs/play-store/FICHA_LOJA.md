@@ -1,10 +1,17 @@
+
 # Ficha da Play Store — textos e requisitos
 
 ## Nome do app (até 30 caracteres)
 
 ```
-Axon
+Axon: IA de produtividade
 ```
+(25 caracteres — sem espaço antes dos dois-pontos)
+
+`Axon` sozinho já está em uso nas duas lojas, e a Apple exige nome único. O
+sufixo resolve isso e injeta "produtividade", o termo de maior busca na
+categoria. O nome sob o ícone do aparelho continua sendo só `Axon`
+(`strings.xml`), que é outro campo.
 
 ## Descrição curta (até 80 caracteres)
 
@@ -36,6 +43,10 @@ Converse em vez de preencher formulários
 "Marca dentista amanhã às 14h" já cria a tarefa. Peça para reorganizar o dia,
 tirar dúvidas ou registrar como foi — em linguagem natural.
 
+Fale em vez de digitar
+Uma tela dedicada para conversar por voz com o Axon. Diga o que precisa fazer e
+ele organiza, sem teclado.
+
 Sugestões no momento certo
 Quando o Axon percebe um padrão — uma tarefa sempre adiada, um horário que
 nunca funciona — ele avisa e propõe um ajuste.
@@ -45,7 +56,8 @@ Um registro rápido do que funcionou e do que não funcionou. Com o tempo, isso
 vira relatórios semanais e mensais sobre a sua produtividade real.
 
 Google Agenda
-Conecte sua agenda e veja compromissos e tarefas no mesmo lugar.
+Conecte sua conta e as tarefas que você agenda no Axon aparecem automaticamente
+no seu Google Agenda, com horário e duração.
 
 Notificações que fazem sentido
 Lembretes de planejamento e sugestões chegam na hora certa, respeitando o seu

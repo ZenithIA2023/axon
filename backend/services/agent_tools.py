@@ -213,6 +213,18 @@ _STATUS = {"type": "string", "enum": ["todo", "progress", "done", "scheduled"]}
 _DATE = {"type": "string", "description": "Data no formato YYYY-MM-DD"}
 _TIME = {"type": "string", "description": "Horário no formato HH:MM"}
 
+# Saída explícita da trava de horário passado (ver tasks_service.is_in_past).
+# Compartilhado por criar_tarefa e atualizar_tarefa, que aplicam a mesma regra.
+_CONFIRMAR_PASSADO = {
+    "type": "boolean",
+    "description": (
+        "Deixe ausente. Se a chamada voltar com erro 'horario_no_passado', a tarefa "
+        "NÃO foi gravada: avise o usuário que esse horário já passou e pergunte se ele "
+        "quer outro horário ou outro dia. Use true APENAS se ele disser explicitamente "
+        "que é para registrar algo que já aconteceu."
+    ),
+}
+
 TOOLS = [
     {
         "name": "criar_tarefa",
@@ -275,6 +287,7 @@ TOOLS = [
                         "chame de novo com o horário novo e SEM este campo."
                     ),
                 },
+                "confirmar_passado": _CONFIRMAR_PASSADO,
             },
             "required": ["title"],
         },
@@ -347,6 +360,7 @@ TOOLS = [
                         "todas as tags."
                     ),
                 },
+                "confirmar_passado": _CONFIRMAR_PASSADO,
             },
             "required": ["task_id"],
         },
@@ -799,6 +813,21 @@ def tools_for_conversation(conversation_type: str, voice: bool = False) -> list[
     return tools
 
 
+def _erro_horario_passado(agora: datetime, acao: str) -> dict:
+    """tool_result de recusa por horário passado; a instrução diz ao modelo o que fazer."""
+    return {
+        "ok": False,
+        "erro": "horario_no_passado",
+        "agora": agora.strftime("%Y-%m-%d %H:%M"),
+        "instrucao": (
+            f"A tarefa NÃO foi {acao}: esse horário já passou (agora são "
+            f"{agora.strftime('%H:%M')} no fuso do usuário). Avise o usuário e pergunte "
+            "se ele quer outro horário ou outro dia. Se ele disser que é só para "
+            "registrar algo que já aconteceu, repita a chamada com confirmar_passado=true."
+        ),
+    }
+
+
 def execute_tool(name: str, tool_input: dict, user_id: str, tz_name: str | None = None) -> dict:
     """Executa a tool e devolve um dict serializável para o tool_result."""
     try:
@@ -813,7 +842,7 @@ def execute_tool(name: str, tool_input: dict, user_id: str, tz_name: str | None 
         if name == "criar_tarefa":
             agora = datetime.now(user_tz.zone(tz_name))
             dados = {k: v for k, v in tool_input.items()
-                     if k != "confirmar_conflito"}
+                     if k not in ("confirmar_conflito", "confirmar_passado")}
 
             # 1) Repetição da mesma chamada (tool_result que não voltou ao
             #    modelo). Devolve a tarefa que já existe em vez de criar outra.
@@ -827,7 +856,16 @@ def execute_tool(name: str, tool_input: dict, user_id: str, tz_name: str | None 
             if existente:
                 return {"ok": True, "task": existente, "ja_existia": True}
 
-            # 2) Sobreposição com outra tarefa do dia. Não grava na primeira
+            # 2) Horário que já passou. A regra é do servidor, não do modelo:
+            #    nem todo modelo percebe que "hoje às 14h30" pedido às 20h já
+            #    venceu. Mesmo padrão do conflito abaixo — recusa e devolve a
+            #    instrução; só grava com confirmar_passado=true.
+            if not tool_input.get("confirmar_passado") and tasks_service.is_in_past(
+                dados.get("scheduled_date"), dados.get("start_time"), dados.get("end_time"), agora,
+            ):
+                return _erro_horario_passado(agora, "criada")
+
+            # 3) Sobreposição com outra tarefa do dia. Não grava na primeira
             #    tentativa: devolve o conflito para o Axon avisar ANTES de
             #    criar. O usuário decide manter (o modelo repete a chamada com
             #    confirmar_conflito=true) ou trocar o horário (chamada nova,
@@ -881,7 +919,23 @@ def execute_tool(name: str, tool_input: dict, user_id: str, tz_name: str | None 
             return {"ok": True, "count": len(tags), "tags": tags}
 
         if name == "atualizar_tarefa":
-            data = {k: v for k, v in tool_input.items() if k != "task_id"}
+            data = {k: v for k, v in tool_input.items()
+                    if k not in ("task_id", "confirmar_passado")}
+
+            # Mesma trava do criar_tarefa, só quando a tarefa MUDA de lugar.
+            # Concluir não entra: "já fiz a academia às 7h" registra o passado
+            # de propósito. O alvo combina o que muda com o que fica — mover só
+            # o horário mantém a data atual da tarefa.
+            muda_horario = any(k in data for k in ("scheduled_date", "start_time", "end_time"))
+            if muda_horario and data.get("status") != "done" and not tool_input.get("confirmar_passado"):
+                agora = datetime.now(user_tz.zone(tz_name))
+                atual = tasks_service.get_task_schedule(user_id, tool_input["task_id"])
+                alvo = {**atual, **{k: data[k] for k in ("scheduled_date", "start_time", "end_time") if k in data}}
+                if tasks_service.is_in_past(
+                    alvo.get("scheduled_date"), alvo.get("start_time"), alvo.get("end_time"), agora,
+                ):
+                    return _erro_horario_passado(agora, "alterada")
+
             task = tasks_service.update_task(user_id, tool_input["task_id"], data)
             _notify_task_change(user_id, 1, task)
             return {"ok": True, "task": task}

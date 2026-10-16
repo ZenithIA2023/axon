@@ -1,3 +1,4 @@
+
 # Data Safety — respostas para o formulário da Play Console
 
 > Levantado do código em 2026-08-20, **revisado em 2026-09-28**. Declaração
@@ -23,8 +24,19 @@
 ### Informações pessoais
 | Tipo | Coletado | Compartilhado | Obrigatório | Finalidade |
 |---|---|---|---|---|
-| Nome | Sim | Não | Sim | Funcionalidade do app (personalização) |
+| Nome | Sim | **Sim** | Sim | Funcionalidade, personalização, gerenciamento de conta |
 | E-mail | Sim | Não | Sim | Funcionalidade do app, gerenciamento de conta |
+| IDs de usuário | Sim | Não | Sim | Funcionalidade do app, gerenciamento de conta |
+
+**O nome é compartilhado** (corrigido em 13/10/2026; as versões anteriores diziam
+"Não"). Ele entra no prompt do sistema enviado ao Claude —
+`prompts.py:351` monta a linha `- Nome: {nome}.` — pelo mesmo motivo que o
+conteúdo do usuário é declarado como compartilhado. O **e-mail não** vai ao
+Claude: `chat_context.py:82` seleciona apenas `name`, `chronotype`,
+`qualidade_sono`, `schedule_type` e `timezone`.
+
+O ID de usuário é o identificador da conta gerado pelo Supabase Auth, usado para
+filtrar todo acesso a dados. Faltava nesta tabela até 13/10/2026.
 
 ### Fotos
 | Tipo | Coletado | Compartilhado | Obrigatório | Finalidade |
@@ -47,8 +59,9 @@ API da Anthropic (Claude) para gerar respostas, sugestões e relatórios.
 |---|---|---|---|---|
 | Gravações de voz | Sim | **Sim** | Não | Funcionalidade do app |
 
-O usuário fala com o Axon na rota `/voz` e pelo botão de voz do chat
-(`RECORD_AUDIO` no `AndroidManifest.xml`, linha 59). O áudio é enviado à
+O usuário fala com o Axon na rota `/voz` — e **só** nela, desde 02/10/2026: o
+chat é exclusivamente texto e seu botão de microfone navega para a `/voz` em vez
+de gravar (`RECORD_AUDIO` no `AndroidManifest.xml`, linha 59). O áudio é enviado à
 **OpenAI** para transcrição e volta como texto; o texto da resposta vai à
 **ElevenLabs** para virar voz.
 
@@ -57,6 +70,27 @@ essa distinção** — o áudio não é gravado em nenhuma tabela nossa: atraves
 backend e é descartado. Só a transcrição em texto é guardada, e ela já está
 declarada como conteúdo do usuário. Confirme no código antes de responder, e
 não marque "coletado" por precaução: declarar de mais também é errado.
+
+### Saúde e atividade física
+
+| Tipo | Coletado | Compartilhado | Obrigatório | Finalidade |
+|---|---|---|---|---|
+| Informações de saúde | Sim | **Sim** | Não | Funcionalidade do app, personalização |
+| Informações de condicionamento físico | Sim | **Sim** | Não | Funcionalidade do app, personalização |
+
+**Acrescentado em 13/10/2026.** As versões anteriores deste doc afirmavam que o
+Axon não coletava dados de saúde. Era incorreto: o registro diário guarda
+`hours_slept`, `sleep_time`, `wake_time`, `sleep_rating` (1–5) e `mood_rating`
+(1–5) — sono e humor quantificados — além de `exercised` (booleano), que é
+condicionamento físico.
+
+**Compartilhado** porque esses campos são enviados ao Claude para gerar insights,
+correlações e relatórios (ver `insights_service.py`, linha ~131, cujo comentário
+registra que "o Claude recebe isto como JSON solto"). O `qualidade_sono` do
+perfil também entra no contexto do chat (`chat_context.py:82`).
+
+Nenhum dos dois é obrigatório: o registro diário é opcional e o app funciona sem
+ele.
 
 ### Identificadores do dispositivo
 | Tipo | Coletado | Compartilhado | Obrigatório | Finalidade |
@@ -69,8 +103,11 @@ Tabela `device_tokens`. Só existe se o usuário aceitar as notificações.
 
 Declarar de menos é tão problemático quanto declarar de mais. O Axon **não**
 coleta: localização, contatos, SMS, chamadas, arquivos do aparelho, dados
-financeiros, saúde, histórico de navegação, nem qualquer identificador de
-publicidade. **Não há analytics** — o `firebase-analytics` foi deliberadamente
+financeiros, histórico de navegação, nem qualquer identificador de
+publicidade. **Saúde saiu desta lista em 13/10/2026** — ver a seção "Saúde e
+atividade física" acima. *Installed apps* exigiria a permissão
+`QUERY_ALL_PACKAGES`, que não está no manifesto.
+**Não há analytics** — o `firebase-analytics` foi deliberadamente
 mantido fora do projeto.
 
 ## Terceiros que recebem dados
