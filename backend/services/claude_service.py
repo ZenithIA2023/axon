@@ -24,6 +24,7 @@ def call_chat(
     max_tokens: int = 4096,
     user_id: str | None = None,
     feature: str = "outro",
+    json_schema: dict | None = None,
 ) -> str:
     """
     Chamada simples ao Claude, devolvendo só o texto.
@@ -36,12 +37,20 @@ def call_chat(
     o raciocínio chegava a esgotá-lo antes da resposta começar, e a aba exibia
     "não foi possível gerar insights". O chat mantém o padrão (thinking ligado).
 
+    `json_schema` liga a saída estruturada da API: a resposta vem garantidamente
+    como JSON válido nesse schema (a raiz tem de ser um objeto). Existe porque
+    pedir "responda só com JSON" no prompt não basta — o modelo às vezes põe
+    aspas sem escape dentro de uma string, e uma aspa invalidava a resposta
+    inteira (bug dos insights, achado na avaliação de modelos de 07/10/2026).
+
     `user_id` e `feature` identificam quem gastou e onde, no registro de uso
     (services/usage_service.py). `user_id` None é aceito para chamadas sem
     usuário, mas toda chamada feita em nome de alguém deve passá-lo.
     """
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     kwargs = {"thinking": {"type": "adaptive"}} if thinking else {}
+    if json_schema is not None:
+        kwargs["output_config"] = {"format": {"type": "json_schema", "schema": json_schema}}
     response = client.messages.create(
         model=_MODEL,
         max_tokens=max_tokens,
