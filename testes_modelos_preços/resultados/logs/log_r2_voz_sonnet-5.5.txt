@@ -1,0 +1,12 @@
+sonnet-5.5         voz S1   r0 OK  $0.0402 1.86s/3.23s mut=[('criar_tarefa', {'title': 'Dentista', 'scheduled_date': '2026-10-08', 'sta
+sonnet-5.5         voz S3   r0 OK  $0.0135 2.29s/8.32s mut=[('atualizar_tarefa', {'task_id': 't2', 'start_time': '16:00', 'end_time': '
+sonnet-5.5         voz H1   r0 OK  $0.0156 1.83s/6.08s mut=[('atualizar_tarefa', {'task_id': 't4', 'start_time': '15:00', 'end_time': '
+sonnet-5.5         voz H3   r0 OK  $0.0130 1.71s/6.37s mut=[('atualizar_tarefa', {'task_id': 't3', 'scheduled_date': '2026-10-08'})]
+sonnet-5.5         voz H6   r0 OK  $0.0068 1.21s/2.41s calls=['listar_objetivos']
+sonnet-5.5         voz H9   r0 xx  $0.0038 2.29s/2.29s mut=[]
+sonnet-5.5         voz S1   r1 OK  $0.0111 1.59s/2.86s mut=[('criar_tarefa', {'title': 'Dentista', 'scheduled_date': '2026-10-08', 'sta
+sonnet-5.5         voz S3   r1 OK  $0.0144 2.74s/6.94s mut=[('atualizar_tarefa', {'task_id': 't2', 'start_time': '16:00', 'end_time': '
+sonnet-5.5         voz H1   r1 OK  $0.0154 1.5s/5.51s mut=[('atualizar_tarefa', {'task_id': 't4', 'start_time': '15:00', 'end_time': '
+sonnet-5.5         voz H3   r1 OK  $0.0129 1.44s/4.15s mut=[('atualizar_tarefa', {'task_id': 't3', 'scheduled_date': '2026-10-08'})]
+sonnet-5.5         voz H6   r1 OK  $0.0073 1.63s/3.1s calls=['listar_objetivos']
+sonnet-5.5         voz H9   r1 xx  $0.0036 1.65s/1.65s mut=[]

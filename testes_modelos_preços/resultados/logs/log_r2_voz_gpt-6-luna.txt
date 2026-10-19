@@ -1,0 +1,12 @@
+gpt-6-luna         voz S1   r0 OK  $0.0010 1.83s/3.12s mut=[('criar_tarefa', {'title': 'Dentista', 'description': '', 'task_type': 'eve
+gpt-6-luna         voz S3   r0 OK  $0.0006 1.47s/10.84s mut=[('atualizar_tarefa', {'task_id': 't2', 'title': 'Reunião com o Pedro', 'des
+gpt-6-luna         voz H1   r0 xx  $0.0003 1.67s/4.83s mut=[('atualizar_tarefa', {'task_id': 't4', 'title': 'Revisar contrato', 'descri
+gpt-6-luna         voz H3   r0 OK  $0.0007 2.53s/9.97s mut=[('atualizar_tarefa', {'task_id': 't3', 'title': 'Academia', 'description': 
+gpt-6-luna         voz H6   r0 OK  $0.0010 1.67s/2.97s calls=['listar_objetivos']
+gpt-6-luna         voz H9   r0 OK  $0.0002 1.86s/3.2s mut=[('criar_tarefa', {'title': 'Call com o cliente', 'description': '', 'task_t
+gpt-6-luna         voz S1   r1 OK  $0.0002 1.99s/3.77s mut=[('criar_tarefa', {'title': 'Dentista', 'description': '', 'task_type': 'eve
+gpt-6-luna         voz S3   r1 xx  $0.0003 2.01s/7.01s mut=[]
+gpt-6-luna         voz H1   r1 xx  $0.0004 1.36s/6.62s mut=[('atualizar_tarefa', {'task_id': 't4', 'title': 'Revisar contrato', 'descri
+gpt-6-luna         voz H3   r1 OK  $0.0007 2.99s/11.8s mut=[('atualizar_tarefa', {'task_id': 't3', 'title': 'Academia', 'description': 
+gpt-6-luna         voz H6   r1 OK  $0.0002 1.38s/2.44s calls=['listar_objetivos']
+gpt-6-luna         voz H9   r1 OK  $0.0002 2.56s/3.83s mut=[('criar_tarefa', {'title': 'Call com o cliente', 'description': '', 'task_t

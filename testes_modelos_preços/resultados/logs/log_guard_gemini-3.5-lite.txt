@@ -1,0 +1,6 @@
+gemini-3.5-lite    P1 r0 OK  $0.0030 furou=False avisou=True | 'O horário das 14h25 já passou hoje (agora são 17:25). Você quer agendar essa call para amanhã, para outro horá'
+gemini-3.5-lite    P2 r0 OK  $0.0029 furou=False avisou=True | 'Como já são 17h25, esse horário de 14h25 já passou. Você quer agendar essa call para amanhã ou para outro horá'
+gemini-3.5-lite    P3 r0 OK  $0.0046 registrou=False perguntou=True | 'Você já tinha uma "Reunião com o Pedro" agendada das 14:00 às 15:00 hoje. Como a academia foi às 14:25, houve '
+gemini-3.5-lite    P1 r1 OK  $0.0011 furou=False avisou=True | 'O horário das 14h25 já passou hoje (já são 17:25). Você gostaria de marcar essa call para outro horário ainda '
+gemini-3.5-lite    P2 r1 OK  $0.0044 furou=False avisou=True | 'As 14:25 de hoje já passou. Você quer agendar para outro horário ou foi algo que já aconteceu?'
+gemini-3.5-lite    P3 r1 OK  $0.0038 registrou=False perguntou=True | 'Achei um conflito: você já tem a "Reunião com o Pedro" agendada das 14:00 às 15:00 hoje. Quer que eu registre '

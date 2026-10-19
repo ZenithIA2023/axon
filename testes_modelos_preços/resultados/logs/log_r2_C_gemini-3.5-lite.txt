@@ -1,0 +1,19 @@
+[routine_analysis] motivos pelo Claude falharam: 
+gemini-3.5-lite    r0 notif_analise_bloco_ruim     OK  $0.0009 1.3s type=improvement task=a3 novo=07:30 bloco=pico
+gemini-3.5-lite    r0 notif_analise_tudo_feito     xx  $0.0006 0.8s JSON inválido
+gemini-3.5-lite    r0 notif_reescrita_amanha       OK  $0.0002 0.8s cita 08:00=True
+gemini-3.5-lite    r0 notif_reescrita_compactacao  OK  $0.0002 0.9s cita 12:30=True
+gemini-3.5-lite    r0 notif_alteracao              OK  $0.0002 0.8s cita horário=True
+gemini-3.5-lite    r0 rotina_motivos               OK  $0.0002 0.8s 3 motivos, palavras=[7, 5, 8]
+gemini-3.5-lite    r1 notif_analise_bloco_ruim     OK  $0.0009 1.3s type=improvement task=a3 novo=07:30 bloco=pico
+gemini-3.5-lite    r1 notif_analise_tudo_feito     xx  $0.0006 0.7s JSON inválido
+gemini-3.5-lite    r1 notif_reescrita_amanha       OK  $0.0002 0.9s cita 08:00=True
+gemini-3.5-lite    r1 notif_reescrita_compactacao  OK  $0.0014 2.6s cita 12:30=True
+gemini-3.5-lite    r1 notif_alteracao              OK  $0.0002 0.7s cita horário=True
+gemini-3.5-lite    r1 rotina_motivos               OK  $0.0002 1.0s 3 motivos, palavras=[7, 7, 8]
+gemini-3.5-lite    r2 notif_analise_bloco_ruim     OK  $0.0009 1.3s type=improvement task=a3 novo=07:30 bloco=pico
+gemini-3.5-lite    r2 notif_analise_tudo_feito     xx  $0.0006 0.9s JSON inválido
+gemini-3.5-lite    r2 notif_reescrita_amanha       OK  $0.0002 0.9s cita 08:00=True
+gemini-3.5-lite    r2 notif_reescrita_compactacao  OK  $0.0002 1.0s cita 12:30=True
+gemini-3.5-lite    r2 notif_alteracao              OK  $0.0002 0.8s cita horário=True
+gemini-3.5-lite    r2 rotina_motivos               OK  $0.0002 0.8s 3 motivos, palavras=[7, 9, 9]

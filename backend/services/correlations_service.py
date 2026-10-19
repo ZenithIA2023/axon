@@ -20,7 +20,7 @@ combinatória generaliza sozinha, sem escrever um teste por hipótese.
 import json
 from datetime import date, timedelta
 
-from services import claude_service
+from services import llm_service
 
 # Mínimo de dias em CADA grupo (com/sem a condição) para considerar a
 # comparação confiável — evita "1 dia ruim vs 1 dia bom" virar "padrão".
@@ -214,8 +214,17 @@ _METRICS: dict[str, tuple[str, str]] = {
 
 _RATING_METRICS = {"productivity_rating", "mood_rating"}
 
+# Métricas de desempenho: num dia livre o usuário ESCOLHEU não produzir, então
+# o valor ali não é desempenho. Contá-lo gerava "nos seus domingos a
+# produtividade vai a zero" para quem descansa todo domingo, e os zeros ainda
+# puxavam para baixo as médias das outras comparações. Humor fica de fora da
+# exclusão: "nos dias de descanso seu humor é melhor" é uma descoberta válida.
+_PERFORMANCE_METRICS = {"tasks_completed", "productivity_rating"}
+
 
 def _metric_value(row: dict, metric_key: str) -> float | None:
+    if metric_key in _PERFORMANCE_METRICS and row.get("dia_livre"):
+        return None
     field, _ = _METRICS[metric_key]
     v = row.get(field)
     return None if v is None else float(v)
@@ -420,6 +429,8 @@ usuário. Regras estritas:
   deixe isso claro na frase (ex.: "quando você ... num dia, no dia seguinte ...").
 - Se "is_weekday" for true, a descoberta é sobre um dia da semana recorrente — escreva como padrão \
   ("nas suas quintas...").
+- Dias livres (descanso que o usuário escolheu) já ficaram fora das métricas de tarefas e \
+  produtividade. NUNCA trate descanso como queda de produtividade, falta de disciplina ou dia perdido.
 - Quando "group_with_n" for pequeno (menos de 6), use linguagem mais cautelosa ("parece que", \
   "os primeiros dados sugerem") — sem citar o número de dias.
 - Cada item tem um "title" curto (até ~60 caracteres) e um "detail" de 1 frase com o número real.
@@ -431,7 +442,7 @@ que você usou, para eu recuperar os números certos.
 Responda APENAS com JSON válido, sem texto fora dele, neste formato:
 {"items": [{"source_index": 0, "title": "...", "detail": "..."}]}"""
 
-# Schema da saída estruturada (ver claude_service.call_chat). A raiz precisa ser
+# Schema da saída estruturada (ver llm_service.complete). A raiz precisa ser
 # um objeto, por isso a lista vai dentro de "items".
 _WRITER_OUTPUT_SCHEMA = {
     "type": "object",
@@ -532,16 +543,16 @@ def write_findings(findings: list[dict], user_id: str | None = None) -> list[dic
     if not findings:
         return []
 
-    # Sem thinking: é extração estruturada a partir de números já calculados
-    # (regra do AGENTS.md §8). Com o thinking ligado e o teto padrão de 4096,
-    # o Sonnet 4.6 gastou o teto inteiro pensando e não escreveu nada — mesmo
-    # bug que os insights tiveram em agosto (avaliação de modelos, 07/10/2026).
-    text = claude_service.call_chat(
-        messages=[{"role": "user", "content": _findings_to_user_message(findings)}],
-        system_prompt=_WRITER_SYSTEM_PROMPT,
-        thinking=False,
-        user_id=user_id,
+    # Sem raciocínio estendido (llm_service nunca o liga): com o thinking e o
+    # teto de 4096, o Sonnet 4.6 gastou o teto inteiro pensando e não escreveu
+    # nada — mesmo bug que os insights tiveram em agosto (avaliação de modelos,
+    # 07/10/2026).
+    text = llm_service.complete(
+        "redacao",
+        _WRITER_SYSTEM_PROMPT,
+        _findings_to_user_message(findings),
         feature="descobertas",
+        user_id=user_id,
         json_schema=_WRITER_OUTPUT_SCHEMA,
     )
     written = _parse_written_findings(text)

@@ -1,0 +1,19 @@
+[routine_analysis] motivos pelo Claude falharam: 
+gpt-6-luna         r0 notif_analise_bloco_ruim     OK  $0.0003 5.0s type=improvement task=a3 novo=07:30 bloco=pico
+gpt-6-luna         r0 notif_analise_tudo_feito     OK  $0.0003 4.3s notify=True type=simple
+gpt-6-luna         r0 notif_reescrita_amanha       OK  $0.0000 1.1s cita 08:00=True
+gpt-6-luna         r0 notif_reescrita_compactacao  OK  $0.0000 1.3s cita 12:30=True
+gpt-6-luna         r0 notif_alteracao              OK  $0.0000 1.3s cita horário=True
+gpt-6-luna         r0 rotina_motivos               OK  $0.0001 2.9s 3 motivos, palavras=[5, 8, 8]
+gpt-6-luna         r1 notif_analise_bloco_ruim     OK  $0.0001 5.4s type=improvement task=a3 novo=07:30 bloco=pico
+gpt-6-luna         r1 notif_analise_tudo_feito     OK  $0.0001 2.7s notify=True type=simple
+gpt-6-luna         r1 notif_reescrita_amanha       OK  $0.0000 1.1s cita 08:00=True
+gpt-6-luna         r1 notif_reescrita_compactacao  OK  $0.0000 1.1s cita 12:30=True
+gpt-6-luna         r1 notif_alteracao              OK  $0.0000 1.1s cita horário=True
+gpt-6-luna         r1 rotina_motivos               OK  $0.0002 4.1s 3 motivos, palavras=[8, 8, 8]
+gpt-6-luna         r2 notif_analise_bloco_ruim     OK  $0.0001 3.9s type=improvement task=a3 novo=07:30 bloco=pico
+gpt-6-luna         r2 notif_analise_tudo_feito     OK  $0.0001 1.9s notify=True type=simple
+gpt-6-luna         r2 notif_reescrita_amanha       OK  $0.0000 2.0s cita 08:00=True
+gpt-6-luna         r2 notif_reescrita_compactacao  OK  $0.0001 3.0s cita 12:30=True
+gpt-6-luna         r2 notif_alteracao              OK  $0.0000 1.1s cita horário=True
+gpt-6-luna         r2 rotina_motivos               OK  $0.0001 3.4s 3 motivos, palavras=[6, 7, 6]

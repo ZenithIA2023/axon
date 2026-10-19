@@ -1,0 +1,37 @@
+[routine_analysis] motivos pelo Claude falharam: 
+haiku-4.5          insights                     OK  $0.0145 11.4s 8 insights válidos
+haiku-4.5          descobertas                  OK  $0.0051 4.1s 4/4 com source_index válido
+haiku-4.5          relatorio                    OK  $0.0018 2.2s 474 chars
+haiku-4.5          notif_analise_bloco_ruim     OK  $0.0029 2.3s type=improvement task=a3 novo=07:30 bloco=pico
+haiku-4.5          notif_analise_tudo_feito     OK  $0.0025 1.7s notify=False type=
+haiku-4.5          notif_reescrita_amanha       OK  $0.0006 1.0s cita 08:00=True
+haiku-4.5          notif_reescrita_compactacao  OK  $0.0006 0.9s cita 12:30=True
+haiku-4.5          notif_alteracao              OK  $0.0006 1.2s cita horário=True
+haiku-4.5          rotina_motivos               OK  $0.0007 0.9s 3 motivos, palavras=[7, 7, 7]
+gemini-3.8-flash   insights                     OK  $0.0092 6.5s 7 insights válidos
+gemini-3.8-flash   descobertas                  OK  $0.0033 3.2s 4/4 com source_index válido
+gemini-3.8-flash   relatorio                    OK  $0.0010 2.3s 345 chars
+gemini-3.8-flash   notif_analise_bloco_ruim     OK  $0.0020 2.6s type=improvement task=a3 novo=07:30 bloco=pico
+gemini-3.8-flash   notif_analise_tudo_feito     OK  $0.0015 1.9s notify=True type=simple
+gemini-3.8-flash   notif_reescrita_amanha       OK  $0.0032 7.1s cita 08:00=True
+gemini-3.8-flash   notif_reescrita_compactacao  OK  $0.0004 2.6s cita 12:30=True
+gemini-3.8-flash   notif_alteracao              OK  $0.0003 2.4s cita horário=True
+gemini-3.8-flash   rotina_motivos               OK  $0.0004 1.7s 3 motivos, palavras=[7, 7, 7]
+qwen-3.8-flash     insights                     xx  $0.0052 105.8s 0 insights válidos
+qwen-3.8-flash     descobertas                  xx  $0.0023 78.4s 0/0 com source_index válido
+qwen-3.8-flash     relatorio                    OK  $0.0009 25.4s 388 chars
+qwen-3.8-flash     notif_analise_bloco_ruim     xx  $0.0007 17.4s JSON inválido
+qwen-3.8-flash     notif_analise_tudo_feito     OK  $0.0005 10.6s notify=True type=simple
+qwen-3.8-flash     notif_reescrita_amanha       OK  $0.0003 9.0s cita 08:00=True
+qwen-3.8-flash     notif_reescrita_compactacao  OK  $0.0002 5.7s cita 12:30=True
+qwen-3.8-flash     notif_alteracao              OK  $0.0005 17.1s cita horário=True
+qwen-3.8-flash     rotina_motivos               OK  $0.0002 7.8s 3 motivos, palavras=[8, 8, 7]
+mistral-large-4    insights                     OK  $0.0160 78.7s 8 insights válidos
+mistral-large-4    descobertas                  xx  $0.0101 158.0s 0/0 com source_index válido
+mistral-large-4    relatorio                    OK  $0.0056 81.5s 391 chars
+mistral-large-4    notif_analise_bloco_ruim     xx  $0.0032 17.8s JSON inválido
+mistral-large-4    notif_analise_tudo_feito     xx  $0.0031 26.3s JSON inválido
+mistral-large-4    notif_reescrita_amanha       OK  $0.0022 20.7s cita 08:00=True
+mistral-large-4    notif_reescrita_compactacao  xx  $0.0022 17.5s JSON inválido
+mistral-large-4    notif_alteracao              OK  $0.0015 11.1s cita horário=True
+mistral-large-4    rotina_motivos               xx  $0.0023 34.7s 0 motivos, palavras=[]

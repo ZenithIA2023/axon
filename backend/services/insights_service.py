@@ -12,7 +12,7 @@ As funções de agregação/parse são puras (sem I/O) para permitir testes.
 import json
 from datetime import datetime, timedelta, date, timezone
 
-from services import claude_service
+from services import llm_service
 
 # Mínimo de dias preenchidos para gerar insights de verdade.
 MIN_DATA_POINTS = 7
@@ -48,7 +48,7 @@ Regras importantes:
 Responda APENAS com JSON válido, sem nenhum texto fora dele, neste formato:
 {{"items": [{{"title": "...", "detail": "...", "type": "sleep|productivity|mood|habit|general"}}]}}""".format(MAX_INSIGHTS=MAX_INSIGHTS)
 
-# Schema da saída estruturada (ver claude_service.call_chat). A raiz precisa ser
+# Schema da saída estruturada (ver llm_service.complete). A raiz precisa ser
 # um objeto, por isso a lista vai dentro de "items".
 OUTPUT_SCHEMA = {
     "type": "object",
@@ -266,25 +266,25 @@ def is_fresh(generated_at: str | None, now: datetime, ttl_hours: int = CACHE_TTL
 
 def generate_insights(rows: list[dict], user_id: str | None = None) -> list[dict]:
     """
-    Chama o Claude e devolve a lista de insights já parseada.
+    Gera os insights pelo modelo de redação (llm_service, rota "redacao") e
+    devolve a lista já parseada.
 
-    Sem thinking de propósito: medido nos dados reais, o raciocínio adaptativo
-    consumia ~14k tokens de saída e devolvia MENOS padrões que a versão direta
-    (10 contra 14), porque pensar e escrever dividem o mesmo orçamento. Com o
-    max_tokens de 4096 do padrão, o raciocínio o esgotava antes de a resposta
+    Sem raciocínio estendido de propósito: medido nos dados reais com o Sonnet
+    4.6, o thinking adaptativo consumia ~14k tokens de saída e devolvia MENOS
+    padrões que a versão direta (10 contra 14), porque pensar e escrever dividem
+    o mesmo orçamento — com o teto de 4096 ele esgotava antes de a resposta
     começar e a aba não exibia insight nenhum. O `max_tokens` folgado aqui é
     para caber os {MAX_INSIGHTS} insights com conforto — o custo real é o texto
-    gerado (~1,7k tokens), não o teto.
+    gerado, não o teto.
     """
-    user_message = build_user_message(rows)
-    text = claude_service.call_chat(
-        messages=[{"role": "user", "content": user_message}],
-        system_prompt=SYSTEM_PROMPT,
-        thinking=False,
-        max_tokens=8192,
-        user_id=user_id,
+    text = llm_service.complete(
+        "redacao",
+        SYSTEM_PROMPT,
+        build_user_message(rows),
         feature="insights",
+        user_id=user_id,
         json_schema=OUTPUT_SCHEMA,
+        max_tokens=8192,
     )
     return parse_insights(text)
 

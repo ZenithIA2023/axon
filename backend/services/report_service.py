@@ -26,7 +26,7 @@ import json
 from datetime import date, datetime, timedelta
 
 from database import supabase
-from services import claude_service, daily_stats_service, routines_service
+from services import daily_stats_service, llm_service, routines_service
 from services import saved_time_service
 from services import user_tz as user_tz_service
 
@@ -424,11 +424,17 @@ def _collect_period_data(user_id: str, start: date, end: date, tz_name: str) -> 
 def _generate_report(user_id: str, period_type: str, start: date, end: date, tz_name: str) -> dict:
     data = _collect_period_data(user_id, start, end, tz_name)
 
-    narrative = claude_service.call_chat(
-        messages=[{"role": "user", "content": _period_summary_message(data)}],
-        system_prompt=_NARRATOR_SYSTEM_PROMPT,
-        user_id=user_id,
+    # Sem raciocínio estendido (llm_service nunca o liga): é redação a partir de
+    # números já calculados. Medido em 19/10/2026 com o Sonnet 4.6: com thinking
+    # eram 1.300–1.730 tokens de saída (US$0,025, ~30s) para 3 frases, a ~2,4k
+    # do teto de 4096 — o mesmo padrão que zerou insights e descobertas; sem
+    # thinking, ~150 tokens (US$0,005, ~5s) e texto equivalente.
+    narrative = llm_service.complete(
+        "redacao",
+        _NARRATOR_SYSTEM_PROMPT,
+        _period_summary_message(data),
         feature=f"relatorio_{period_type}",
+        user_id=user_id,
     ).strip()
 
     payload = {

@@ -1,0 +1,37 @@
+[routine_analysis] motivos pelo Claude falharam: 
+sonnet-4.6         insights                     xx  $0.0433 21.8s 0 insights válidos
+sonnet-4.6         descobertas                  xx  $0.0701 68.4s 0/0 com source_index válido
+sonnet-4.6         relatorio                    OK  $0.0196 20.3s 540 chars
+sonnet-4.6         notif_analise_bloco_ruim     OK  $0.0089 4.6s type=improvement task=a3 novo=07:30 bloco=pico
+sonnet-4.6         notif_analise_tudo_feito     OK  $0.0069 2.7s notify=True type=simple
+sonnet-4.6         notif_reescrita_amanha       OK  $0.0017 2.2s cita 08:00=True
+sonnet-4.6         notif_reescrita_compactacao  OK  $0.0015 1.7s cita 12:30=True
+sonnet-4.6         notif_alteracao              OK  $0.0015 2.0s cita horário=True
+sonnet-4.6         rotina_motivos               OK  $0.0019 2.1s 3 motivos, palavras=[8, 7, 8]
+gpt-6-luna         insights                     OK  $0.0013 6.9s 7 insights válidos
+gpt-6-luna         descobertas                  OK  $0.0006 7.9s 3/3 com source_index válido
+gpt-6-luna         relatorio                    OK  $0.0001 1.9s 319 chars
+gpt-6-luna         notif_analise_bloco_ruim     OK  $0.0003 3.7s type=improvement task=a3 novo=07:30 bloco=pico
+gpt-6-luna         notif_analise_tudo_feito     OK  $0.0003 5.1s notify=True type=simple
+gpt-6-luna         notif_reescrita_amanha       OK  $0.0001 2.3s cita 08:00=True
+gpt-6-luna         notif_reescrita_compactacao  OK  $0.0000 1.1s cita 12:30=True
+gpt-6-luna         notif_alteracao              OK  $0.0000 1.3s cita horário=True
+gpt-6-luna         rotina_motivos               OK  $0.0002 5.6s 3 motivos, palavras=[8, 8, 8]
+gemini-3.5-lite    insights                     OK  $0.0038 2.3s 6 insights válidos
+gemini-3.5-lite    descobertas                  OK  $0.0016 1.4s 4/4 com source_index válido
+gemini-3.5-lite    relatorio                    OK  $0.0005 1.2s 341 chars
+gemini-3.5-lite    notif_analise_bloco_ruim     OK  $0.0009 1.3s type=improvement task=a3 novo=07:30 bloco=pico
+gemini-3.5-lite    notif_analise_tudo_feito     OK  $0.0006 0.7s notify=False type=simple
+gemini-3.5-lite    notif_reescrita_amanha       OK  $0.0018 3.1s cita 08:00=True
+gemini-3.5-lite    notif_reescrita_compactacao  OK  $0.0002 0.9s cita 12:30=True
+gemini-3.5-lite    notif_alteracao              OK  $0.0002 0.8s cita horário=True
+gemini-3.5-lite    rotina_motivos               OK  $0.0002 0.8s 3 motivos, palavras=[7, 8, 9]
+minimax-m3         insights                     xx  $0.0122 78.2s 0 insights válidos
+minimax-m3         descobertas                  OK  $0.0046 31.3s 4/4 com source_index válido
+minimax-m3         relatorio                    OK  $0.0011 10.2s 371 chars
+minimax-m3         notif_analise_bloco_ruim     xx  $0.0014 48.1s JSON inválido
+minimax-m3         notif_analise_tudo_feito     OK  $0.0016 13.3s notify=True type=simple
+minimax-m3         notif_reescrita_amanha       OK  $0.0004 3.5s cita 08:00=True
+minimax-m3         notif_reescrita_compactacao  OK  $0.0005 13.1s cita 12:30=True
+minimax-m3         notif_alteracao              OK  $0.0002 2.5s cita horário=True
+minimax-m3         rotina_motivos               OK  $0.0010 13.8s 3 motivos, palavras=[6, 6, 6]

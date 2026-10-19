@@ -1,0 +1,39 @@
+glm-5.3-flash      S1   OK  $0.0018 r=2 10.6s mut=[('criar_tarefa', {'end_time': '16:00', 'scheduled_date': '2026-10-08', 'start_time': 
+glm-5.3-flash      S2   OK  $0.0013 r=2 2.66s calls=['listar_tarefas']
+glm-5.3-flash      S3   OK  $0.0010 r=3 2.19s mut=[('atualizar_tarefa', {'end_time': '17:00', 'start_time': '16:00', 'task_id': 't2'})]
+glm-5.3-flash      S4   OK  $0.0016 r=3 2.6s mut=[('atualizar_tarefa', {'status': 'done', 'task_id': 't1'})]
+glm-5.3-flash      S5   xx  $0.0005 r=1 1.87s mut=[]
+glm-5.3-flash      S6   OK  $0.0007 r=2 2.37s mut=[('criar_objetivo', {'deadline': '2026-12-31', 'step_label': 'páginas', 'title': 'Ler 
+glm-5.3-flash      S7   OK  $0.0009 r=3 1.76s mut=[('pausar_rotina', {'paused_until': '2026-10-20', 'routine_id': 'r1'})]
+glm-5.3-flash      S8   OK  $0.0006 r=2 1.32s mut=[('salvar_memoria', {'content': 'Não agendar nada depois das 21h: horário reservado pa
+glm-5.3-flash      S9   OK  $0.0004 r=1 2.28s mut=[] len=684
+glm-5.3-flash      S10  OK  $0.0007 r=2 1.81s mut=[('criar_tarefa', {'scheduled_date': '2026-10-07', 'start_time': '14:30', 'task_type':
+glm-5.3-flash      S11  OK  $0.0007 r=2 1.47s mut=[]
+glm-5.3-flash      S12  OK  $0.0007 r=2 1.48s mut=[('criar_tarefa', {'priority': 'high', 'scheduled_date': '2026-10-09', 'start_time': '
+glm-5.3-flash      S13  OK  $0.0013 r=4 2.18s mut=[('criar_subtarefa', {'task_id': 't1', 'title': 'Coletar dados'}), ('criar_subtarefa',
+mistral-large-4    S1   OK  $0.0119 r=2 8.11s mut=[('criar_tarefa', {'title': 'Dentista', 'scheduled_date': '2026-10-08', 'start_time': 
+mistral-large-4    S2   OK  $0.0029 r=2 8.16s calls=['listar_tarefas']
+mistral-large-4    S3   OK  $0.0039 r=3 8.04s mut=[('atualizar_tarefa', {'end_time': '17:00', 'start_time': '16:00', 'task_id': 't2'})]
+mistral-large-4    S4   OK  $0.0137 r=3 10.13s mut=[('atualizar_tarefa', {'task_id': 't1', 'status': 'done'})]
+mistral-large-4    S5   OK  $0.0028 r=2 14.71s 
+mistral-large-4    S6   OK  $0.0091 r=2 15.95s mut=[('criar_objetivo', {'deadline': '2026-12-31', 'description': 'Ler Sapiens, de Yuval N
+mistral-large-4    S7   OK  $0.0031 r=3 6.74s mut=[('pausar_rotina', {'paused_until': '2026-10-20', 'routine_id': 'r1'})]
+mistral-large-4    S8   OK  $0.0072 r=2 4.92s mut=[('salvar_memoria', {'content': 'Não agendar nada depois das 21h — é horário fixo de f
+mistral-large-4    S9   OK  $0.0024 r=1 17.18s mut=[] len=1257
+mistral-large-4    S10  OK  $0.0031 r=2 15.33s mut=[('criar_tarefa', {'title': 'Call com o cliente', 'task_type': 'event', 'scheduled_dat
+mistral-large-4    S11  OK  $0.0078 r=2 26.34s mut=[]
+mistral-large-4    S12  OK  $0.0085 r=2 12.2s mut=[('criar_tarefa', {'title': 'Pagar aluguel', 'scheduled_date': '2026-10-09', 'start_ti
+mistral-large-4    S13  OK  $0.0036 r=3 5.74s mut=[('criar_subtarefa', {'task_id': 't1', 'title': 'Coletar dados'}), ('criar_subtarefa',
+minimax-m3         S1   OK  $0.0029 r=2 13.57s mut=[('criar_tarefa', {'title': 'Dentista', 'task_type': 'event', 'scheduled_date': '2026-
+minimax-m3         S2   OK  $0.0023 r=2 6.5s calls=['listar_tarefas']
+minimax-m3         S3   OK  $0.0034 r=3 14.99s mut=[('atualizar_tarefa', {'task_id': 't2', 'start_time': '16:00', 'end_time': '17:00'})]
+minimax-m3         S4   OK  $0.0020 r=3 10.88s mut=[('atualizar_tarefa', {'task_id': 't1', 'status': 'done'})]
+minimax-m3         S5   xx  $0.0008 r=1 15.48s mut=[]
+minimax-m3         S6   OK  $0.0038 r=2 64.6s mut=[('criar_objetivo', {'title': 'Ler Sapiens', 'description': 'Livro Sapiens, de Yuval N
+minimax-m3         S7   OK  $0.0038 r=3 12.94s mut=[('pausar_rotina', {'routine_id': 'r1', 'paused_until': '2026-10-20'})]
+minimax-m3         S8   OK  $0.0027 r=2 10.88s mut=[('salvar_memoria', {'content': 'Não agendar nada após 21h — é horário reservado para 
+minimax-m3         S9   OK  $0.0019 r=1 26.31s mut=[] len=824
+minimax-m3         S10  OK  $0.0019 r=2 45.9s mut=[('criar_tarefa', {'title': 'Call com o cliente', 'task_type': 'event', 'scheduled_dat
+minimax-m3         S11  OK  $0.0023 r=1 14.88s mut=[]
+minimax-m3         S12  OK  $0.0016 r=2 29.92s mut=[('criar_tarefa', {'title': 'Pagar aluguel', 'scheduled_date': '2026-10-09', 'start_ti
+minimax-m3         S13  OK  $0.0045 r=3 15.17s mut=[('criar_subtarefa', {'task_id': 't1', 'title': 'Coletar dados'}), ('criar_subtarefa',

@@ -1,5 +1,6 @@
 """
-Registro do uso de APIs pagas: Claude, transcrição e síntese de voz.
+Registro do uso de APIs pagas: Claude, modelos de texto pela OpenRouter,
+transcrição e síntese de voz.
 
 Cada chamada vira uma linha em `api_usage_events` (Migration 36), com o usuário,
 a funcionalidade que gastou e as unidades cobradas pelo provedor (tokens,
@@ -115,6 +116,30 @@ def record_claude(user_id: str | None, feature: str, model: str, usage) -> None:
         "cache_read_tokens": c_read,
         "cache_write_tokens": c_write,
         "cost_usd": claude_cost(model, inp, out, c_read, c_write),
+    })
+
+
+def record_openrouter(user_id: str | None, feature: str, model: str, usage: dict | None) -> None:
+    """
+    Registra uma chamada de texto pela OpenRouter a partir do `usage` da resposta.
+
+    Diferente do Claude, o custo vem pronto da própria OpenRouter (`usage.cost`,
+    pedido com `usage: {include: true}`) e já inclui o raciocínio e a margem
+    dela, então não há tabela de preços aqui. `completion_tokens` já conta os
+    tokens de raciocínio.
+    """
+    if not usage:
+        return
+    _submit({
+        "user_id": user_id,
+        "feature": feature,
+        "provider": "openrouter",
+        "model": model,
+        "input_tokens": usage.get("prompt_tokens") or 0,
+        "output_tokens": usage.get("completion_tokens") or 0,
+        "cache_read_tokens": (usage.get("prompt_tokens_details") or {}).get("cached_tokens") or 0,
+        "cache_write_tokens": 0,
+        "cost_usd": usage.get("cost"),
     })
 
 

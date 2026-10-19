@@ -1,0 +1,39 @@
+sonnet-4.6         S1   OK  $0.0484 r=2 4.54s mut=[('criar_tarefa', {'title': 'Dentista', 'task_type': 'event', 'scheduled_date': '2026-
+sonnet-4.6         S2   OK  $0.0128 r=2 6.26s calls=['listar_tarefas']
+sonnet-4.6         S3   OK  $0.0191 r=3 20.6s mut=[('atualizar_tarefa', {'task_id': 't2', 'start_time': '16:00', 'end_time': '17:00'})]
+sonnet-4.6         S4   OK  $0.0216 r=3 4.96s mut=[('atualizar_tarefa', {'task_id': 't1', 'status': 'done'})]
+sonnet-4.6         S5   xx  $0.0090 r=1 8.37s mut=[]
+sonnet-4.6         S6   OK  $0.0189 r=2 12.08s mut=[('criar_objetivo', {'title': 'Ler Sapiens', 'total_steps': 450, 'step_label': 'página
+sonnet-4.6         S7   OK  $0.0182 r=3 7.31s mut=[('pausar_rotina', {'routine_id': 'r1', 'paused_until': '2026-10-20'})]
+sonnet-4.6         S8   OK  $0.0113 r=2 4.65s mut=[('salvar_memoria', {'content': 'Não agendar tarefas após 21h — esse é o horário reser
+sonnet-4.6         S9   OK  $0.0132 r=1 14.06s mut=[] len=1100
+sonnet-4.6         S10  OK  $0.0156 r=2 6.15s mut=[('criar_tarefa', {'title': 'Call com o cliente', 'task_type': 'event', 'scheduled_dat
+sonnet-4.6         S11  OK  $0.0058 r=1 2.61s mut=[]
+sonnet-4.6         S12  OK  $0.0213 r=2 15.46s mut=[('criar_tarefa', {'title': 'Pagar aluguel', 'scheduled_date': '2026-10-09', 'priority
+sonnet-4.6         S13  OK  $0.0209 r=3 8.77s mut=[('criar_subtarefa', {'task_id': 't1', 'title': 'Coletar dados'}), ('criar_subtarefa',
+gpt-6-luna         S1   OK  $0.0010 r=2 3.63s mut=[('criar_tarefa', {'title': 'Dentista', 'description': '', 'task_type': 'event', 'prio
+gpt-6-luna         S2   OK  $0.0002 r=2 3.42s calls=['listar_tarefas']
+gpt-6-luna         S3   OK  $0.0006 r=4 11.71s mut=[('atualizar_tarefa', {'task_id': 't2', 'title': 'Reunião com o Pedro', 'description':
+gpt-6-luna         S4   OK  $0.0012 r=3 4.47s mut=[('atualizar_tarefa', {'task_id': 't1', 'title': 'Relatório trimestral', 'description'
+gpt-6-luna         S5   OK  $0.0002 r=2 3.79s 
+gpt-6-luna         S6   OK  $0.0003 r=2 7.65s mut=[('criar_objetivo', {'title': 'Ler Sapiens', 'description': 'Ler o livro Sapiens, tota
+gpt-6-luna         S7   OK  $0.0003 r=3 6.83s mut=[('pausar_rotina', {'routine_id': 'r1', 'paused_until': '2026-10-20'})]
+gpt-6-luna         S8   OK  $0.0002 r=2 6.81s mut=[('salvar_memoria', {'content': 'Marina reserva o período depois das 21h para a famíli
+gpt-6-luna         S9   OK  $0.0001 r=1 4.31s mut=[] len=243
+gpt-6-luna         S10  OK  $0.0002 r=2 5.7s mut=[('criar_tarefa', {'title': 'Call com o cliente', 'description': '', 'task_type': 'eve
+gpt-6-luna         S11  OK  $0.0001 r=1 4.62s mut=[]
+gpt-6-luna         S12  OK  $0.0002 r=2 4.47s mut=[('criar_tarefa', {'title': 'Pagar aluguel', 'description': '', 'task_type': 'task', '
+gpt-6-luna         S13  OK  $0.0004 r=3 5.4s mut=[('criar_subtarefa', {'task_id': 't1', 'objective_id': '', 'objective_steps': 1, 'titl
+gemini-3.5-lite    S1   OK  $0.0041 r=2 3.54s mut=[('criar_tarefa', {'scheduled_date': '2026-10-08', 'task_type': 'event', 'start_time':
+gemini-3.5-lite    S2   OK  $0.0049 r=2 2.08s calls=['listar_tarefas']
+gemini-3.5-lite    S3   OK  $0.0034 r=3 2.57s mut=[('atualizar_tarefa', {'start_time': '16:00:00', 'task_id': 't2'})]
+gemini-3.5-lite    S4   OK  $0.0039 r=4 3.12s mut=[('atualizar_tarefa', {'task_id': 't1', 'status': 'done'})]
+gemini-3.5-lite    S5   OK  $0.0030 r=2 1.82s 
+gemini-3.5-lite    S6   OK  $0.0031 r=2 1.9s mut=[('criar_objetivo', {'total_steps': 450, 'step_label': 'páginas', 'deadline': '2026-12
+gemini-3.5-lite    S7   OK  $0.0051 r=3 2.59s mut=[('pausar_rotina', {'routine_id': 'r1', 'paused_until': '2026-10-20'})]
+gemini-3.5-lite    S8   OK  $0.0028 r=2 1.82s mut=[('salvar_memoria', {'content': 'Não agendar nenhuma tarefa ou compromisso após as 21h
+gemini-3.5-lite    S9   OK  $0.0064 r=2 4.7s mut=[] len=679
+gemini-3.5-lite    S10  OK  $0.0037 r=2 2.72s mut=[('criar_tarefa', {'start_time': '14:30', 'scheduled_date': '2026-10-07', 'title': 'Ca
+gemini-3.5-lite    S11  OK  $0.0049 r=2 1.88s mut=[]
+gemini-3.5-lite    S12  OK  $0.0029 r=2 1.89s mut=[('criar_tarefa', {'start_time': '09:00', 'scheduled_date': '2026-10-09', 'priority': 
+gemini-3.5-lite    S13  OK  $0.0035 r=3 2.52s mut=[('criar_subtarefa', {'task_id': 't1', 'title': 'coletar dados'}), ('criar_subtarefa',
