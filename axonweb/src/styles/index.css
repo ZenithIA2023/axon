@@ -552,10 +552,20 @@ body {
 }
 
 /* O "puxar além do fim" do WebView denuncia que é um site dentro de uma
-   janela. Num app instalado ele não existe. */
-.is-native html,
-.is-native body {
-  overscroll-behavior: none;
+   janela. Num app instalado ele não existe.
+
+   Única regra deste bloco que PRECISA da media query: todas as outras de
+   `.is-native` são no-op fora do aparelho (dependem de `env(safe-area-inset-*)`,
+   que vale zero, ou repetem um valor que a própria classe do elemento já
+   define). Esta não — ela desligaria o repique de rolagem do desktop, que é
+   comportamento de produto e não deve mudar. Abaixo de 1024px ela vale, e aí
+   serve tanto ao APK quanto à pré-visualização mobile na web (onde também
+   desliga o "puxar para recarregar", como no app). */
+@media (max-width: 1023.98px) {
+  .is-native html,
+  .is-native body {
+    overscroll-behavior: none;
+  }
 }
 
 /* Barra de rolagem da transcrição de voz: visível o bastante para revelar que

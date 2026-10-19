@@ -18,7 +18,7 @@ import {
   User,
 } from "lucide-react";
 
-import { isNative } from "../../lib/nativeAuth";
+import { useLarguraDeCelular } from "../../lib/useLarguraDeCelular";
 import { useTheme } from "../theme/ThemeProvider";
 // Versão reduzida (192px) do rosto: a barra aparece em todas as telas do app,
 // e o original de 1080px pesa 687KB para ser exibido a 44px.
@@ -681,14 +681,19 @@ export default function BottomNav() {
 // ===========================================================================
 // MONTAGEM CONDICIONAL
 // ===========================================================================
-// Esta barra é exclusiva do app instalado — iOS e Android. No navegador, em
-// qualquer largura, a navegação continua sendo a Sidebar de cada página.
+// A barra aparece em LARGURA de celular, não só no APK: a web estreita serve
+// como pré-visualização do design mobile (ver useLarguraDeCelular). No desktop
+// a navegação continua sendo a Sidebar de cada página.
 //
-// `isNativePlatform()` é falso em todo browser, inclusive no celular e num PWA
-// adicionado à tela inicial: só o app empacotado pelo Capacitor recebe a barra.
+// DESMONTAR, e não esconder com `lg:hidden`: a regra
+// `body:has([data-bottom-nav]) main:not(.h-[100dvh])` do index.css reserva
+// espaço no rodapé, e o `:has()` enxerga o elemento mesmo invisível — esconder
+// por CSS deixaria um vão morto no rodapé de todo o desktop.
 
 export function BottomNavGate() {
-  if (!isNative()) {
+  const ehCelular = useLarguraDeCelular();
+
+  if (!ehCelular) {
     return null;
   }
 

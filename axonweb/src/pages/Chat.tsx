@@ -30,6 +30,7 @@ import Sidebar from "../components/layout/Sidebar";
 import { ChatConversationPanel } from "./ChatConversation";
 import * as api from "../lib/api";
 import type { ConversationData } from "../lib/api";
+import { ehLarguraDeCelular } from "../lib/useLarguraDeCelular";
 import AppBackground from "../components/layout/AppBackground";
 import ConfirmDialog from "../components/ui/ConfirmDialog";
 import EmptyState from "../components/ui/EmptyState";
@@ -156,11 +157,12 @@ function saveLastAccessMap(nextMap: LastAccessMap) {
   localStorage.setItem(CHAT_LAST_ACCESS_STORAGE_KEY, JSON.stringify(nextMap));
 }
 
+// Mesma quebra de 1024px do `useLarguraDeCelular`, delegada para lá: um número
+// só, num lugar só. Continua NÃO reativa de propósito — os seis usos abaixo são
+// checagens dentro de efeitos e handlers, onde um valor de render ficaria
+// capturado velho.
 function isDesktopChatViewport() {
-  return (
-    typeof window !== "undefined" &&
-    window.matchMedia("(min-width: 1024px)").matches
-  );
+  return !ehLarguraDeCelular();
 }
 
 // Fallback usado pela Sidebar quando o cronotipo salvo ainda não existe.
