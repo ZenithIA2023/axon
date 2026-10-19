@@ -1,0 +1,19 @@
+[routine_analysis] motivos pelo Claude falharam: 
+gemini-3.8-flash   r0 notif_analise_bloco_ruim     OK  $0.0019 16.4s type=improvement task=a3 novo=07:30 bloco=pico
+gemini-3.8-flash   r0 notif_analise_tudo_feito     OK  $0.0015 1.6s notify=True type=simple
+gemini-3.8-flash   r0 notif_reescrita_amanha       OK  $0.0025 5.4s cita 08:00=True
+gemini-3.8-flash   r0 notif_reescrita_compactacao  OK  $0.0004 1.7s cita 12:30=True
+gemini-3.8-flash   r0 notif_alteracao              OK  $0.0003 1.7s cita horário=True
+gemini-3.8-flash   r0 rotina_motivos               OK  $0.0004 1.4s 3 motivos, palavras=[7, 7, 7]
+gemini-3.8-flash   r1 notif_analise_bloco_ruim     OK  $0.0019 2.2s type=improvement task=a3 novo=07:30 bloco=pico
+gemini-3.8-flash   r1 notif_analise_tudo_feito     OK  $0.0015 1.7s notify=True type=simple
+gemini-3.8-flash   r1 notif_reescrita_amanha       OK  $0.0004 1.6s cita 08:00=True
+gemini-3.8-flash   r1 notif_reescrita_compactacao  OK  $0.0024 4.7s cita 12:30=True
+gemini-3.8-flash   r1 notif_alteracao              OK  $0.0003 1.2s cita horário=True
+gemini-3.8-flash   r1 rotina_motivos               OK  $0.0004 1.6s 3 motivos, palavras=[7, 8, 8]
+gemini-3.8-flash   r2 notif_analise_bloco_ruim     OK  $0.0019 2.2s type=improvement task=a3 novo=07:30 bloco=pico
+gemini-3.8-flash   r2 notif_analise_tudo_feito     OK  $0.0015 2.0s notify=True type=simple
+gemini-3.8-flash   r2 notif_reescrita_amanha       OK  $0.0004 1.4s cita 08:00=True
+gemini-3.8-flash   r2 notif_reescrita_compactacao  OK  $0.0004 2.1s cita 12:30=True
+gemini-3.8-flash   r2 notif_alteracao              OK  $0.0003 1.7s cita horário=True
+gemini-3.8-flash   r2 rotina_motivos               OK  $0.0036 6.4s 3 motivos, palavras=[7, 7, 7]

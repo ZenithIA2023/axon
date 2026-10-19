@@ -1,0 +1,26 @@
+gpt-6-luna         txt H1   r0 xx  $0.0003 1.45s/4.69s mut=[('atualizar_tarefa', {'task_id': 't4', 'title': 'Revisar contrato', 'descri
+gpt-6-luna         txt H5   r0 OK  $0.0003 1.69s/4.97s mut=[('criar_tarefa', {'title': 'Ligar para minha mãe', 'description': '', 'task
+gpt-6-luna         txt H6   r0 OK  $0.0002 1.45s/3.55s calls=['listar_objetivos']
+gpt-6-luna         txt H7   r0 OK  $0.0002 1.87s/3.02s mut=[('criar_tarefa', {'title': 'Estudar', 'description': 'Bloco de estudo', 'ta
+gpt-6-luna         txt H8   r0 OK  $0.0001 1.88s/1.88s mut=[]
+gpt-6-luna         txt H11  r0 xx  $0.0007 1.37s/12.14s calls=['listar_tarefas', 'listar_tarefas', 'listar_tarefas', 'criar_tarefa']
+gpt-6-luna         txt H1   r1 xx  $0.0012 2.37s/6.97s mut=[('atualizar_tarefa', {'task_id': 't4', 'title': 'Revisar contrato', 'descri
+gpt-6-luna         txt H2   r1 OK  $0.0002 1.69s/3.08s datas=['2026-10-13'] esperado=2026-10-13
+gpt-6-luna         txt H3   r1 OK  $0.0004 1.78s/5.03s mut=[('atualizar_tarefa', {'task_id': 't3', 'title': 'Academia', 'description': 
+gpt-6-luna         txt H5   r1 OK  $0.0003 1.56s/4.44s mut=[('criar_tarefa', {'title': 'Ligar para minha mãe', 'description': '', 'task
+gpt-6-luna         txt H6   r1 OK  $0.0002 1.23s/2.39s calls=['listar_objetivos']
+gpt-6-luna         txt H7   r1 OK  $0.0002 4.42s/6.07s mut=[('criar_tarefa', {'title': 'Estudar', 'description': 'Bloco de estudo', 'ta
+gpt-6-luna         txt H8   r1 OK  $0.0001 2.27s/2.27s mut=[]
+gpt-6-luna         txt H9   r1 OK  $0.0002 1.65s/2.8s mut=[('criar_tarefa', {'title': 'Call com o cliente', 'description': '', 'task_t
+gpt-6-luna         txt H10  r1 OK  $0.0004 4.62s/5.95s 
+gpt-6-luna         txt H11  r1 xx  $0.0004 1.43s/8.85s calls=['listar_tarefas', 'listar_tarefas', 'listar_tarefas']
+gpt-6-luna         txt H1   r2 xx  $0.0003 1.33s/4.72s mut=[('atualizar_tarefa', {'task_id': 't4', 'title': 'Revisar contrato', 'descri
+gpt-6-luna         txt H2   r2 OK  $0.0002 1.53s/2.63s datas=['2026-10-13'] esperado=2026-10-13
+gpt-6-luna         txt H3   r2 xx  $0.0004 1.21s/7.63s mut=[]
+gpt-6-luna         txt H5   r2 OK  $0.0011 3.08s/7.35s mut=[('criar_tarefa', {'title': 'Ligar para minha mãe', 'description': '', 'task
+gpt-6-luna         txt H6   r2 OK  $0.0002 1.13s/2.65s calls=['listar_objetivos']
+gpt-6-luna         txt H7   r2 OK  $0.0002 2.15s/3.58s mut=[('criar_tarefa', {'title': 'Estudar', 'description': 'Bloco de estudo', 'ta
+gpt-6-luna         txt H8   r2 OK  $0.0001 2.2s/2.2s mut=[]
+gpt-6-luna         txt H9   r2 OK  $0.0002 2.21s/4.4s mut=[('criar_tarefa', {'title': 'Call com o cliente', 'description': '', 'task_t
+gpt-6-luna         txt H10  r2 OK  $0.0003 5.27s/6.5s 
+gpt-6-luna         txt H11  r2 OK  $0.0006 3.25s/11.08s calls=['listar_tarefas', 'listar_tarefas', 'listar_tarefas', 'listar_tarefas', '

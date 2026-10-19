@@ -1,0 +1,10 @@
+[routine_analysis] motivos pelo Claude falharam: 
+gpt-6.1-sol        r0 insights                     OK  $0.0296 20.2s 7 insights válidos
+gpt-6.1-sol        r0 descobertas                  OK  $0.0089 6.4s 3/3 com source_index válido
+gpt-6.1-sol        r0 relatorio                    OK  $0.0024 3.1s 395 chars
+gpt-6.1-sol        r1 insights                     OK  $0.0104 19.2s 7 insights válidos
+gpt-6.1-sol        r1 descobertas                  OK  $0.0045 8.7s 4/4 com source_index válido
+gpt-6.1-sol        r1 relatorio                    OK  $0.0024 3.2s 370 chars
+gpt-6.1-sol        r2 insights                     OK  $0.0099 16.4s 7 insights válidos
+gpt-6.1-sol        r2 descobertas                  OK  $0.0032 6.7s 3/3 com source_index válido
+gpt-6.1-sol        r2 relatorio                    OK  $0.0024 3.2s 335 chars

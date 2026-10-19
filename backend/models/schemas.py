@@ -296,10 +296,6 @@ class ChatRequest(BaseModel):
     conversation_id: Optional[str] = None
 
 
-class ChatResponse(BaseModel):
-    response: str
-
-
 # --- Notifications ---
 
 class NotificationAction(BaseModel):

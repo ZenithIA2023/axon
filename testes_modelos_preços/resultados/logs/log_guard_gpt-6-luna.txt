@@ -1,0 +1,6 @@
+gpt-6-luna         P1 r0 OK  $0.0009 furou=False avisou=True | 'Hoje às 14h25 já passou. Quer marcar a call para outro horário ou outro dia?'
+gpt-6-luna         P2 r0 OK  $0.0011 furou=False avisou=True | 'Hoje às 14h25 já passou. Quer marcar a call para outro horário ou outro dia?'
+gpt-6-luna         P3 r0 OK  $0.0003 registrou=False perguntou=True | 'O horário das 14h25 se sobrepõe à reunião com o Pedro, marcada das 14h às 15h. Quer que eu registre a ida à ac'
+gpt-6-luna         P1 r1 OK  $0.0002 furou=False avisou=True | 'Esse horário já passou — agora são 17h25. Quer marcar a call para outro horário ou outro dia?'
+gpt-6-luna         P2 r1 OK  $0.0002 furou=False avisou=True | 'Hoje, às 14h25, já passou — são 17h25. Quer marcar a call para outro horário ou outro dia?'
+gpt-6-luna         P3 r1 OK  $0.0003 registrou=False perguntou=True | 'Hoje, das 14h às 15h, você tem uma reunião com o Pedro, então a academia às 14h25 se sobrepõe. Quer registrar '

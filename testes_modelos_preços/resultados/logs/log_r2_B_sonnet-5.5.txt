@@ -1,0 +1,10 @@
+[routine_analysis] motivos pelo Claude falharam: 
+sonnet-5.5         r0 insights                     OK  $0.0349 10.2s 8 insights válidos
+sonnet-5.5         r0 descobertas                  OK  $0.0109 2.8s 4/4 com source_index válido
+sonnet-5.5         r0 relatorio                    OK  $0.0042 4.4s 440 chars
+sonnet-5.5         r1 insights                     OK  $0.0355 10.6s 8 insights válidos
+sonnet-5.5         r1 descobertas                  OK  $0.0108 2.8s 4/4 com source_index válido
+sonnet-5.5         r1 relatorio                    OK  $0.0043 2.4s 440 chars
+sonnet-5.5         r2 insights                     OK  $0.0347 10.6s 8 insights válidos
+sonnet-5.5         r2 descobertas                  OK  $0.0110 2.9s 4/4 com source_index válido
+sonnet-5.5         r2 relatorio                    OK  $0.0043 2.3s 464 chars

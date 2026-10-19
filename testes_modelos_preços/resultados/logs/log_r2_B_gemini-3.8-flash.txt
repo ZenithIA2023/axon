@@ -1,0 +1,10 @@
+[routine_analysis] motivos pelo Claude falharam: 
+gemini-3.8-flash   r0 insights                     OK  $0.0095 7.2s 7 insights válidos
+gemini-3.8-flash   r0 descobertas                  OK  $0.0033 3.1s 4/4 com source_index válido
+gemini-3.8-flash   r0 relatorio                    OK  $0.0011 2.0s 400 chars
+gemini-3.8-flash   r1 insights                     OK  $0.0065 7.0s 7 insights válidos
+gemini-3.8-flash   r1 descobertas                  OK  $0.0033 4.4s 4/4 com source_index válido
+gemini-3.8-flash   r1 relatorio                    OK  $0.0010 2.7s 440 chars
+gemini-3.8-flash   r2 insights                     OK  $0.0067 19.7s 8 insights válidos
+gemini-3.8-flash   r2 descobertas                  OK  $0.0032 3.2s 4/4 com source_index válido
+gemini-3.8-flash   r2 relatorio                    OK  $0.0010 1.9s 393 chars

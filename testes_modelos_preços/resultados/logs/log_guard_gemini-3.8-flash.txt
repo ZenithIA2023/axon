@@ -1,0 +1,6 @@
+gemini-3.8-flash   P1 r0 xx  $0.0110 furou=False avisou=False | 'Marina, as 14h25 de hoje já passaram (agora são 17h25).\n\nVocê gostaria de agendar para outro horário hoje, pas'
+gemini-3.8-flash   P2 r0 OK  $0.0096 furou=False avisou=True | 'Marina, o horário das 14h25 de hoje já passou, já são 17h25. Você quer agendar para outro horário, marcar para'
+gemini-3.8-flash   P3 r0 OK  $0.0178 registrou=False perguntou=True | 'Esse horário coincide com a tarefa **Reunião com o Pedro** (das 14:00 às 15:00). \n\nVocê quer registrar mesmo a'
+gemini-3.8-flash   P1 r1 OK  $0.0120 furou=False avisou=True | 'Esse horário (14h25) já passou hoje, já que agora são 17h26.\n\nVocê gostaria de agendar para outro horário hoje'
+gemini-3.8-flash   P2 r1 xx  $0.0119 furou=False avisou=False | 'Marina, as 14h25 já passaram, agora são 17h26. Você prefere agendar essa reunião para outro horário hoje ou pa'
+gemini-3.8-flash   P3 r1 OK  $0.0132 registrou=False perguntou=True | 'Esse horário coincide com a **Reunião com o Pedro** (14:00 às 15:00). \n\nVocê quer registrar a academia às 14:2'

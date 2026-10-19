@@ -1,0 +1,30 @@
+sonnet-5.5         txt H1   r0 xx  $0.0464 1.58s/4.88s mut=[('atualizar_tarefa', {'task_id': 't4', 'start_time': '15:00', 'end_time': '
+sonnet-5.5         txt H2   r0 OK  $0.0097 4.28s/6.34s datas=['2026-10-13'] esperado=2026-10-13
+sonnet-5.5         txt H3   r0 OK  $0.0127 1.53s/4.0s mut=[('atualizar_tarefa', {'task_id': 't3', 'scheduled_date': '2026-10-08'})]
+sonnet-5.5         txt H5   r0 OK  $0.0096 1.63s/2.64s mut=[('criar_tarefa', {'title': 'Ligar para a mãe', 'scheduled_date': '2026-10-0
+sonnet-5.5         txt H6   r0 OK  $0.0077 1.75s/3.34s calls=['listar_objetivos']
+sonnet-5.5         txt H7   r0 OK  $0.0087 1.39s/2.67s mut=[('criar_tarefa', {'title': 'Estudar', 'scheduled_date': '2026-10-08', 'star
+sonnet-5.5         txt H8   r0 OK  $0.0067 4.13s/4.13s mut=[]
+sonnet-5.5         txt H9   r0 OK  $0.0155 5.72s/7.5s mut=[('criar_tarefa', {'title': 'Call com o cliente', 'task_type': 'event', 'sch
+sonnet-5.5         txt H10  r0 OK  $0.0098 1.37s/3.13s 
+sonnet-5.5         txt H11  r0 OK  $0.0096 1.25s/4.21s calls=['listar_tarefas']
+sonnet-5.5         txt H1   r1 xx  $0.0139 1.45s/4.91s mut=[('atualizar_tarefa', {'task_id': 't4', 'start_time': '15:00', 'end_time': '
+sonnet-5.5         txt H2   r1 OK  $0.0095 2.04s/3.65s datas=['2026-10-13'] esperado=2026-10-13
+sonnet-5.5         txt H3   r1 OK  $0.0127 1.23s/3.79s mut=[('atualizar_tarefa', {'task_id': 't3', 'scheduled_date': '2026-10-08'})]
+sonnet-5.5         txt H5   r1 OK  $0.0098 2.64s/3.81s mut=[('criar_tarefa', {'title': 'Ligar para a mãe', 'scheduled_date': '2026-10-0
+sonnet-5.5         txt H6   r1 OK  $0.0073 1.57s/3.22s calls=['listar_objetivos']
+sonnet-5.5         txt H7   r1 OK  $0.0088 1.28s/4.13s mut=[('criar_tarefa', {'title': 'Estudar', 'scheduled_date': '2026-10-08', 'star
+sonnet-5.5         txt H8   r1 OK  $0.0066 6.54s/6.54s mut=[]
+sonnet-5.5         txt H9   r1 OK  $0.0201 4.16s/7.82s mut=[('criar_tarefa', {'title': 'Call com o cliente', 'task_type': 'event', 'sch
+sonnet-5.5         txt H10  r1 OK  $0.0099 1.41s/3.57s 
+sonnet-5.5         txt H11  r1 OK  $0.0099 1.21s/4.73s calls=['listar_tarefas']
+sonnet-5.5         txt H1   r2 xx  $0.0163 1.32s/4.78s mut=[('atualizar_tarefa', {'task_id': 't4', 'start_time': '15:00', 'end_time': '
+sonnet-5.5         txt H2   r2 OK  $0.0100 2.25s/3.17s datas=['2026-10-13'] esperado=2026-10-13
+sonnet-5.5         txt H3   r2 OK  $0.0126 1.14s/3.57s mut=[('atualizar_tarefa', {'task_id': 't3', 'scheduled_date': '2026-10-08'})]
+sonnet-5.5         txt H5   r2 OK  $0.0096 1.65s/2.7s mut=[('criar_tarefa', {'title': 'Ligar para a mãe', 'scheduled_date': '2026-10-0
+sonnet-5.5         txt H6   r2 OK  $0.0076 1.08s/6.91s calls=['listar_objetivos']
+sonnet-5.5         txt H7   r2 OK  $0.0089 1.43s/3.83s mut=[('criar_tarefa', {'title': 'Estudar', 'scheduled_date': '2026-10-08', 'star
+sonnet-5.5         txt H8   r2 OK  $0.0074 4.07s/4.07s mut=[]
+sonnet-5.5         txt H9   r2 OK  $0.0121 3.17s/4.83s mut=[('criar_tarefa', {'title': 'Call com o cliente', 'scheduled_date': '2026-10
+sonnet-5.5         txt H10  r2 OK  $0.0111 2.62s/4.59s 
+sonnet-5.5         txt H11  r2 OK  $0.0095 1.61s/4.3s calls=['listar_tarefas']

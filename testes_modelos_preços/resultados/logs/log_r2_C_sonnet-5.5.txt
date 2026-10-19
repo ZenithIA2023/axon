@@ -1,0 +1,19 @@
+[routine_analysis] motivos pelo Claude falharam: 
+sonnet-5.5         r0 notif_analise_bloco_ruim     xx  $0.0087 3.2s type= task=None novo= bloco=None
+sonnet-5.5         r0 notif_analise_tudo_feito     OK  $0.0057 1.6s notify=True type=simple
+sonnet-5.5         r0 notif_reescrita_amanha       OK  $0.0015 1.2s cita 08:00=True
+sonnet-5.5         r0 notif_reescrita_compactacao  OK  $0.0015 1.3s cita 12:30=True
+sonnet-5.5         r0 notif_alteracao              OK  $0.0014 1.7s cita horário=True
+sonnet-5.5         r0 rotina_motivos               OK  $0.0016 1.4s 3 motivos, palavras=[8, 8, 8]
+sonnet-5.5         r1 notif_analise_bloco_ruim     xx  $0.0077 2.7s type= task=None novo= bloco=None
+sonnet-5.5         r1 notif_analise_tudo_feito     OK  $0.0059 3.1s notify=True type=simple
+sonnet-5.5         r1 notif_reescrita_amanha       OK  $0.0014 1.3s cita 08:00=True
+sonnet-5.5         r1 notif_reescrita_compactacao  OK  $0.0014 1.5s cita 12:30=True
+sonnet-5.5         r1 notif_alteracao              OK  $0.0013 1.6s cita horário=True
+sonnet-5.5         r1 rotina_motivos               OK  $0.0016 1.4s 3 motivos, palavras=[8, 7, 9]
+sonnet-5.5         r2 notif_analise_bloco_ruim     OK  $0.0096 3.5s type=improvement task=a3 novo=07:30 bloco=pico
+sonnet-5.5         r2 notif_analise_tudo_feito     OK  $0.0059 3.7s notify=True type=simple
+sonnet-5.5         r2 notif_reescrita_amanha       OK  $0.0014 1.5s cita 08:00=True
+sonnet-5.5         r2 notif_reescrita_compactacao  OK  $0.0015 1.4s cita 12:30=True
+sonnet-5.5         r2 notif_alteracao              OK  $0.0014 1.7s cita horário=True
+sonnet-5.5         r2 rotina_motivos               OK  $0.0017 1.4s 3 motivos, palavras=[9, 10, 9]

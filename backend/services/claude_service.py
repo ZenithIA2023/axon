@@ -11,6 +11,22 @@ _MODEL = "claude-sonnet-4-6"
 _MAX_TOOL_ROUNDS = 5
 
 
+# Modelos que pensam por padrão: neles, omitir `thinking` LIGA o raciocínio
+# adaptativo e `{"type": "disabled"}` é recusado com 400. O jeito de desligar é
+# `between_tools` — numa chamada sem ferramentas, o modelo não raciocina.
+# Medido em 19/10/2026 nos insights do Sonnet 5.5: omitido, ~7,8k tokens de
+# saída (a ~400 do teto) e 3× o custo; com between_tools, ~1,1k.
+_THINKS_BY_DEFAULT = {"claude-sonnet-5-5"}
+
+
+def _thinking_kwargs(model: str, thinking: bool) -> dict:
+    if thinking:
+        return {"thinking": {"type": "adaptive"}}
+    if model in _THINKS_BY_DEFAULT:
+        return {"thinking": {"type": "between_tools"}}
+    return {}
+
+
 def _text_from_content(content) -> str:
     """Concatena todos os blocos de texto da resposta (ignora thinking/tool_use)."""
     return "".join(b.text for b in content if getattr(b, "type", None) == "text")
@@ -24,6 +40,8 @@ def call_chat(
     max_tokens: int = 4096,
     user_id: str | None = None,
     feature: str = "outro",
+    json_schema: dict | None = None,
+    model: str = _MODEL,
 ) -> str:
     """
     Chamada simples ao Claude, devolvendo só o texto.
@@ -36,20 +54,31 @@ def call_chat(
     o raciocínio chegava a esgotá-lo antes da resposta começar, e a aba exibia
     "não foi possível gerar insights". O chat mantém o padrão (thinking ligado).
 
+    `json_schema` liga a saída estruturada da API: a resposta vem garantidamente
+    como JSON válido nesse schema (a raiz tem de ser um objeto). Existe porque
+    pedir "responda só com JSON" no prompt não basta — o modelo às vezes põe
+    aspas sem escape dentro de uma string, e uma aspa invalidava a resposta
+    inteira (bug dos insights, achado na avaliação de modelos de 07/10/2026).
+
+    `model` troca o modelo da chamada; o padrão é `_MODEL`. O roteamento entre
+    provedores (principal + reserva) vive em services/llm_service.py.
+
     `user_id` e `feature` identificam quem gastou e onde, no registro de uso
     (services/usage_service.py). `user_id` None é aceito para chamadas sem
     usuário, mas toda chamada feita em nome de alguém deve passá-lo.
     """
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    kwargs = {"thinking": {"type": "adaptive"}} if thinking else {}
+    kwargs = _thinking_kwargs(model, thinking)
+    if json_schema is not None:
+        kwargs["output_config"] = {"format": {"type": "json_schema", "schema": json_schema}}
     response = client.messages.create(
-        model=_MODEL,
+        model=model,
         max_tokens=max_tokens,
         system=system_prompt,
         messages=messages,
         **kwargs,
     )
-    usage_service.record_claude(user_id, feature, _MODEL, response.usage)
+    usage_service.record_claude(user_id, feature, model, response.usage)
     if response.stop_reason == "refusal":
         return "Desculpe, não consigo ajudar com esse pedido específico. Podemos tentar outra coisa?"
 

@@ -1,0 +1,30 @@
+gemini-3.5-lite    txt H1   r0 OK  $0.0059 1.13s/4.28s mut=[('criar_tarefa', {'scheduled_date': '2026-10-08', 'title': 'Dentista', 'tas
+gemini-3.5-lite    txt H2   r0 OK  $0.0084 5.39s/6.56s datas=['2026-10-13'] esperado=2026-10-13
+gemini-3.5-lite    txt H3   r0 OK  $0.0053 1.11s/3.59s mut=[('atualizar_tarefa', {'task_id': 't3', 'end_time': '19:00', 'scheduled_date
+gemini-3.5-lite    txt H5   r0 OK  $0.0041 2.2s/3.1s mut=[('criar_tarefa', {'scheduled_date': '2026-10-08', 'start_time': '19:00', 't
+gemini-3.5-lite    txt H6   r0 OK  $0.0046 0.78s/1.66s calls=['listar_objetivos']
+gemini-3.5-lite    txt H7   r0 OK  $0.0048 0.96s/1.87s mut=[('criar_tarefa', {'scheduled_date': '2026-10-08', 'end_time': '15:00', 'tit
+gemini-3.5-lite    txt H8   r0 OK  $0.0025 1.36s/1.36s mut=[]
+gemini-3.5-lite    txt H9   r0 OK  $0.0048 0.94s/2.24s mut=[('criar_tarefa', {'start_time': '14:30', 'confirmar_conflito': True, 'sched
+gemini-3.5-lite    txt H10  r0 OK  $0.0052 2.66s/5.17s 
+gemini-3.5-lite    txt H11  r0 OK  $0.0049 0.89s/2.21s calls=['listar_tarefas']
+gemini-3.5-lite    txt H1   r1 OK  $0.0037 0.89s/2.97s mut=[('criar_tarefa', {'title': 'Dentista', 'task_type': 'event', 'end_time': '1
+gemini-3.5-lite    txt H2   r1 OK  $0.0047 1.03s/1.93s datas=['2026-10-13'] esperado=2026-10-13
+gemini-3.5-lite    txt H3   r1 OK  $0.0053 0.91s/2.81s mut=[('atualizar_tarefa', {'start_time': '18:00:00', 'task_id': 't3', 'scheduled
+gemini-3.5-lite    txt H5   r1 OK  $0.0030 0.95s/1.91s mut=[('criar_tarefa', {'task_type': 'task', 'title': 'Ligar pra mãe', 'scheduled
+gemini-3.5-lite    txt H6   r1 OK  $0.0046 1.02s/1.88s calls=['listar_objetivos']
+gemini-3.5-lite    txt H7   r1 OK  $0.0048 0.77s/1.72s mut=[('criar_tarefa', {'end_time': '15:00', 'title': 'Estudar', 'task_type': 'ev
+gemini-3.5-lite    txt H8   r1 OK  $0.0025 1.35s/1.35s mut=[]
+gemini-3.5-lite    txt H9   r1 OK  $0.0029 1.07s/2.4s mut=[('criar_tarefa', {'title': 'Call com o cliente', 'start_time': '14:30', 'co
+gemini-3.5-lite    txt H10  r1 OK  $0.0034 0.69s/2.51s 
+gemini-3.5-lite    txt H11  r1 OK  $0.0031 0.82s/1.85s calls=['listar_tarefas']
+gemini-3.5-lite    txt H1   r2 OK  $0.0022 0.89s/4.42s mut=[('criar_tarefa', {'description': 'Consulta no dentista', 'end_time': '10:00
+gemini-3.5-lite    txt H2   r2 OK  $0.0029 0.87s/1.58s datas=['2026-10-13'] esperado=2026-10-13
+gemini-3.5-lite    txt H3   r2 OK  $0.0035 1.02s/2.58s mut=[('atualizar_tarefa', {'start_time': '18:00:00', 'task_id': 't3', 'scheduled
+gemini-3.5-lite    txt H5   r2 OK  $0.0021 2.35s/3.26s mut=[('criar_tarefa', {'title': 'Ligar para a mãe', 'start_time': '19:00', 'task
+gemini-3.5-lite    txt H6   r2 OK  $0.0032 0.93s/2.74s calls=['listar_objetivos', 'listar_etapas']
+gemini-3.5-lite    txt H7   r2 OK  $0.0010 1.33s/2.22s mut=[('criar_tarefa', {'end_time': '15:00', 'scheduled_date': '2026-10-08', 'tit
+gemini-3.5-lite    txt H8   r2 OK  $0.0006 1.14s/1.14s mut=[]
+gemini-3.5-lite    txt H9   r2 OK  $0.0029 0.84s/1.66s mut=[('criar_tarefa', {'task_type': 'event', 'confirmar_conflito': True, 'start_
+gemini-3.5-lite    txt H10  r2 OK  $0.0011 0.9s/1.93s 
+gemini-3.5-lite    txt H11  r2 OK  $0.0011 0.97s/2.16s calls=['listar_tarefas']

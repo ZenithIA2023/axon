@@ -1,0 +1,37 @@
+[routine_analysis] motivos pelo Claude falharam: 
+sonnet-5.5         insights                     OK  $0.0359 11.1s 8 insights válidos
+sonnet-5.5         descobertas                  OK  $0.0111 3.2s 4/4 com source_index válido
+sonnet-5.5         relatorio                    OK  $0.0043 2.4s 458 chars
+sonnet-5.5         notif_analise_bloco_ruim     OK  $0.0071 4.3s type=improvement task=a3 novo=07:30 bloco=pico
+sonnet-5.5         notif_analise_tudo_feito     OK  $0.0060 1.6s notify=True type=simple
+sonnet-5.5         notif_reescrita_amanha       OK  $0.0014 2.0s cita 08:00=True
+sonnet-5.5         notif_reescrita_compactacao  OK  $0.0014 1.5s cita 12:30=True
+sonnet-5.5         notif_alteracao              OK  $0.0014 1.5s cita horário=True
+sonnet-5.5         rotina_motivos               OK  $0.0016 1.4s 3 motivos, palavras=[8, 8, 8]
+gpt-6.1-sol        insights                     OK  $0.0323 27.4s 8 insights válidos
+gpt-6.1-sol        descobertas                  OK  $0.0089 9.6s 4/4 com source_index válido
+gpt-6.1-sol        relatorio                    OK  $0.0023 4.3s 316 chars
+gpt-6.1-sol        notif_analise_bloco_ruim     OK  $0.0055 4.3s type=improvement task=a3 novo=07:30 bloco=pico
+gpt-6.1-sol        notif_analise_tudo_feito     OK  $0.0044 4.8s notify=True type=simple
+gpt-6.1-sol        notif_reescrita_amanha       OK  $0.0008 5.3s cita 08:00=True
+gpt-6.1-sol        notif_reescrita_compactacao  OK  $0.0009 3.0s cita 12:30=True
+gpt-6.1-sol        notif_alteracao              OK  $0.0008 2.9s cita horário=True
+gpt-6.1-sol        rotina_motivos               OK  $0.0025 6.3s 3 motivos, palavras=[8, 8, 8]
+deepseek-v4.1-fl   insights                     OK  $0.0029 41.2s 8 insights válidos
+deepseek-v4.1-fl   descobertas                  OK  $0.0033 5.7s 4/4 com source_index válido
+deepseek-v4.1-fl   relatorio                    OK  $0.0007 1.7s 542 chars
+deepseek-v4.1-fl   notif_analise_bloco_ruim     OK  $0.0010 7.2s type=improvement task=a3 novo=07:30 bloco=pico
+deepseek-v4.1-fl   notif_analise_tudo_feito     OK  $0.0002 2.7s notify=True type=simple
+deepseek-v4.1-fl   notif_reescrita_amanha       OK  $0.0003 2.1s cita 08:00=True
+deepseek-v4.1-fl   notif_reescrita_compactacao  OK  $0.0003 3.8s cita 12:30=True
+deepseek-v4.1-fl   notif_alteracao              OK  $0.0003 0.9s cita horário=True
+deepseek-v4.1-fl   rotina_motivos               OK  $0.0005 2.6s 3 motivos, palavras=[7, 8, 8]
+glm-5.3-flash      insights                     OK  $0.0016 19.5s 8 insights válidos
+glm-5.3-flash      descobertas                  OK  $0.0006 7.6s 4/4 com source_index válido
+glm-5.3-flash      relatorio                    OK  $0.0002 2.5s 334 chars
+glm-5.3-flash      notif_analise_bloco_ruim     OK  $0.0004 10.8s type=improvement task=a3 novo=07:30 bloco=pico
+glm-5.3-flash      notif_analise_tudo_feito     OK  $0.0003 3.2s notify=True type=simple
+glm-5.3-flash      notif_reescrita_amanha       OK  $0.0001 2.2s cita 08:00=True
+glm-5.3-flash      notif_reescrita_compactacao  OK  $0.0001 3.5s cita 12:30=True
+glm-5.3-flash      notif_alteracao              OK  $0.0001 1.0s cita horário=True
+glm-5.3-flash      rotina_motivos               OK  $0.0001 3.6s 3 motivos, palavras=[7, 7, 8]

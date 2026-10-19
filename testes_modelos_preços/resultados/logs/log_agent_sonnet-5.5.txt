@@ -1,0 +1,39 @@
+sonnet-5.5         S1   OK  $0.0408 r=2 2.8s mut=[('criar_tarefa', {'title': 'Dentista', 'scheduled_date': '2026-10-08', 'start_time': 
+sonnet-5.5         S2   OK  $0.0090 r=2 3.14s calls=['listar_tarefas']
+sonnet-5.5         S3   OK  $0.0131 r=3 5.48s mut=[('atualizar_tarefa', {'task_id': 't2', 'start_time': '16:00', 'end_time': '17:00'})]
+sonnet-5.5         S4   OK  $0.0136 r=3 3.86s mut=[('atualizar_tarefa', {'task_id': 't1', 'status': 'done', 'progress': 100})]
+sonnet-5.5         S5   xx  $0.0076 r=1 4.06s mut=[]
+sonnet-5.5         S6   OK  $0.0127 r=2 5.4s mut=[('criar_objetivo', {'title': 'Ler Sapiens', 'total_steps': 450, 'step_label': 'página
+sonnet-5.5         S7   OK  $0.0118 r=3 3.55s mut=[('pausar_rotina', {'routine_id': 'r1', 'paused_until': '2026-10-20'})]
+sonnet-5.5         S8   OK  $0.0079 r=2 2.92s mut=[('salvar_memoria', {'content': 'Não agendar nada depois das 21h: é o horário de famíl
+sonnet-5.5         S9   OK  $0.0073 r=1 4.26s mut=[] len=933
+sonnet-5.5         S10  OK  $0.0094 r=2 3.6s mut=[('criar_tarefa', {'title': 'Call com o cliente', 'task_type': 'event', 'scheduled_dat
+sonnet-5.5         S11  OK  $0.0036 r=1 1.52s mut=[]
+sonnet-5.5         S12  OK  $0.0086 r=2 2.66s mut=[('criar_tarefa', {'title': 'Pagar aluguel', 'scheduled_date': '2026-10-09', 'priority
+sonnet-5.5         S13  OK  $0.0137 r=3 3.79s mut=[('criar_subtarefa', {'task_id': 't1', 'title': 'Coletar dados'}), ('criar_subtarefa',
+gpt-6.1-sol        S1   OK  $0.0201 r=2 5.5s mut=[('criar_tarefa', {'title': 'Dentista', 'description': '', 'task_type': 'event', 'prio
+gpt-6.1-sol        S2   OK  $0.0033 r=2 6.95s calls=['listar_tarefas']
+gpt-6.1-sol        S3   OK  $0.0065 r=4 11.19s mut=[('atualizar_tarefa', {'task_id': 't2', 'title': 'Reunião com o Pedro', 'description':
+gpt-6.1-sol        S4   OK  $0.0053 r=3 8.4s mut=[('atualizar_tarefa', {'task_id': 't1', 'title': 'Relatório trimestral', 'description'
+gpt-6.1-sol        S5   xx  $0.0179 r=1 2.24s mut=[]
+gpt-6.1-sol        S6   OK  $0.0030 r=2 5.13s mut=[('criar_objetivo', {'title': 'Ler Sapiens', 'description': 'Ler as 450 páginas até o 
+gpt-6.1-sol        S7   OK  $0.0034 r=3 6.74s mut=[('pausar_rotina', {'routine_id': 'r1', 'paused_until': '2026-10-20'})]
+gpt-6.1-sol        S8   OK  $0.0025 r=2 5.21s mut=[('salvar_memoria', {'content': 'Não quer agendar atividades depois das 21h; esse horá
+gpt-6.1-sol        S9   OK  $0.0023 r=1 5.23s mut=[] len=572
+gpt-6.1-sol        S10  OK  $0.0036 r=2 6.06s mut=[('criar_tarefa', {'title': 'Call com o cliente', 'description': '', 'task_type': 'eve
+gpt-6.1-sol        S11  OK  $0.0033 r=2 5.37s mut=[]
+gpt-6.1-sol        S12  xx  $0.0009 r=1 2.08s mut=[]
+gpt-6.1-sol        S13  OK  $0.0050 r=3 6.28s mut=[('criar_subtarefa', {'task_id': 't1', 'objective_id': '', 'objective_steps': 1, 'titl
+deepseek-v4.1-fl   S1   OK  $0.0018 r=2 1.92s mut=[('criar_tarefa', {'title': 'Dentista', 'scheduled_date': '2026-10-08', 'start_time': 
+deepseek-v4.1-fl   S2   OK  $0.0019 r=2 5.91s calls=['listar_tarefas']
+deepseek-v4.1-fl   S3   OK  $0.0012 r=3 5.9s mut=[('atualizar_tarefa', {'task_id': 't2', 'start_time': '16:00', 'end_time': '17:00'})]
+deepseek-v4.1-fl   S4   OK  $0.0019 r=3 3.77s mut=[('atualizar_tarefa', {'task_id': 't1', 'status': 'done'})]
+deepseek-v4.1-fl   S5   xx  $0.0008 r=1 1.23s mut=[]
+deepseek-v4.1-fl   S6   OK  $0.0009 r=2 4.29s mut=[('criar_objetivo', {'title': 'Ler Sapiens', 'total_steps': 450, 'step_label': 'página
+deepseek-v4.1-fl   S7   OK  $0.0011 r=3 1.77s mut=[('pausar_rotina', {'routine_id': 'r1', 'paused_until': '2026-10-20'})]
+deepseek-v4.1-fl   S8   OK  $0.0011 r=3 2.03s mut=[('salvar_memoria', {'content': 'Não quer tarefas agendadas depois das 21h — é o horár
+deepseek-v4.1-fl   S9   OK  $0.0035 r=1 2.65s mut=[] len=780
+deepseek-v4.1-fl   S10  OK  $0.0011 r=2 2.62s mut=[('criar_tarefa', {'title': 'Call com o cliente', 'task_type': 'event', 'scheduled_dat
+deepseek-v4.1-fl   S11  OK  $0.0010 r=2 1.88s mut=[]
+deepseek-v4.1-fl   S12  OK  $0.0009 r=2 7.16s mut=[('criar_tarefa', {'title': 'Pagar aluguel', 'scheduled_date': '2026-10-09', 'start_ti
+deepseek-v4.1-fl   S13  OK  $0.0007 r=3 1.52s mut=[('criar_subtarefa', {'task_id': 't1', 'title': 'Coletar dados'}), ('criar_subtarefa',

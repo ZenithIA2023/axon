@@ -1,0 +1,30 @@
+gemini-3.8-flash   txt H1   r0 OK  $0.0155 1.97s/6.43s mut=[('criar_tarefa', {'start_time': '09:00', 'end_time': '10:00', 'task_type': 
+gemini-3.8-flash   txt H2   r0 OK  $0.0094 1.8s/3.48s datas=['2026-10-13'] esperado=2026-10-13
+gemini-3.8-flash   txt H3   r0 OK  $0.0130 2.69s/14.13s mut=[('atualizar_tarefa', {'task_id': 't3', 'scheduled_date': '2026-10-08'})]
+gemini-3.8-flash   txt H5   r0 OK  $0.0096 1.84s/4.66s mut=[('criar_tarefa', {'title': 'Ligar para a mãe', 'start_time': '19:00', 'sche
+gemini-3.8-flash   txt H6   r0 OK  $0.0127 1.66s/11.52s calls=['listar_objetivos', 'listar_etapas']
+gemini-3.8-flash   txt H7   r0 OK  $0.0094 9.49s/11.51s mut=[('criar_tarefa', {'scheduled_date': '2026-10-08', 'end_time': '15:00', 'tas
+gemini-3.8-flash   txt H8   r0 OK  $0.0066 4.11s/4.11s mut=[]
+gemini-3.8-flash   txt H9   r0 OK  $0.0094 1.65s/3.15s mut=[('criar_tarefa', {'title': 'Call com o cliente', 'task_type': 'event', 'con
+gemini-3.8-flash   txt H10  r0 OK  $0.0119 2.39s/4.09s 
+gemini-3.8-flash   txt H11  r0 OK  $0.0120 1.26s/4.16s calls=['listar_tarefas']
+gemini-3.8-flash   txt H1   r1 OK  $0.0150 2.14s/7.45s mut=[('criar_tarefa', {'start_time': '09:00', 'title': 'Dentista', 'task_type': 
+gemini-3.8-flash   txt H2   r1 OK  $0.0124 6.3s/11.85s datas=['2026-10-13'] esperado=2026-10-13
+gemini-3.8-flash   txt H3   r1 OK  $0.0131 1.52s/4.85s mut=[('atualizar_tarefa', {'start_time': '18:00', 'scheduled_date': '2026-10-08'
+gemini-3.8-flash   txt H5   r1 OK  $0.0096 2.19s/15.66s mut=[('criar_tarefa', {'title': 'Ligar para minha mãe', 'scheduled_date': '2026-
+gemini-3.8-flash   txt H6   r1 OK  $0.0136 2.35s/6.82s calls=['listar_objetivos', 'listar_etapas']
+gemini-3.8-flash   txt H7   r1 OK  $0.0094 1.52s/3.35s mut=[('criar_tarefa', {'task_type': 'task', 'title': 'Estudar', 'end_time': '15:
+gemini-3.8-flash   txt H8   r1 OK  $0.0064 2.77s/2.77s mut=[]
+gemini-3.8-flash   txt H9   r1 OK  $0.0094 1.49s/2.8s mut=[('criar_tarefa', {'title': 'Call com o cliente', 'task_type': 'event', 'sch
+gemini-3.8-flash   txt H10  r1 OK  $0.0095 2.12s/4.31s 
+gemini-3.8-flash   txt H11  r1 OK  $0.0098 1.55s/4.33s calls=['listar_tarefas']
+gemini-3.8-flash   txt H1   r2 OK  $0.0192 1.54s/6.9s mut=[('criar_tarefa', {'start_time': '09:00', 'scheduled_date': '2026-10-08', 't
+gemini-3.8-flash   txt H2   r2 OK  $0.0117 1.95s/3.84s datas=['2026-10-13'] esperado=2026-10-13
+gemini-3.8-flash   txt H3   r2 OK  $0.0130 1.38s/4.75s mut=[('atualizar_tarefa', {'start_time': '18:00', 'scheduled_date': '2026-10-08'
+gemini-3.8-flash   txt H5   r2 OK  $0.0072 2.65s/4.07s mut=[('criar_tarefa', {'scheduled_date': '2026-10-08', 'title': 'Ligar para a mã
+gemini-3.8-flash   txt H6   r2 OK  $0.0091 1.37s/2.93s calls=['listar_objetivos']
+gemini-3.8-flash   txt H7   r2 OK  $0.0095 1.38s/3.1s mut=[('criar_tarefa', {'start_time': '13:00', 'end_time': '15:00', 'scheduled_da
+gemini-3.8-flash   txt H8   r2 OK  $0.0065 3.26s/3.26s mut=[]
+gemini-3.8-flash   txt H9   r2 OK  $0.0117 1.85s/4.02s mut=[('criar_tarefa', {'start_time': '14:30', 'scheduled_date': '2026-10-07', 't
+gemini-3.8-flash   txt H10  r2 OK  $0.0109 3.9s/5.61s 
+gemini-3.8-flash   txt H11  r2 OK  $0.0097 1.42s/4.49s calls=['listar_tarefas']

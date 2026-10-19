@@ -1,0 +1,39 @@
+haiku-4.5          S1   OK  $0.0176 r=2 2.17s mut=[('criar_tarefa', {'title': 'Dentista', 'scheduled_date': '2026-10-08', 'start_time': 
+haiku-4.5          S2   OK  $0.0046 r=2 3.19s calls=['listar_tarefas']
+haiku-4.5          S3   OK  $0.0069 r=3 3.09s mut=[('atualizar_tarefa', {'task_id': 't2', 'start_time': '16:00', 'end_time': '17:00'})]
+haiku-4.5          S4   OK  $0.0067 r=3 3.0s mut=[('atualizar_tarefa', {'task_id': 't1', 'status': 'done'})]
+haiku-4.5          S5   OK  $0.0042 r=2 2.63s 
+haiku-4.5          S6   xx  $0.0022 r=1 1.97s mut=[]
+haiku-4.5          S7   OK  $0.0070 r=3 3.27s mut=[('pausar_rotina', {'routine_id': 'r1', 'paused_until': '2026-10-20'})]
+haiku-4.5          S8   OK  $0.0039 r=2 2.29s mut=[('salvar_memoria', {'content': 'Não agenda tarefas/eventos após 21h — esse é seu horá
+haiku-4.5          S9   OK  $0.0033 r=1 4.94s mut=[] len=1058
+haiku-4.5          S10  OK  $0.0045 r=2 2.99s mut=[('criar_tarefa', {'title': 'Call com o cliente', 'task_type': 'event', 'scheduled_dat
+haiku-4.5          S11  OK  $0.0019 r=1 1.15s mut=[]
+haiku-4.5          S12  xx  $0.0020 r=1 1.59s mut=[]
+haiku-4.5          S13  OK  $0.0074 r=3 4.55s mut=[('criar_subtarefa', {'task_id': 't1', 'title': 'Coletar dados'}), ('criar_subtarefa',
+gemini-3.8-flash   S1   OK  $0.0093 r=2 4.25s mut=[('criar_tarefa', {'start_time': '15:00', 'task_type': 'event', 'title': 'Dentista', '
+gemini-3.8-flash   S2   OK  $0.0096 r=2 6.63s calls=['listar_tarefas']
+gemini-3.8-flash   S3   OK  $0.0140 r=3 23.92s mut=[('atualizar_tarefa', {'start_time': '16:00', 'end_time': '17:00', 'task_id': 't2'})]
+gemini-3.8-flash   S4   OK  $0.0131 r=3 6.55s mut=[('atualizar_tarefa', {'task_id': 't1', 'status': 'done'})]
+gemini-3.8-flash   S5   OK  $0.0095 r=2 5.2s 
+gemini-3.8-flash   S6   OK  $0.0098 r=2 7.36s mut=[('criar_objetivo', {'total_steps': 450, 'deadline': '2026-12-31', 'description': 'Lei
+gemini-3.8-flash   S7   OK  $0.0127 r=3 5.43s mut=[('pausar_rotina', {'paused_until': '2026-10-20', 'routine_id': 'r1'})]
+gemini-3.8-flash   S8   OK  $0.0116 r=2 3.91s mut=[('salvar_memoria', {'content': 'Não agendar tarefas após as 21h; reserva o horário pa
+gemini-3.8-flash   S9   OK  $0.0066 r=1 4.54s mut=[] len=937
+gemini-3.8-flash   S10  OK  $0.0096 r=2 4.7s mut=[('criar_tarefa', {'task_type': 'event', 'start_time': '14:30', 'title': 'Call com o c
+gemini-3.8-flash   S11  OK  $0.0105 r=2 6.78s mut=[]
+gemini-3.8-flash   S12  OK  $0.0094 r=2 9.42s mut=[('criar_tarefa', {'scheduled_date': '2026-10-09', 'complexity': 'light', 'title': 'Pa
+gemini-3.8-flash   S13  OK  $0.0160 r=3 9.57s mut=[('criar_subtarefa', {'title': 'Coletar dados', 'task_id': 't1'}), ('criar_subtarefa',
+qwen-3.8-flash     S1   OK  $0.0018 r=2 8.37s mut=[('criar_tarefa', {'title': 'Dentista', 'task_type': 'event', 'scheduled_date': '2026-
+qwen-3.8-flash     S2   OK  $0.0007 r=2 12.73s calls=['listar_tarefas']
+qwen-3.8-flash     S3   OK  $0.0008 r=3 9.76s mut=[('atualizar_tarefa', {'task_id': 't2', 'start_time': '16:00', 'end_time': '17:00'})]
+qwen-3.8-flash     S4   OK  $0.0008 r=3 11.01s mut=[('atualizar_tarefa', {'task_id': 't1', 'status': 'done', 'progress': 100})]
+qwen-3.8-flash     S5   OK  $0.0007 r=2 10.93s 
+qwen-3.8-flash     S6   OK  $0.0010 r=2 21.75s mut=[('criar_objetivo', {'title': 'Ler Sapiens', 'description': 'Leitura completa do livro
+qwen-3.8-flash     S7   OK  $0.0009 r=3 12.23s mut=[('pausar_rotina', {'routine_id': 'r1', 'paused_until': '2026-10-20'})]
+qwen-3.8-flash     S8   OK  $0.0007 r=3 8.28s mut=[('salvar_memoria', {'content': 'Depois das 21h é horário com a família: nada deve ser
+qwen-3.8-flash     S9   OK  $0.0008 r=2 17.87s mut=[] len=1207
+qwen-3.8-flash     S10  OK  $0.0007 r=2 10.1s mut=[('criar_tarefa', {'title': 'Call com o cliente', 'task_type': 'event', 'scheduled_dat
+qwen-3.8-flash     S11  OK  $0.0007 r=2 8.71s mut=[]
+qwen-3.8-flash     S12  OK  $0.0008 r=2 15.41s mut=[('criar_tarefa', {'title': 'Pagar aluguel', 'scheduled_date': '2026-10-09', 'start_ti
+qwen-3.8-flash     S13  OK  $0.0008 r=3 8.35s mut=[('criar_subtarefa', {'task_id': 't1', 'title': 'Coletar dados'}), ('criar_subtarefa',

@@ -1,0 +1,6 @@
+sonnet-5.5         P1 r0 OK  $0.0427 furou=False avisou=True | 'Marina, 14h25 de hoje já passou, porque agora são 17h25. Não criei a call.\n\nQual destas você prefere?\n- Outro '
+sonnet-5.5         P2 r0 OK  $0.0365 furou=False avisou=True | 'Marina, são 17h25 agora, então 14h25 de hoje já passou. Você quer marcar para outro horário hoje, para outro d'
+sonnet-5.5         P3 r0 OK  $0.0094 registrou=False perguntou=True | 'Não registrei ainda. Às 14h25 você já tem a "Reunião com o Pedro", das 14h às 15h, e os horários se sobrepõem.'
+sonnet-5.5         P1 r1 OK  $0.0095 furou=False avisou=True | 'Marina, 14h25 de hoje já passou, porque agora são 17h25. Não criei a call.\n\nQual destes você prefere?\n- Outro '
+sonnet-5.5         P2 r1 OK  $0.0037 furou=False avisou=True | 'Marina, são 17h25 agora, então 14h25 de hoje já passou. Quer que eu marque para outro horário hoje, para outro'
+sonnet-5.5         P3 r1 OK  $0.0095 registrou=False perguntou=True | 'Não registrei ainda. Às 14h25 você já tem a "Reunião com o Pedro", que vai das 14h às 15h, e os horários se so'

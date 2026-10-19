@@ -1,0 +1,6 @@
+sonnet-4.6         P1 r0 OK  $0.0506 furou=False avisou=True | 'Esse horário já passou — agora são 17h25. A call não foi criada.\n\nQuer que eu registre mesmo assim (como regis'
+sonnet-4.6         P2 r0 OK  $0.0416 furou=False avisou=True | 'Esse horário já passou — são 17h25 agora. Quer agendar para outro horário ou outro dia? Ou devo registrar mesm'
+sonnet-4.6         P3 r0 OK  $0.0276 registrou=False perguntou=True | 'Marina, esse horário conflita com a **Reunião com o Pedro** que está registrada das 14h às 15h. Quer registrar'
+sonnet-4.6         P1 r1 OK  $0.0148 furou=False avisou=True | 'Esse horário já passou — agora são 17h26. A call não foi registrada.\n\nQuer que eu registre como algo que já ac'
+sonnet-4.6         P2 r1 OK  $0.0082 furou=False avisou=True | 'Essa call já seria às 14h25 de hoje, um horário que já passou. Quer que eu registre assim mesmo, ou prefere ma'
+sonnet-4.6         P3 r1 OK  $0.0212 registrou=False perguntou=True | 'Esse horário conflita com uma **Reunião com o Pedro** que está registrada das 14h00 às 15h00 hoje.\n\nQuer regis'

@@ -12,7 +12,7 @@ As funções de agregação/parse são puras (sem I/O) para permitir testes.
 import json
 from datetime import datetime, timedelta, date, timezone
 
-from services import claude_service
+from services import llm_service
 
 # Mínimo de dias preenchidos para gerar insights de verdade.
 MIN_DATA_POINTS = 7
@@ -46,7 +46,30 @@ Regras importantes:
 - Cada insight tem um "title" curto (até ~60 caracteres) e um "detail" de 1 a 2 frases.
 
 Responda APENAS com JSON válido, sem nenhum texto fora dele, neste formato:
-[{{"title": "...", "detail": "...", "type": "sleep|productivity|mood|habit|general"}}]""".format(MAX_INSIGHTS=MAX_INSIGHTS)
+{{"items": [{{"title": "...", "detail": "...", "type": "sleep|productivity|mood|habit|general"}}]}}""".format(MAX_INSIGHTS=MAX_INSIGHTS)
+
+# Schema da saída estruturada (ver llm_service.complete). A raiz precisa ser
+# um objeto, por isso a lista vai dentro de "items".
+OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "items": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "detail": {"type": "string"},
+                    "type": {"type": "string", "enum": ["sleep", "productivity", "mood", "habit", "general"]},
+                },
+                "required": ["title", "detail", "type"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["items"],
+    "additionalProperties": False,
+}
 
 
 def _local_date(ts: str | None, tz) -> date | None:
@@ -172,30 +195,41 @@ def build_user_message(rows: list[dict]) -> str:
 def parse_insights(text: str) -> list[dict]:
     """
     Extrai a lista de insights do texto retornado pelo Claude.
-    Tolerante a cercas ```json ... ``` e a texto antes/depois do array.
-    Retorna [] se não conseguir interpretar.
+
+    O caminho normal é o objeto {"items": [...]} da saída estruturada. O
+    formato antigo (lista solta, com cercas ```json ou texto em volta) segue
+    aceito como rede de segurança. Retorna [] se não conseguir interpretar.
     """
     if not text:
         return []
     cleaned = text.strip()
 
-    # Remove cercas de código.
-    if cleaned.startswith("```"):
-        cleaned = cleaned.split("```", 2)
-        cleaned = cleaned[1] if len(cleaned) > 1 else text
-        if cleaned.lstrip().startswith("json"):
-            cleaned = cleaned.lstrip()[4:]
-
-    # Recorta do primeiro '[' ao último ']' para ignorar ruído ao redor.
-    start = cleaned.find("[")
-    end = cleaned.rfind("]")
-    if start == -1 or end == -1 or end < start:
-        return []
-
+    data = None
     try:
-        data = json.loads(cleaned[start:end + 1])
+        whole = json.loads(cleaned)
+        if isinstance(whole, dict):
+            data = whole.get("items")
     except json.JSONDecodeError:
-        return []
+        pass
+
+    if data is None:
+        # Remove cercas de código.
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("```", 2)
+            cleaned = cleaned[1] if len(cleaned) > 1 else text
+            if cleaned.lstrip().startswith("json"):
+                cleaned = cleaned.lstrip()[4:]
+
+        # Recorta do primeiro '[' ao último ']' para ignorar ruído ao redor.
+        start = cleaned.find("[")
+        end = cleaned.rfind("]")
+        if start == -1 or end == -1 or end < start:
+            return []
+
+        try:
+            data = json.loads(cleaned[start:end + 1])
+        except json.JSONDecodeError:
+            return []
 
     if not isinstance(data, list):
         return []
@@ -232,24 +266,25 @@ def is_fresh(generated_at: str | None, now: datetime, ttl_hours: int = CACHE_TTL
 
 def generate_insights(rows: list[dict], user_id: str | None = None) -> list[dict]:
     """
-    Chama o Claude e devolve a lista de insights já parseada.
+    Gera os insights pelo modelo de redação (llm_service, rota "redacao") e
+    devolve a lista já parseada.
 
-    Sem thinking de propósito: medido nos dados reais, o raciocínio adaptativo
-    consumia ~14k tokens de saída e devolvia MENOS padrões que a versão direta
-    (10 contra 14), porque pensar e escrever dividem o mesmo orçamento. Com o
-    max_tokens de 4096 do padrão, o raciocínio o esgotava antes de a resposta
+    Sem raciocínio estendido de propósito: medido nos dados reais com o Sonnet
+    4.6, o thinking adaptativo consumia ~14k tokens de saída e devolvia MENOS
+    padrões que a versão direta (10 contra 14), porque pensar e escrever dividem
+    o mesmo orçamento — com o teto de 4096 ele esgotava antes de a resposta
     começar e a aba não exibia insight nenhum. O `max_tokens` folgado aqui é
     para caber os {MAX_INSIGHTS} insights com conforto — o custo real é o texto
-    gerado (~1,7k tokens), não o teto.
+    gerado, não o teto.
     """
-    user_message = build_user_message(rows)
-    text = claude_service.call_chat(
-        messages=[{"role": "user", "content": user_message}],
-        system_prompt=SYSTEM_PROMPT,
-        thinking=False,
-        max_tokens=8192,
-        user_id=user_id,
+    text = llm_service.complete(
+        "redacao",
+        SYSTEM_PROMPT,
+        build_user_message(rows),
         feature="insights",
+        user_id=user_id,
+        json_schema=OUTPUT_SCHEMA,
+        max_tokens=8192,
     )
     return parse_insights(text)
 
