@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   CheckCircle2,
   ChevronDown,
@@ -29,6 +28,86 @@ const validKeys: ChronotypeResultKey[] = [
 const focusDurations = [25, 45, 90];
 const UI_IDLE_TIMEOUT_MS = 4200;
 
+function FocusLightThemeStyles() {
+  return (
+    <style>{`
+      html:not(.dark) .focus-light-scope [class~="text-white/12"],
+      html:not(.dark) .focus-light-scope [class~="text-white/22"],
+      html:not(.dark) .focus-light-scope [class~="text-white/24"],
+      html:not(.dark) .focus-light-scope [class~="text-white/26"],
+      html:not(.dark) .focus-light-scope [class~="text-white/30"],
+      html:not(.dark) .focus-light-scope [class~="text-white/34"],
+      html:not(.dark) .focus-light-scope [class~="text-white/38"],
+      html:not(.dark) .focus-light-scope [class~="text-white/42"],
+      html:not(.dark) .focus-light-scope [class~="text-white/44"],
+      html:not(.dark) .focus-light-scope [class~="text-white/45"],
+      html:not(.dark) .focus-light-scope [class~="text-white/46"],
+      html:not(.dark) .focus-light-scope [class~="text-white/48"],
+      html:not(.dark) .focus-light-scope [class~="text-white/52"],
+      html:not(.dark) .focus-light-scope [class~="text-white/58"],
+      html:not(.dark) .focus-light-scope [class~="text-white/62"],
+      html:not(.dark) .focus-light-scope [class~="text-white/68"],
+      html:not(.dark) .focus-light-scope [class~="text-white/72"] {
+        color: #64748b !important;
+      }
+
+      html:not(.dark) .focus-light-scope [class~="text-white"] {
+        color: #0f172a !important;
+      }
+
+      html:not(.dark) .focus-light-scope [class~="border-white/8"],
+      html:not(.dark) .focus-light-scope [class~="border-white/10"] {
+        border-color: #e2e8f0 !important;
+      }
+
+      html:not(.dark) .focus-light-scope [class~="bg-white/7"],
+      html:not(.dark) .focus-light-scope [class~="bg-white/10"],
+      html:not(.dark) .focus-light-scope [class~="bg-white/12"],
+      html:not(.dark) .focus-light-scope [class~="bg-white/[0.028]"],
+      html:not(.dark) .focus-light-scope [class~="bg-white/[0.03]"],
+      html:not(.dark) .focus-light-scope [class~="bg-white/[0.035]"],
+      html:not(.dark) .focus-light-scope [class~="bg-white/[0.038]"],
+      html:not(.dark) .focus-light-scope [class~="bg-white/[0.04]"],
+      html:not(.dark) .focus-light-scope [class~="bg-white/[0.045]"],
+      html:not(.dark) .focus-light-scope [class~="bg-white/[0.05]"] {
+        background-color: #ffffff !important;
+      }
+
+      html:not(.dark) .focus-light-scope [class~="bg-black/10"],
+      html:not(.dark) .focus-light-scope [class~="bg-black/16"] {
+        background-color: #ffffff !important;
+      }
+
+      html:not(.dark) .focus-light-scope [class~="bg-[#101018]/95"],
+      html:not(.dark) .focus-light-scope [class~="bg-[#11101a]/95"] {
+        background-color: rgba(255, 255, 255, 0.98) !important;
+      }
+
+      html:not(.dark) .focus-light-scope [class~="bg-black/72"],
+      html:not(.dark) .focus-light-scope [class~="bg-black/70"] {
+        background-color: rgba(15, 23, 42, 0.34) !important;
+      }
+
+      html:not(.dark) .focus-light-scope [class~="bg-[#7b2cbf]/10"],
+      html:not(.dark) .focus-light-scope [class~="bg-[#7b2cbf]/14"],
+      html:not(.dark) .focus-light-scope [class~="bg-[#7b2cbf]/16"],
+      html:not(.dark) .focus-light-scope [class~="bg-[#7b2cbf]/18"],
+      html:not(.dark) .focus-light-scope [class~="bg-[#7b2cbf]/24"],
+      html:not(.dark) .focus-light-scope [class~="bg-[#7b2cbf]/28"] {
+        background-color: rgba(109, 40, 217, 0.10) !important;
+      }
+
+      html:not(.dark) .focus-light-scope [class~="bg-[#7b2cbf]"][class~="text-white"] {
+        color: #ffffff !important;
+      }
+
+      html:not(.dark) .focus-light-scope [class~="bg-[#7b2cbf]/24"][class~="text-white"] {
+        color: #6d28d9 !important;
+      }
+    `}</style>
+  );
+}
+
 // ===========================================================================
 // FOCUS — AMBIENTE CINEMATOGRÁFICO
 // ===========================================================================
@@ -38,7 +117,6 @@ const UI_IDLE_TIMEOUT_MS = 4200;
 // Ao tocar/clicar/mover na tela, eles voltam.
 
 export default function Focus() {
-  const navigate = useNavigate();
   const idleTimerRef = useRef<number | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const lastAutoDurationTaskIdRef = useRef<string | null>(null);
@@ -455,41 +533,25 @@ export default function Focus() {
 
   return (
     <main
-      className="relative h-[100dvh] overflow-hidden bg-[#030208] text-white"
+      className="relative h-[100dvh] overflow-hidden bg-[#f7f8fa] text-slate-950 dark:bg-[#030208] dark:text-white"
       onPointerDown={revealInterface}
       onMouseMove={revealInterface}
       onKeyDown={revealInterface}
       tabIndex={-1}
     >
-      <FocusAtmosphere isRunning={isRunning} progress={progress} />
+      <FocusLightThemeStyles />
 
-      <div className="relative z-10 flex h-full flex-col px-4 pb-5 pt-5 sm:px-6 lg:px-8 lg:pb-7 [@media(orientation:landscape)_and_(max-height:560px)_and_(max-width:950px)]:px-4 [@media(orientation:landscape)_and_(max-height:560px)_and_(max-width:950px)]:pb-3 [@media(orientation:landscape)_and_(max-height:560px)_and_(max-width:950px)]:pt-3">
+      <div className="focus-light-scope contents">
+        <FocusAtmosphere isRunning={isRunning} progress={progress} />
+
+        <div className="relative z-10 flex h-full flex-col px-4 pb-5 pt-5 sm:px-6 lg:px-8 lg:pb-7 [@media(orientation:landscape)_and_(max-height:560px)_and_(max-width:950px)]:px-4 [@media(orientation:landscape)_and_(max-height:560px)_and_(max-width:950px)]:pb-3 [@media(orientation:landscape)_and_(max-height:560px)_and_(max-width:950px)]:pt-3">
         <header
-          className={`mx-auto mb-3 flex w-full max-w-[1280px] shrink-0 items-center justify-between transition-all duration-700 [@media(orientation:landscape)_and_(max-height:560px)_and_(max-width:950px)]:mb-1 ${
+          className={`mx-auto mb-3 flex w-full max-w-[1280px] shrink-0 items-center justify-end transition-all duration-700 [@media(orientation:landscape)_and_(max-height:560px)_and_(max-width:950px)]:mb-1 ${
             showInterface
               ? "translate-y-0 opacity-100"
               : "pointer-events-none -translate-y-4 opacity-0"
           }`}
         >
-          <button
-            type="button"
-            onClick={() => navigate("/dashboard")}
-            className="group flex min-w-0 items-center gap-3 text-left transition active:scale-[0.98]"
-          >
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.045] shadow-[0_18px_42px_rgba(0,0,0,0.32)] backdrop-blur-2xl transition group-active:scale-[0.96]">
-              <img
-                src="/axon-logo.svg"
-                alt="Axon"
-                className="h-8 w-8 object-contain"
-              />
-            </div>
-
-            <div className="min-w-0">
-              <p className="truncate text-sm font-black text-white">Focus</p>
-              <p className="truncate text-xs text-white/38">modo silêncio</p>
-            </div>
-          </button>
-
           <button
             type="button"
             onClick={() => setIsSidebarOpen(true)}
@@ -555,6 +617,7 @@ export default function Focus() {
         >
           toque para mostrar controles
         </div>
+        </div>
       </div>
 
       <Sidebar
@@ -564,36 +627,38 @@ export default function Focus() {
         energyPeak={result.energyPeak}
       />
 
-      <TaskSelectorModal
-        isOpen={isTaskSelectorOpen}
-        tasks={todayTasks}
-        selectedTaskId={currentTask?.id ?? null}
-        onClose={() => {
-          setIsTaskSelectorOpen(false);
-          revealInterface();
-        }}
-        onSelect={handleSelectTask}
-      />
+      <div className="focus-light-scope contents">
+        <TaskSelectorModal
+          isOpen={isTaskSelectorOpen}
+          tasks={todayTasks}
+          selectedTaskId={currentTask?.id ?? null}
+          onClose={() => {
+            setIsTaskSelectorOpen(false);
+            revealInterface();
+          }}
+          onSelect={handleSelectTask}
+        />
 
-      <EndFocusModal
-        isOpen={showEndModal}
-        progress={progress}
-        onClose={() => {
-          setShowEndModal(false);
-          revealInterface();
-        }}
-        onConfirm={handleFinish}
-      />
+        <EndFocusModal
+          isOpen={showEndModal}
+          progress={progress}
+          onClose={() => {
+            setShowEndModal(false);
+            revealInterface();
+          }}
+          onConfirm={handleFinish}
+        />
 
-      <CompleteTaskModal
-        isOpen={showCompleteTaskModal}
-        taskTitle={currentTask?.title}
-        onClose={() => {
-          setShowCompleteTaskModal(false);
-          revealInterface();
-        }}
-        onConfirm={handleCompleteCurrentTask}
-      />
+        <CompleteTaskModal
+          isOpen={showCompleteTaskModal}
+          taskTitle={currentTask?.title}
+          onClose={() => {
+            setShowCompleteTaskModal(false);
+            revealInterface();
+          }}
+          onConfirm={handleCompleteCurrentTask}
+        />
+      </div>
     </main>
   );
 }
@@ -611,26 +676,26 @@ function FocusAtmosphere({
 }) {
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_22%,rgba(123,44,191,0.20),transparent_32%),linear-gradient(180deg,#070611_0%,#04030a_54%,#020106_100%)]" />
+      <div className="absolute inset-0 bg-[#f7f8fa] dark:bg-[radial-gradient(circle_at_50%_22%,rgba(123,44,191,0.20),transparent_32%),linear-gradient(180deg,#070611_0%,#04030a_54%,#020106_100%)]" />
 
       <div
-        className={`absolute left-1/2 top-[34%] h-[34rem] w-[34rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#7b2cbf]/14 blur-[140px] transition-opacity duration-700 ${
+        className={`absolute left-1/2 top-[34%] hidden h-[34rem] w-[34rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#7b2cbf]/14 blur-[140px] transition-opacity duration-700 dark:block ${
           isRunning ? "opacity-100" : "opacity-70"
         }`}
       />
 
-      <div className="absolute -left-32 bottom-[-12rem] h-[28rem] w-[28rem] rounded-full bg-[#3b82f6]/8 blur-[130px]" />
-      <div className="absolute -right-32 bottom-[-12rem] h-[30rem] w-[30rem] rounded-full bg-[#a855f7]/10 blur-[140px]" />
+      <div className="absolute -left-32 bottom-[-12rem] hidden h-[28rem] w-[28rem] rounded-full bg-[#3b82f6]/8 blur-[130px] dark:block" />
+      <div className="absolute -right-32 bottom-[-12rem] hidden h-[30rem] w-[30rem] rounded-full bg-[#a855f7]/10 blur-[140px] dark:block" />
 
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.026)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.022)_1px,transparent_1px)] bg-[size:64px_64px] opacity-[0.14]" />
+      <div className="absolute inset-0 hidden bg-[linear-gradient(rgba(255,255,255,0.026)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.022)_1px,transparent_1px)] bg-[size:64px_64px] opacity-[0.14] dark:block" />
 
       <div
-        className="absolute left-1/2 top-1/2 h-px w-[88vw] -translate-x-1/2 bg-gradient-to-r from-transparent via-white/14 to-transparent"
+        className="absolute left-1/2 top-1/2 hidden h-px w-[88vw] -translate-x-1/2 bg-gradient-to-r from-transparent via-white/14 to-transparent dark:block"
         style={{ opacity: 0.32 + progress / 180 }}
       />
 
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,transparent_42%,rgba(0,0,0,0.72)_100%)]" />
-      <div className="absolute inset-x-0 bottom-0 h-[32%] bg-[linear-gradient(to_top,rgba(3,2,8,0.98),transparent)]" />
+      <div className="absolute inset-0 hidden bg-[radial-gradient(circle_at_center,transparent_0%,transparent_42%,rgba(0,0,0,0.72)_100%)] dark:block" />
+      <div className="absolute inset-x-0 bottom-0 hidden h-[32%] bg-[linear-gradient(to_top,rgba(3,2,8,0.98),transparent)] dark:block" />
     </div>
   );
 }
@@ -656,6 +721,8 @@ function CinematicTimer({
   isPaused: boolean;
   selectedMinutes: number;
 }) {
+  const hasLongMinuteValue = !compactMode && Math.floor(secondsLeft / 60) >= 100;
+
   return (
     <div
       className={`relative flex w-full flex-col items-center justify-center transition-all duration-700 [@media(orientation:landscape)_and_(max-height:560px)_and_(max-width:950px)]:max-w-[22rem] [@media(orientation:landscape)_and_(max-height:560px)_and_(max-width:950px)]:justify-self-center lg:max-w-[42rem] ${
@@ -663,17 +730,19 @@ function CinematicTimer({
       }`}
     >
       <div
-        className={`pointer-events-none absolute left-1/2 top-1/2 h-40 w-[72vw] max-w-[42rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#7b2cbf]/14 blur-[120px] transition-opacity duration-700 ${
+        className={`pointer-events-none absolute left-1/2 top-1/2 hidden h-40 w-[72vw] max-w-[42rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#7b2cbf]/14 blur-[120px] transition-opacity duration-700 dark:block ${
           isRunning ? "opacity-100" : "opacity-64"
         }`}
       />
 
       <div className="relative text-center">
         <p
-          className={`font-black leading-none text-white transition-all duration-700 ${
-            compactMode
+          className={`font-black leading-none text-white tabular-nums transition-all duration-700 ${
+            hasLongMinuteValue
+              ? "text-[3.75rem] tracking-[-0.055em] sm:text-[6rem] lg:text-[8rem] [@media(orientation:landscape)_and_(max-height:560px)_and_(max-width:950px)]:text-[3.6rem]"
+              : compactMode
               ? "text-[5.85rem] tracking-[-0.12em] sm:text-[8.4rem] lg:text-[11rem] [@media(orientation:landscape)_and_(max-height:560px)_and_(max-width:950px)]:text-[4.7rem]"
-              : "text-[4.55rem] tracking-[-0.105em] sm:text-[7.1rem] lg:text-[9.6rem] [@media(orientation:landscape)_and_(max-height:560px)_and_(max-width:950px)]:text-[4.55rem]"
+              : "text-[4.55rem] tracking-[-0.075em] sm:text-[7.1rem] lg:text-[9.6rem] [@media(orientation:landscape)_and_(max-height:560px)_and_(max-width:950px)]:text-[4.55rem]"
           }`}
         >
           {compactMode ? currentTime : formatFocusTime(secondsLeft)}

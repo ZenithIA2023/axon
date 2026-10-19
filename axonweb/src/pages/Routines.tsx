@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { type ReactElement, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -89,7 +89,7 @@ export default function Routines({
   onOpenNotifications?: () => void;
   unreadCount?: number | null;
   onOpenDesktopSidebar?: () => void;
-} = {}) {
+} = {}): ReactElement {
   const navigate = useNavigate();
 
   // Controles visuais da página/lista.
@@ -159,8 +159,20 @@ export default function Routines({
   // Conteúdo compartilhado entre a rota própria e a aba embedded do Planning.
   const inner = (
     <>
-      <div className="lg:hidden">
-        <section className="mb-5 flex items-end justify-between gap-3">
+      {embedded && (
+        <button
+          type="button"
+          onClick={goCreate}
+          className="absolute left-3 top-5 z-20 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#6d28d9] text-white shadow-[0_8px_22px_rgba(109,40,217,0.24)] transition active:scale-[0.96] dark:bg-[var(--accent-strong)] dark:shadow-card"
+          aria-label="Criar rotina"
+          title="Criar rotina"
+        >
+          <Plus className="h-5 w-5" />
+        </button>
+      )}
+
+      <div className={`lg:hidden ${embedded ? "px-3" : ""}`}>
+        <section className="mb-5">
           <div>
             <h1 className="text-[1.7rem] font-semibold leading-tight tracking-[-0.04em] text-slate-950 dark:text-white">
               Minhas Rotinas
@@ -171,13 +183,6 @@ export default function Routines({
             </p>
           </div>
 
-          <button
-            onClick={goCreate}
-            className="flex shrink-0 items-center gap-2 rounded-full border border-purple-300/20 bg-purple-500/20 px-4 py-2.5 text-sm font-semibold text-purple-100 shadow-lg shadow-purple-950/20 active:scale-[0.97]"
-          >
-            <Plus className="h-4 w-4" />
-            Nova Rotina
-          </button>
         </section>
 
         {error && (
@@ -248,32 +253,24 @@ export default function Routines({
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#f8f4ff] text-slate-950 dark:bg-[#05050b] dark:text-white">
+    <main className="relative min-h-screen overflow-hidden bg-[#f7f8fa] text-slate-950 dark:bg-[#05050b] dark:text-white">
       <Background />
 
       <div className="relative z-10 min-h-screen px-4 pb-6 pt-5">
         <header className="mb-6 flex items-center justify-between lg:hidden">
           <button
-            onClick={() => navigate("/dashboard")}
-            className="flex items-center gap-3 text-left active:scale-[0.98]"
+            type="button"
+            onClick={goCreate}
+            className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#6d28d9] text-white shadow-[0_8px_22px_rgba(109,40,217,0.24)] active:scale-[0.96] dark:bg-purple-500/20 dark:text-purple-100 dark:shadow-none"
+            aria-label="Criar rotina"
           >
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-purple-300/20 bg-purple-500/15 text-purple-700 dark:text-purple-200 shadow-lg shadow-purple-950/30">
-              <img
-                src="/axon-logo.svg"
-                alt="Axon"
-                className="h-8 w-8 object-contain"
-              />
-            </div>
-
-            <div>
-              <p className="text-sm font-semibold text-slate-950 dark:text-white">Rotinas</p>
-              <p className="text-xs text-slate-500 dark:text-white/40">Hábitos recorrentes</p>
-            </div>
+            <Plus className="h-5 w-5" />
           </button>
 
           <button
+            type="button"
             onClick={() => setIsSidebarOpen(true)}
-            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white/80 dark:bg-white/[0.045] text-slate-700 dark:text-white/60 backdrop-blur-2xl active:scale-[0.96]"
+            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200/80 bg-white text-slate-700 shadow-[0_8px_22px_rgba(15,23,42,0.07)] backdrop-blur-2xl active:scale-[0.96] dark:border-white/10 dark:bg-white/[0.045] dark:text-white/60 dark:shadow-none"
             aria-label="Abrir menu"
           >
             <Menu className="h-5 w-5" />
@@ -431,10 +428,8 @@ function DesktopRoutinesPanel({
 
   return (
     <section className="hidden min-h-0 lg:block">
-      <div className="mx-auto grid h-[calc(100vh-0.6rem)] max-w-[1500px] grid-cols-[272px_minmax(0,1fr)] gap-2.5">
-        <aside className="relative grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-2.5 overflow-hidden rounded-[1.45rem] border border-slate-200/80 dark:border-white/8 bg-white/[0.85] dark:bg-white/[0.035] p-2.5 shadow-[0_24px_90px_rgba(93,64,126,0.16)] dark:shadow-[0_24px_90px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
-          <DesktopRoutinesBrand />
-
+      <div className="mx-auto grid h-[calc(100vh-0.6rem)] max-w-[1120px] grid-cols-[252px_minmax(0,1fr)] gap-3">
+        <aside className="relative grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2.5 overflow-hidden rounded-[1.45rem] border border-slate-200/80 bg-white p-2.5 shadow-[0_18px_52px_rgba(15,23,42,0.07)] dark:border-white/8 dark:bg-white/[0.035] dark:shadow-[0_24px_90px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
           <DesktopRoutinesSummaryCard
             activeCount={activeCount}
             pausedCount={pausedCount}
@@ -446,7 +441,7 @@ function DesktopRoutinesPanel({
           <DesktopRoutinesSidebarCard routine={featuredRoutine} />
         </aside>
 
-        <section className="relative flex min-w-0 flex-col overflow-hidden rounded-[1.55rem] border border-slate-200/80 dark:border-white/8 bg-white/[0.85] dark:bg-white/[0.035] shadow-[0_24px_90px_rgba(93,64,126,0.16)] dark:shadow-[0_24px_90px_rgba(0,0,0,0.26)] backdrop-blur-2xl">
+        <section className="relative flex min-w-0 flex-col overflow-hidden rounded-[1.55rem] border border-slate-200/80 bg-white shadow-[0_18px_52px_rgba(15,23,42,0.07)] dark:border-white/8 dark:bg-white/[0.035] dark:shadow-[0_24px_90px_rgba(0,0,0,0.26)] backdrop-blur-2xl">
           <DesktopRoutinesTopbar
             title="Rotinas"
             activeView={activeView}
@@ -458,7 +453,7 @@ function DesktopRoutinesPanel({
           />
 
           <div className="min-h-0 flex-1 px-2.5 pb-2.5">
-            <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[1.45rem] border border-slate-200/80 dark:border-white/8 bg-white/[0.88] dark:bg-[#0b0b14]/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
+            <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[1.45rem] border border-slate-200/80 bg-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl dark:border-white/8 dark:bg-[#0b0b14]/72">
               <DesktopRoutinesSearchFilters
                 searchTerm={searchTerm}
                 activeFilter={activeFilter}
@@ -680,23 +675,6 @@ function DesktopRoutinesTopbar({
         >
           <Menu className="h-4.5 w-4.5" />
         </button>
-      </div>
-    </div>
-  );
-}
-
-function DesktopRoutinesBrand() {
-  return (
-    <div className="flex items-center gap-2.5">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#a855f7]/24 bg-[#7b2cbf]/18 shadow-[0_12px_28px_rgba(123,44,191,0.26)]">
-        <img src="/axon-logo.svg" alt="AXON" className="h-7 w-7 object-contain" />
-      </div>
-
-      <div className="min-w-0">
-        <p className="truncate text-sm font-black leading-tight text-primary">AXON</p>
-        <p className="mt-0.5 truncate text-xs font-semibold text-muted">
-          Rotinas e hábitos
-        </p>
       </div>
     </div>
   );
@@ -1124,7 +1102,7 @@ function RoutineCard({
           onOpen();
         }
       }}
-      className="cursor-pointer rounded-[1.7rem] border border-slate-200/80 dark:border-white/10 bg-white/[0.82] dark:bg-white/[0.055] p-4 shadow-[0_16px_45px_rgba(93,64,126,0.12)] dark:shadow-black/20 backdrop-blur-2xl transition active:scale-[0.99] hover:border-slate-300 dark:hover:border-white/15"
+      className="cursor-pointer rounded-[1.7rem] border border-slate-200/80 bg-white p-4 shadow-[0_14px_36px_rgba(15,23,42,0.07)] backdrop-blur-2xl transition hover:border-slate-300 active:scale-[0.99] dark:border-white/10 dark:bg-white/[0.055] dark:shadow-black/20 dark:hover:border-white/15"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
@@ -1178,7 +1156,7 @@ function RoutineCard({
         </button>
       </div>
 
-      <div className="mt-4 flex items-center gap-2 border-t border-white/[0.06] pt-3 text-xs text-slate-500 dark:text-white/45">
+      <div className="mt-4 flex items-center gap-2 border-t border-slate-200/80 pt-3 text-xs text-slate-500 dark:border-white/[0.06] dark:text-white/45">
         <span className="flex items-center gap-1.5">
           <ListChecks className="h-3.5 w-3.5 text-slate-500 dark:text-white/35" />
           {itemLabel}
@@ -1242,7 +1220,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
       <button
         type="button"
         onClick={onCreate}
-        className="mt-6 flex items-center gap-2 rounded-full border border-purple-300/20 bg-purple-500/20 px-5 py-3 text-sm font-semibold text-purple-100 shadow-lg shadow-purple-950/20 active:scale-[0.97]"
+        className="mt-6 flex items-center gap-2 rounded-full bg-[#6d28d9] px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(109,40,217,0.22)] active:scale-[0.97] dark:border dark:border-purple-300/20 dark:bg-purple-500/20 dark:text-purple-100 dark:shadow-lg dark:shadow-purple-950/20"
       >
         <Plus className="h-4 w-4" />
         Criar primeira rotina
@@ -1285,7 +1263,7 @@ function formatDate(iso: string) {
 
 function Background() {
   return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+    <div className="pointer-events-none absolute inset-0 hidden overflow-hidden dark:block">
       <div className="absolute left-1/2 top-[-16rem] h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-purple-700/25 blur-[120px]" />
       <div className="absolute right-[-14rem] top-[14rem] h-[26rem] w-[26rem] rounded-full bg-fuchsia-500/10 blur-[110px]" />
       <div className="absolute bottom-[-12rem] left-[-12rem] h-[26rem] w-[26rem] rounded-full bg-indigo-500/10 blur-[120px]" />
@@ -1524,7 +1502,7 @@ export function RoutineDetailPage() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#f8f4ff] text-slate-950 dark:bg-[#05050b] dark:text-white">
+    <main className="relative min-h-screen overflow-hidden bg-[#f7f8fa] text-slate-950 dark:bg-[#05050b] dark:text-white">
       <Background />
 
       <div className="relative z-10 min-h-screen px-4 pb-6 pt-5">

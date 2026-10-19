@@ -33,9 +33,11 @@ const TAG_COLORS = [
 export default function TaskTagsSheet({
   isOpen,
   onClose,
+  inline = false,
 }: {
   isOpen: boolean;
   onClose: () => void;
+  inline?: boolean;
 }) {
   const [tags, setTags] = useState<TaskTag[]>([]);
   const [loading, setLoading] = useState(true);
@@ -153,16 +155,10 @@ export default function TaskTagsSheet({
         deleting.taskCount === 1 ? "tarefa" : "tarefas"
       }. Excluir remove a categoria dessas tarefas — as tarefas continuam lá.`;
 
-  return (
+  const editorContent = (
     <>
-      <BottomSheet
-        isOpen={isOpen}
-        onClose={onClose}
-        ariaLabel="Categorias das tarefas"
-        maxHeightClassName="max-h-[85vh]"
-      >
         <div className="space-y-4">
-          <div className="flex items-start gap-3">
+          {!inline && <div className="flex items-start gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-accent-soft bg-accent-soft text-accent">
               <Tags className="h-5 w-5" />
             </div>
@@ -174,7 +170,7 @@ export default function TaskTagsSheet({
                 Servem para o Axon agrupar tarefas parecidas ao organizar seu dia.
               </p>
             </div>
-          </div>
+          </div>}
 
           <div className="flex gap-2">
             <input
@@ -188,13 +184,13 @@ export default function TaskTagsSheet({
                 }
               }}
               placeholder="Nova categoria..."
-              className="min-h-[48px] w-full rounded-2xl border border-soft bg-surface-muted px-4 text-sm text-primary outline-none placeholder:text-soft focus:border-accent-soft"
+              className="min-h-10 w-full rounded-xl border border-soft bg-surface-muted px-3 text-xs text-primary outline-none placeholder:text-soft focus:border-accent-soft"
             />
             <button
               type="button"
               onClick={() => void handleCreate()}
               disabled={!newLabel.trim() || creating}
-              className="flex min-h-[48px] shrink-0 items-center justify-center rounded-2xl bg-[var(--accent-strong)] px-4 text-white transition active:scale-[0.97] disabled:opacity-50"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-strong)] text-white shadow-sm transition active:scale-[0.97] disabled:opacity-50"
               aria-label="Criar categoria"
             >
               {creating ? (
@@ -216,7 +212,7 @@ export default function TaskTagsSheet({
               {[0, 1, 2].map((i) => (
                 <div
                   key={i}
-                  className="h-14 animate-pulse rounded-2xl bg-surface-muted"
+                  className="h-12 animate-pulse rounded-xl bg-surface-muted"
                 />
               ))}
             </div>
@@ -229,7 +225,7 @@ export default function TaskTagsSheet({
               {tags.map((tag) => (
                 <div
                   key={tag.id}
-                  className="rounded-2xl border border-soft bg-surface-muted px-3 py-2"
+                  className="rounded-xl border border-soft bg-surface-muted px-3 py-1.5"
                 >
                   <div className="flex items-center gap-2">
                   {editingId === tag.id ? (
@@ -283,7 +279,7 @@ export default function TaskTagsSheet({
                           setEditingId(tag.id);
                           setEditingLabel(tag.label);
                         }}
-                        className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-primary"
+                        className="min-w-0 flex-1 truncate text-left text-xs font-semibold text-primary"
                       >
                         {tag.label}
                       </button>
@@ -333,7 +329,23 @@ export default function TaskTagsSheet({
             </div>
           )}
         </div>
-      </BottomSheet>
+    </>
+  );
+
+  return (
+    <>
+      {inline ? (
+        <div className="min-w-0 py-1">{editorContent}</div>
+      ) : (
+        <BottomSheet
+          isOpen={isOpen}
+          onClose={onClose}
+          ariaLabel="Categorias das tarefas"
+          maxHeightClassName="max-h-[85vh]"
+        >
+          {editorContent}
+        </BottomSheet>
+      )}
 
       <ConfirmDialog
         isOpen={!!deleting}

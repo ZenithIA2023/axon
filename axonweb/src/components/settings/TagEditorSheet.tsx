@@ -22,6 +22,7 @@ type Category = "sleep" | "mood" | "productivity";
 type Props = {
   isOpen: boolean;
   onClose: () => void;
+  inline?: boolean;
 };
 
 // ===========================================================================
@@ -65,7 +66,7 @@ function getCategoryLabel(category: Category) {
 // SHEET DE EDIÇÃO DE TAGS
 // ===========================================================================
 
-export default function TagEditorSheet({ isOpen, onClose }: Props) {
+export default function TagEditorSheet({ isOpen, onClose, inline = false }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   // ---------------------------------------------------------------------------
@@ -170,7 +171,7 @@ export default function TagEditorSheet({ isOpen, onClose }: Props) {
       const updated = await api.updateTagPreferences(prefs);
 
       setPrefs(updated);
-      onClose();
+      if (!inline) onClose();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erro ao salvar.");
     } finally {
@@ -178,17 +179,10 @@ export default function TagEditorSheet({ isOpen, onClose }: Props) {
     }
   }
 
-  return (
-    <BottomSheet
-      isOpen={isOpen}
-      onClose={onClose}
-      title="Tags da análise diária"
-      subtitle="Personalize as opções que aparecem ao registrar seu dia"
-      ariaLabel="Editor de tags"
-      maxHeightClassName="max-h-[88vh]"
-    >
+  const editorContent = (
+    <>
       {/* Abas de categoria fixas no topo do conteúdo rolável. */}
-      <div className="sticky -top-4 z-10 -mx-5 mb-4 bg-surface-elevated px-5 pb-3 pt-1 backdrop-blur-xl">
+      <div className={inline ? "mb-4" : "sticky -top-4 z-10 -mx-5 mb-4 bg-surface-elevated px-5 pb-3 pt-1 backdrop-blur-xl"}>
         <CategoryTabs activeTab={activeTab} onChangeTab={changeTab} />
       </div>
 
@@ -214,6 +208,27 @@ export default function TagEditorSheet({ isOpen, onClose }: Props) {
           <SaveButton saving={saving} onSave={handleSave} />
         </>
       )}
+    </>
+  );
+
+  if (inline) {
+    return (
+      <div className="min-w-0 py-1">
+        {editorContent}
+      </div>
+    );
+  }
+
+  return (
+    <BottomSheet
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Tags da análise diária"
+      subtitle="Personalize as opções que aparecem ao registrar seu dia"
+      ariaLabel="Editor de tags"
+      maxHeightClassName="max-h-[88vh]"
+    >
+      {editorContent}
     </BottomSheet>
   );
 }
@@ -236,7 +251,7 @@ function CategoryTabs({
           key={key}
           type="button"
           onClick={() => onChangeTab(key)}
-          className={`flex-1 rounded-2xl border py-2.5 text-xs font-semibold transition active:scale-[0.97] ${
+        className={`flex-1 rounded-xl border py-2 text-[0.68rem] font-semibold transition active:scale-[0.97] ${
             activeTab === key
               ? "border-accent-soft bg-accent-soft text-accent"
               : "border-soft bg-surface-muted text-muted"
@@ -278,9 +293,9 @@ function TagList({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.85 }}
               transition={{ duration: 0.15 }}
-              className="flex items-center gap-1.5 rounded-full border border-soft bg-surface-muted py-1.5 pl-3.5 pr-2"
+            className="flex items-center gap-1.5 rounded-full border border-soft bg-surface-muted py-1 pl-3 pr-1.5"
             >
-              <span className="text-xs font-medium text-primary">
+              <span className="text-[0.7rem] font-medium text-primary">
                 {tag.label}
               </span>
 
@@ -324,17 +339,17 @@ function AddTagControl({
           onKeyDown={(event) => event.key === "Enter" && onAdd()}
           maxLength={40}
           placeholder="Nova tag..."
-          className="min-w-0 flex-1 rounded-2xl border border-soft bg-surface-muted px-4 py-3 text-sm text-primary outline-none ring-[var(--accent-soft)] transition placeholder:text-soft focus:border-accent-soft focus:ring-2"
+          className="min-h-10 min-w-0 flex-1 rounded-xl border border-soft bg-surface-muted px-3 py-2 text-xs text-primary outline-none ring-[var(--accent-soft)] transition placeholder:text-soft focus:border-accent-soft focus:ring-2"
         />
 
         <button
           type="button"
           onClick={onAdd}
           disabled={!value.trim()}
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--accent-strong)] text-white shadow-card transition active:scale-[0.96] disabled:opacity-30"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-strong)] text-white shadow-sm transition active:scale-[0.96] disabled:opacity-30"
           aria-label="Adicionar tag"
         >
-          <Plus className="h-5 w-5" />
+          <Plus className="h-4 w-4" />
         </button>
       </div>
 
@@ -356,7 +371,7 @@ function ResetCategoryButton({
     <button
       type="button"
       onClick={onReset}
-      className="mb-6 flex items-center gap-1.5 px-1 text-xs text-soft transition hover:text-secondary active:scale-[0.97]"
+      className="mb-4 flex items-center gap-1.5 px-1 text-[0.68rem] text-soft transition hover:text-secondary active:scale-[0.97]"
     >
       <RefreshCcw className="h-3 w-3" />
       Restaurar padrões de {label}
@@ -388,7 +403,7 @@ function SaveButton({
       type="button"
       onClick={onSave}
       disabled={saving}
-      className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent-strong)] px-5 text-sm font-semibold text-white shadow-card transition active:scale-[0.98] disabled:opacity-50"
+      className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent-strong)] px-4 text-xs font-semibold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-50"
     >
       {saving ? (
         <Loader2 className="h-4 w-4 animate-spin" />

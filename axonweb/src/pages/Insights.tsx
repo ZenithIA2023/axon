@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Activity,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Info,
+  Menu,
   Moon,
   NotebookPen,
   RefreshCw,
   Smile,
   Sparkles,
+  Sun,
   Target,
   Zap,
 } from "lucide-react";
@@ -32,7 +33,6 @@ import DayReview from "./DayReview";
 import * as api from "../lib/api";
 import type { TaskInsights, FocusBlockItem } from "../lib/api";
 import AppBackground from "../components/layout/AppBackground";
-import PageHeader from "../components/layout/PageHeader";
 import axonHeadHappy from "../assets/axon/axon-head-happy.png";
 
 // ===========================================================================
@@ -45,15 +45,36 @@ import axonHeadHappy from "../assets/axon/axon-head-happy.png";
 // cartão. O respiro do conteúdo vem do padding de cada caixa interna, não
 // deste — assim sobra largura para os gráficos no telefone.
 const CARD =
-  "rounded-[1.75rem] border border-soft bg-surface-elevated p-2 text-primary shadow-card backdrop-blur-2xl";
+  "rounded-[1.75rem] border border-slate-200/90 bg-white p-2 text-slate-950 shadow-[0_12px_35px_rgba(15,23,42,0.07)] dark:border-soft dark:bg-surface-elevated dark:text-primary dark:shadow-card dark:backdrop-blur-2xl";
 
 // Caixa interna que envolve os gráficos dentro de cada cartão.
-const CHART_BOX = "rounded-[1.4rem] border border-soft bg-surface-muted p-4";
+const CHART_BOX =
+  "rounded-[1.4rem] border border-slate-200/90 bg-[#f7f8fa] p-4 dark:border-soft dark:bg-surface-muted";
 
 // Variante do gráfico de linhas: recuo lateral mínimo para os rótulos dos
 // eixos encostarem nas bordas. A área que sobra fica toda para os dias.
 const CHART_BOX_AXES =
-  "rounded-[1.4rem] border border-soft bg-surface-muted px-1 py-3";
+  "rounded-[1.4rem] border border-slate-200/90 bg-[#f7f8fa] px-1 py-3 dark:border-soft dark:bg-surface-muted";
+
+function InsightsLightThemeStyles() {
+  return (
+    <style>{`
+      html:not(.dark) .insights-light-theme {
+        --bg-app: #f7f8fa;
+        --surface-elevated: #ffffff;
+        --surface-muted: #f7f8fa;
+        --border-soft: #e2e8f0;
+        --border-medium: #cbd5e1;
+        --text-primary: #0f172a;
+        --text-secondary: #475569;
+        --text-muted: #64748b;
+        --accent: #6d28d9;
+        --accent-strong: #6d28d9;
+        --accent-soft: rgba(109, 40, 217, 0.10);
+      }
+    `}</style>
+  );
+}
 
 // ===========================================================================
 // TIPOS E CONFIGURAÇÕES DOS GRÁFICOS
@@ -192,8 +213,6 @@ const SWIPE_THRESHOLD = 56;
 // ===========================================================================
 // Consolida padrões de tarefas, sono, humor, produtividade e blocos de foco.
 export default function Insights() {
-  const navigate = useNavigate();
-
   // Sidebar global da página.
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -614,19 +633,37 @@ export default function Insights() {
   const deficit = Math.max(0, sleepTarget - avgSleep);
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-app text-primary">
-      <AppBackground />
+    <main className="insights-light-theme relative min-h-screen overflow-hidden bg-[#f7f8fa] text-slate-950 dark:bg-app dark:text-primary">
+      <InsightsLightThemeStyles />
+
+      <div className="hidden dark:block">
+        <AppBackground />
+      </div>
 
       {/* px-1 no telefone: os cartões encostam quase na borda, porque a
           margem externa era espaço morto. No desktop entra a mesma medida do
           Dashboard — coluna centrada de 1120px. */}
       <div className="relative z-10 mx-auto min-h-screen w-full max-w-[430px] space-y-4 px-1 pb-6 pt-5 lg:max-w-[1120px] lg:space-y-5 lg:px-8 lg:pt-7">
-        <PageHeader
-          title="Insights"
-          subtitle="Padrões do seu ritmo"
-          onBack={() => navigate("/dashboard")}
-          onMenuClick={() => setIsSidebarOpen(true)}
-        />
+        <header className="flex items-center justify-between px-3 lg:px-0">
+          <button
+            type="button"
+            onClick={() => setReviewOpen(true)}
+            className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#6d28d9] text-white shadow-[0_8px_22px_rgba(109,40,217,0.24)] transition active:scale-[0.96] dark:bg-[var(--accent-strong)] dark:shadow-card"
+            aria-label={todayLog ? "Editar registro de hoje" : "Registrar o dia"}
+            title={todayLog ? "Editar registro de hoje" : "Registrar o dia"}
+          >
+            <Sun className="h-5 w-5" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsSidebarOpen(true)}
+            className="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200/90 bg-white text-slate-600 shadow-[0_8px_22px_rgba(15,23,42,0.07)] transition active:scale-[0.96] dark:border-soft dark:bg-surface-muted dark:text-muted dark:shadow-card"
+            aria-label="Abrir menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        </header>
 
         {/* ============================================================
             O QUE O AXON DESCOBRIU — carrossel de padrões
@@ -699,7 +736,7 @@ export default function Insights() {
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-[var(--border-soft)]">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-400"
+                    className="h-full rounded-full bg-[#6d28d9] dark:bg-gradient-to-r dark:from-purple-500 dark:to-fuchsia-400"
                     style={{
                       width: `${Math.min(
                         100,
@@ -840,9 +877,9 @@ export default function Insights() {
               {/* ============================================================
                 REGISTRO DIÁRIO — alimenta toda a análise abaixo
                 ============================================================ */}
-            <section className="order-1 rounded-[1.75rem] border border-accent-soft bg-accent-soft p-4 shadow-card backdrop-blur-2xl">
+            <section className="order-1 rounded-[1.75rem] border border-slate-200/90 bg-white p-4 shadow-[0_12px_35px_rgba(15,23,42,0.07)] dark:border-accent-soft dark:bg-accent-soft dark:shadow-card dark:backdrop-blur-2xl">
               <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-accent">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#6d28d9]/10 text-[#6d28d9] dark:bg-transparent dark:text-accent">
                   {todayLog ? (
                     <CheckCircle2 className="h-6 w-6" />
                   ) : (
@@ -872,7 +909,7 @@ export default function Insights() {
                 <button
                   type="button"
                   onClick={() => setReviewOpen(true)}
-                  className="min-h-11 shrink-0 rounded-2xl border border-accent-soft bg-surface-elevated px-4 text-xs font-semibold text-accent shadow-card transition active:scale-[0.97]"
+                  className="min-h-11 shrink-0 rounded-2xl bg-[#6d28d9] px-4 text-xs font-semibold text-white shadow-[0_8px_20px_rgba(109,40,217,0.20)] transition active:scale-[0.97] dark:border dark:border-accent-soft dark:bg-surface-elevated dark:text-accent dark:shadow-card"
                 >
                   {todayLog ? "Editar dia" : "Registrar dia"}
                 </button>
@@ -1293,7 +1330,7 @@ export default function Insights() {
                         </div>
                         <div className="h-1 w-28 overflow-hidden rounded-full bg-[var(--border-soft)]">
                           <div
-                            className="h-full rounded-full bg-gradient-to-r from-amber-400 to-purple-400 transition-all"
+                            className="h-full rounded-full bg-[#6d28d9] transition-all dark:bg-gradient-to-r dark:from-amber-400 dark:to-purple-400"
                             style={{
                               width: `${Math.min(
                                 100,
@@ -1492,10 +1529,10 @@ export default function Insights() {
                               {/* Dia sem registro não desenha barra nenhuma. */}
                               {hours != null && (
                                 <div
-                                  className={`w-full max-w-[1.9rem] rounded-full bg-gradient-to-t transition-all ${
+                                  className={`w-full max-w-[1.9rem] rounded-full bg-[#6d28d9] transition-all dark:bg-gradient-to-t ${
                                     isActive
-                                      ? "from-purple-600 to-fuchsia-400 ring-2 ring-[var(--text-primary)]"
-                                      : "from-purple-700 to-purple-400 opacity-90 dark:opacity-80"
+                                      ? "ring-2 ring-[var(--text-primary)] dark:from-purple-600 dark:to-fuchsia-400"
+                                      : "opacity-90 dark:from-purple-700 dark:to-purple-400 dark:opacity-80"
                                   }`}
                                   style={{ height: `${barPercent}%` }}
                                 />
@@ -1577,10 +1614,10 @@ export default function Insights() {
                     .map((routine) => {
                       const fillColor =
                         routine.percent >= 80
-                          ? "bg-gradient-to-r from-emerald-500 to-emerald-400"
+                          ? "bg-emerald-500 dark:bg-gradient-to-r dark:from-emerald-500 dark:to-emerald-400"
                           : routine.percent >= 50
-                          ? "bg-gradient-to-r from-amber-500 to-amber-400"
-                          : "bg-gradient-to-r from-rose-500 to-rose-400";
+                          ? "bg-amber-500 dark:bg-gradient-to-r dark:from-amber-500 dark:to-amber-400"
+                          : "bg-rose-500 dark:bg-gradient-to-r dark:from-rose-500 dark:to-rose-400";
 
                       return (
                         <div key={routine.routine_id}>
@@ -1783,7 +1820,7 @@ function PeriodToggle({
           onClick={() => onChange(key)}
           className={`rounded-full px-3 py-1.5 font-semibold transition active:scale-[0.97] ${
             value === key
-              ? "bg-gradient-to-r from-purple-600 to-fuchsia-500 text-white shadow-card"
+              ? "bg-[#6d28d9] text-white shadow-card dark:bg-gradient-to-r dark:from-purple-600 dark:to-fuchsia-500"
               : "text-muted"
           }`}
         >
@@ -1932,10 +1969,10 @@ function TaskBar({
             }}
           >
             <div
-              className={`absolute inset-x-0 bottom-0 rounded-full bg-gradient-to-t transition-all ${
+              className={`absolute inset-x-0 bottom-0 rounded-full bg-[#6d28d9] transition-all dark:bg-gradient-to-t ${
                 isActive
-                  ? "from-purple-600 to-fuchsia-400"
-                  : "from-purple-900 to-purple-600 opacity-90 dark:opacity-80"
+                  ? "dark:from-purple-600 dark:to-fuchsia-400"
+                  : "opacity-90 dark:from-purple-900 dark:to-purple-600 dark:opacity-80"
               }`}
               style={{ height: `${fillPercent}%` }}
             />
