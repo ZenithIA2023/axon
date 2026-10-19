@@ -62,7 +62,7 @@ import { useSpeech } from "../lib/voice/useSpeech";
 
 import Sidebar from "../components/layout/Sidebar";
 
-import { isNative } from "../lib/nativeAuth";
+import { useLarguraDeCelular } from "../lib/useLarguraDeCelular";
 
 import * as api from "../lib/api";
 
@@ -388,13 +388,11 @@ export function ChatConversationPanel({
 
 }: ChatConversationPanelProps = {}) {
 
-  // Só o app empacotado pelo Capacitor recebe o BottomNav — e com ele o campo
-
-  // de mensagem que substitui o desta tela. Na web (inclusive no celular) não
-
-  // existe BottomNav, então a conversa mantém o composer próprio.
-
-  const temComposerNativo = isNative();
+  // Em largura de celular o BottomNav existe — e com ele o campo de mensagem
+  // que substitui o desta tela. No desktop não há BottomNav, então a conversa
+  // mantém o composer próprio. É LARGURA, e não plataforma: a web estreita é a
+  // pré-visualização do design mobile (ver useLarguraDeCelular).
+  const usaComposerDaBarra = useLarguraDeCelular();
 
 
 
@@ -1454,7 +1452,7 @@ export function ChatConversationPanel({
 
             O chat é só texto: gravar áudio é exclusividade da página /voz. */}
 
-        {!temComposerNativo && (
+        {!usaComposerDaBarra && (
 
         <footer className="shrink-0 pt-3">
 
@@ -1596,7 +1594,7 @@ export function ChatConversationPanel({
 
             área visível da conversa. */}
 
-        {temComposerNativo && (
+        {usaComposerDaBarra && (
 
           <div
 

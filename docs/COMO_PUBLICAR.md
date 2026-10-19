@@ -70,6 +70,28 @@ O site e o app rodam o mesmo código. Publique no site primeiro e teste em
 axonapp.tech — se funcionar lá, funciona no app. Economiza um ciclo de
 compilar + baixar + instalar.
 
+### Pré-visualizar o design mobile no navegador
+
+Desde 19/10/2026, **abaixo de 1024px de largura o site renderiza o shell de
+aplicativo**: a barra inferior aparece, e dentro de uma conversa o campo de
+mensagem é o da barra (não o da tela). Basta estreitar a janela do navegador —
+arrastar através de 1024px troca o layout na hora, sem recarregar.
+
+Serve para conferir alteração de design mobile sem gerar e reinstalar um APK a
+cada ajuste. O desktop (a partir de 1024px) não mudou: segue com a Sidebar e o
+compositor dentro da conversa.
+
+> **O que a pré-visualização NÃO mostra: a safe area.**
+>
+> `env(safe-area-inset-*)` vale **zero** no navegador — não há entalhe nem barra
+> de sistema para medir. O respiro das bordas do aparelho (topo sob a câmera,
+> rodapé acima dos botões de navegação do Android) só existe no APK.
+>
+> Ou seja: a pré-visualização mostra **estrutura** igual — barra, compositor,
+> layout, componentes, cores. Bug de corte ou de espaçamento no topo e no
+> rodapé continua aparecendo só no aparelho. Antes de dar uma mudança de layout
+> por concluída, confira no APK.
+
 ## Verificar se deu certo
 
 ```bash
