@@ -78,8 +78,9 @@ eq("com thinking: adaptive em qualquer um",
    claude_service._thinking_kwargs("claude-sonnet-5-5", True), {"thinking": {"type": "adaptive"}})
 
 print("\n— rotas de produção —")
-eq("redação: principal e reserva em provedores diferentes",
-   len({p for p, _ in llm_service._ROUTES["redacao"]}), 2)
+for rota in ("redacao", "curtos"):
+    eq(f"{rota}: principal e reserva em provedores diferentes",
+       len({p for p, _ in llm_service._ROUTES[rota]}), 2)
 
 print(f"\n{ok} passaram, {falhas} falharam")
 if falhas:

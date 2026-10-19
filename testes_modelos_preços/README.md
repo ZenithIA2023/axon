@@ -285,6 +285,23 @@ Análise feita com os dados dos testes 1, 2, 6 e 11, na prioridade definida pelo
 
 **Decisão:** o GPT-6.1 Sol fica nos Insights.
 
+### 13. Etapa 2 da troca: motivos da análise de rotina (19/10/2026)
+
+O `routine_analysis_service._write_reasons` passou a usar o `llm_service`, rota `curtos` (GPT-6 Luna, com o Sonnet 5.5 de reserva). Teste pela função de produção, com 3 movimentos fictícios.
+
+- **Script:** `caminho_real_curtos.py`.
+- **Resultados:** `caminho_real.jsonl`.
+
+| Caso | Modelo | Tempo | Custo | Motivos |
+|---|---|---|---|---|
+| Principal | GPT-6 Luna | 6,4s | US$ 0,00015 | "Alemão cedo, no seu pico de energia." / "Deixei os e-mails para um momento mais leve." / "Fechei o vão e você termina mais cedo." |
+| Principal (repetição) | GPT-6 Luna | 5,2s | US$ 0,00018 | 3/3 reescritos |
+| Principal forçado a falhar | Sonnet 5.5 (reserva) | 2,5s | US$ 0,0021 | 3/3 reescritos |
+
+**Observações:**
+- O Luna é mais lento que o Sonnet 4.6 de antes (~5s contra ~2s), porque raciocina antes de responder. Fica aceitável num botão de análise.
+- O teto de tokens subiu de 600 para 1.024: na avaliação, o raciocínio do Luna chegou a 415 tokens com só 3 movimentos.
+
 ---
 
 ## Decisões até agora
@@ -292,8 +309,8 @@ Análise feita com os dados dos testes 1, 2, 6 e 11, na prioridade definida pelo
 | Funcionalidade | Principal | Reserva | Estado |
 |---|---|---|---|
 | Insights, Descobertas, Relatório | GPT-6.1 Sol | Sonnet 5.5 | Implementado (`llm_service`, rota `redacao`) |
-| Motivos da análise de rotina | GPT-6 Luna | Sonnet 5.5 | Próxima etapa |
-| Chat e voz | Gemini 3.5 Lite | Sonnet 5.5 | Depois dos curtos |
+| Motivos da análise de rotina | GPT-6 Luna | Sonnet 5.5 | Implementado (`llm_service`, rota `curtos`) |
+| Chat e voz | Gemini 3.5 Lite | Sonnet 5.5 | Próxima etapa |
 | Notificações | — | — | Adiado; o Bernardo quer tratar com calma |
 
 **Regras do roteamento:**

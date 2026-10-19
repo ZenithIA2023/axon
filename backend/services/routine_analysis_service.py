@@ -15,9 +15,9 @@ SÓ USA O QUE O USUÁRIO INFORMOU. Tarefa sem `complexity` não entra na troca;
 sem tag não entra no agrupamento. Campo nulo nunca vira suposição (ver
 Migration 31).
 
-Quem decide o horário é ESTE CÓDIGO, deterministicamente. O Claude entra só
+Quem decide o horário é ESTE CÓDIGO, deterministicamente. O modelo entra só
 para escrever os motivos em português a partir da lista pronta — a mesma regra
-de correlations_service: o backend calcula, o Claude traduz. Deixar o modelo
+de correlations_service: o backend calcula, o modelo traduz. Deixar o modelo
 escolher horário reintroduziria a divergência texto↔ação que o app já
 combateu.
 
@@ -28,20 +28,17 @@ consultam e atualizam — o movimento N vê os N-1 anteriores como se já
 estivessem aplicados.
 """
 
-import os
+import json
 from datetime import date, datetime, timedelta, timezone
-
-import anthropic
 
 from database import supabase
 from services import chronotype as chronotype_service
 from services import notification_analyzer, notification_service
-from services import saved_time_service, tasks_service, usage_service, user_tz
-
-_MODEL = notification_analyzer._MODEL
+from services import llm_service, saved_time_service, tasks_service, user_tz
 
 # ── Trava de custo ──────────────────────────────────────────────────────────
-# Cada análise manual é uma chamada ao Claude (~$0,02). 3 por dia cobre o uso
+# Cada análise manual é uma chamada ao modelo de textos curtos (~US$0,0002 no
+# GPT-6 Luna; a reserva, Sonnet 5.5, ~US$0,003). 3 por dia cobre o uso
 # legítimo — analisar de manhã, reanalisar depois de mexer na agenda, e uma
 # terceira para o "e agora?" do fim da tarde — sem deixar um usuário clicando o
 # botão o dia todo. A análise AGENDADA não conta aqui: é uma por dia por
@@ -429,7 +426,7 @@ def _push(
             "new_start": _hhmm(slot[0]),
             "new_end": _hhmm(slot[1]),
             "kind": kind,
-            # Motivo provisório, determinístico; o Claude reescreve depois.
+            # Motivo provisório, determinístico; o modelo reescreve depois.
             "reason": _default_reason(kind, task, day, slot, swap_with),
         }
     )
@@ -449,43 +446,61 @@ def _default_reason(kind, task, day, slot, swap_with) -> str:
     return "fecha um vão e o dia termina antes"
 
 
-# ── Motivos pelo Claude ─────────────────────────────────────────────────────
+# ── Motivos pelo modelo ─────────────────────────────────────────────────────
 
-def _write_reasons(user_id: str, moves: list[dict], user_name: str) -> None:
-    """
-    Pede ao Claude frases curtas por movimento. Os horários NÃO são enviados
-    para ele decidir — já estão decididos; ele só descreve. Se falhar, ficam os
-    motivos determinísticos, que são piores em redação e corretos em conteúdo.
-    """
-    if not moves:
-        return
-    try:
-        client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-        listing = "\n".join(
-            f"{i}. '{m['title']}' de {m['old_start']} para {m['new_start']} "
-            f"— tipo: {m['kind']} — rascunho: {m['reason']}"
-            for i, m in enumerate(moves)
-        )
-        prompt = f"""Você é o Axon, assistente de produtividade. O usuário {user_name} pediu para reorganizar o dia e os movimentos abaixo JÁ ESTÃO DECIDIDOS. Escreva, para cada um, um motivo de no máximo 8 palavras, em português do Brasil, tom de parceiro próximo. Não invente horários nem sugira outros.
+_REASONS_SYSTEM_PROMPT = """Você é o Axon, assistente de produtividade. O usuário pediu para reorganizar o dia e os movimentos que ele vai receber JÁ ESTÃO DECIDIDOS. Escreva, para cada um, um motivo de no máximo 8 palavras, em português do Brasil, tom de parceiro próximo. Não invente horários nem sugira outros.
 
 Tipos: bad_block = saía de horário de baixa energia; complexity_match = trocou de lugar para casar a carga mental com a energia; grouping = juntou com tarefas parecidas; compaction = fechou um vão e o dia acaba antes.
 
-{listing}
+Responda APENAS com JSON: {"reasons": ["motivo 0", "motivo 1", ...]}, com um motivo por movimento, na mesma ordem."""
 
-Retorne APENAS JSON válido: {{"reasons": ["motivo 0", "motivo 1", ...]}} com exatamente {len(moves)} itens, na mesma ordem."""
-        resp = client.messages.create(
-            model=_MODEL, max_tokens=600, messages=[{"role": "user", "content": prompt}]
+# Schema da saída estruturada (ver llm_service.complete).
+_REASONS_SCHEMA = {
+    "type": "object",
+    "properties": {"reasons": {"type": "array", "items": {"type": "string"}}},
+    "required": ["reasons"],
+    "additionalProperties": False,
+}
+
+
+def _write_reasons(user_id: str, moves: list[dict], user_name: str) -> None:
+    """
+    Pede ao modelo de textos curtos (llm_service, rota "curtos") frases curtas
+    por movimento. Os horários NÃO são enviados para ele decidir — já estão
+    decididos; ele só descreve. Se falhar, ficam os motivos determinísticos,
+    que são piores em redação e corretos em conteúdo.
+    """
+    if not moves:
+        return
+    listing = "\n".join(
+        f"{i}. '{m['title']}' de {m['old_start']} para {m['new_start']} "
+        f"— tipo: {m['kind']} — rascunho: {m['reason']}"
+        for i, m in enumerate(moves)
+    )
+    user_message = (
+        f"Usuário: {user_name}. São {len(moves)} movimentos; devolva exatamente "
+        f"{len(moves)} motivos.\n\n{listing}"
+    )
+    try:
+        # 1024 de teto: o GPT-6 Luna raciocina antes de responder e o raciocínio
+        # conta no limite — com 3 movimentos ele chegou a 415 tokens na avaliação.
+        text = llm_service.complete(
+            "curtos",
+            _REASONS_SYSTEM_PROMPT,
+            user_message,
+            feature="rotina_motivos",
+            user_id=user_id,
+            json_schema=_REASONS_SCHEMA,
+            max_tokens=1024,
         )
-        usage_service.record_claude(user_id, "rotina_motivos", _MODEL, resp.usage)
-        parsed = notification_analyzer._parse_json(resp.content[0].text)
-        reasons = parsed.get("reasons") or []
+        reasons = json.loads(text).get("reasons") or []
         if len(reasons) == len(moves):
             for m, r in zip(moves, reasons):
                 r = str(r or "").strip()
                 if r:
                     m["reason"] = r[:80]
     except Exception as e:
-        print(f"[routine_analysis] motivos pelo Claude falharam: {e}", flush=True)
+        print(f"[routine_analysis] motivos pelo modelo falharam: {e}", flush=True)
 
 
 # ── Análise ─────────────────────────────────────────────────────────────────
@@ -517,7 +532,7 @@ def count_manual_today(user_id: str, tz_name: str) -> int:
     """
     Trava de custo: toda análise manual do dia conta — pendente, aplicada,
     dispensada, expirada E 'nothing' (agenda já boa). O que não conta é
-    devolver uma proposta que já estava aberta (não analisa, não chama o Claude).
+    devolver uma proposta que já estava aberta (não analisa, não chama o modelo).
     """
     tz = user_tz.zone(tz_name)
     midnight = datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0)

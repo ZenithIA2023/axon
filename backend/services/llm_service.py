@@ -43,6 +43,13 @@ _ROUTES: dict[str, list[tuple[str, str]]] = {
         ("openrouter", "openai/gpt-6.1-sol"),
         ("anthropic", "claude-sonnet-5-5"),
     ],
+    #   curtos — GPT-6 Luna 18/18, nota 7,5, ~US$0,0001 por chamada. A reserva é
+    #   o Sonnet 5.5 e não o Gemini 3.8 Flash (nota 7,7) porque o Gemini também
+    #   passa pela OpenRouter e cairia junto com o principal.
+    "curtos": [
+        ("openrouter", "openai/gpt-6-luna"),
+        ("anthropic", "claude-sonnet-5-5"),
+    ],
 }
 
 
