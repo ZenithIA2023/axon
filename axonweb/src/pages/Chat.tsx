@@ -733,8 +733,12 @@ export default function Chat() {
    * -------------------------------------------------------------------------- */
 
   return (
-    <main className="relative h-[100dvh] overflow-hidden bg-app text-primary">
-      <AppBackground />
+    <main className="chat-light-theme relative h-[100dvh] overflow-hidden bg-app text-primary">
+      <ChatLightThemeStyles />
+
+      <div className="hidden dark:block">
+        <AppBackground />
+      </div>
 
       {/* ----------------------------------------------------------------
         * Mobile: /chat É a conversa. O histórico saiu do caminho principal
@@ -751,7 +755,6 @@ export default function Chat() {
             conversationId={mobileConversationId}
             embedded
             onOpenChatList={() => setIsChatListOpen(true)}
-            onCreateConversation={() => openCreateConversationModal(null)}
             onOpenSidebar={() => setIsSidebarOpen(true)}
           />
         ) : (
@@ -785,45 +788,23 @@ export default function Chat() {
       <div className="relative z-10 hidden h-full grid-cols-[360px_minmax(0,1fr)] gap-4 px-5 py-5 lg:grid xl:grid-cols-[390px_minmax(0,1fr)]">
         <aside className="flex min-h-0 flex-col overflow-hidden rounded-[2rem] border border-soft bg-surface-elevated text-primary shadow-soft backdrop-blur-2xl">
           <div className="border-b border-[var(--border-soft)] px-4 pb-4 pt-4">
-            <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="mb-4">
               <button
                 type="button"
-                onClick={() => navigate("/dashboard")}
-                className="flex min-w-0 items-center gap-3 text-left transition active:scale-[0.98]"
+                onClick={() =>
+                  openCreateConversationModal(
+                    view === "projects" ? selectedProjectId : null,
+                    view === "projects" && !selectedProjectId
+                      ? "project"
+                      : "conversation"
+                  )
+                }
+                className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200/90 bg-white px-4 text-sm font-black text-[#6d28d9] shadow-[0_8px_22px_rgba(15,23,42,0.07)] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98] dark:border-accent-soft dark:bg-[var(--accent-strong)] dark:text-white dark:shadow-card dark:hover:bg-[var(--accent-strong)]"
+                aria-label="Nova conversa ou projeto"
               >
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-accent-soft bg-accent-soft text-accent shadow-card">
-                  <img
-                    src="/axon-logo.svg"
-                    alt="Axon"
-                    className="h-8 w-8 object-contain"
-                  />
-                </div>
-
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-black text-primary">
-                    Chat
-                  </p>
-                  <p className="truncate text-xs text-muted">
-                    Conversas e projetos
-                  </p>
-                </div>
+                <Plus className="h-5 w-5" />
+                Nova conversa/projeto
               </button>
-
-              <div className="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    openCreateConversationModal(
-                      view === "projects" ? selectedProjectId : null
-                    )
-                  }
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--accent-strong)] text-white shadow-card transition active:scale-[0.96]"
-                  aria-label="Nova conversa ou projeto"
-                >
-                  <Plus className="h-5 w-5" />
-                </button>
-
-              </div>
             </div>
 
             <ChatSearchPanel
@@ -929,7 +910,45 @@ export default function Chat() {
 
 }
 
-/* ==========================================================================
+function ChatLightThemeStyles() {
+  return (
+    <style>{`
+      html:not(.dark) body:not(.dark) .chat-light-theme {
+        --app-bg: #f7f8fa;
+        --app-bg-soft: #ffffff;
+        --surface-base: #ffffff;
+        --surface-elevated: #ffffff;
+        --surface-muted: #f3f4f6;
+        --border-soft: rgba(15, 23, 42, 0.10);
+        --border-medium: rgba(15, 23, 42, 0.16);
+        --text-primary: #111827;
+        --text-secondary: #374151;
+        --text-muted: #6b7280;
+        --text-soft: #9ca3af;
+        --accent: #6d28d9;
+        --accent-strong: #6d28d9;
+        --accent-soft: rgba(109, 40, 217, 0.08);
+        --accent-muted: rgba(109, 40, 217, 0.08);
+        --accent-border: rgba(109, 40, 217, 0.20);
+        --shadow-soft: 0 18px 52px rgba(15, 23, 42, 0.07);
+        --shadow-card: 0 14px 36px rgba(15, 23, 42, 0.06);
+        background: #f7f8fa;
+      }
+
+      html:not(.dark) body:not(.dark) .chat-light-theme .bg-app {
+        background: #f7f8fa;
+      }
+
+      html:not(.dark) body:not(.dark) .chat-light-theme [class*="bg-[radial-gradient"],
+      html:not(.dark) body:not(.dark) .chat-light-theme [class*="bg-gradient-to-b"],
+      html:not(.dark) body:not(.dark) .chat-light-theme [class*="bg-gradient-to-r"] {
+        display: none;
+      }
+    `}</style>
+  );
+}
+
+/* ========================================================================== 
  * Card contextual temporário
  * ========================================================================== */
 function ChatIntroCard({ onHide }: { onHide: () => void }) {
@@ -1456,33 +1475,6 @@ function CreateConversationModal({
             </button>
           </div>
 
-          {!isInsideProject && (
-            <div className="grid grid-cols-2 gap-2 rounded-2xl border border-soft bg-surface-muted p-1">
-              <button
-                type="button"
-                onClick={() => setCreateMode("conversation")}
-                className={`min-h-11 rounded-xl text-xs font-semibold transition active:scale-[0.98] ${
-                  createMode === "conversation"
-                    ? "bg-[var(--accent-strong)] text-white shadow-card"
-                    : "text-muted"
-                }`}
-              >
-                Conversa
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setCreateMode("project")}
-                className={`min-h-11 rounded-xl text-xs font-semibold transition active:scale-[0.98] ${
-                  createMode === "project"
-                    ? "bg-[var(--accent-strong)] text-white shadow-card"
-                    : "text-muted"
-                }`}
-              >
-                Projeto
-              </button>
-            </div>
-          )}
         </div>
 
         <ScrollArea className="flex-1" contentClassName="relative px-5 py-4">

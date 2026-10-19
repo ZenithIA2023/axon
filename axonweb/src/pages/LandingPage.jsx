@@ -19,7 +19,7 @@ import starDecoration from "../assets/decorations/star.svg";
 // LANDING PAGE — REDESIGN
 // ===========================================================================
 // Hero mobile-first com suporte real a light/dark mode.
-// No light mode, a landing fica clara/lavanda.
+// No light mode, a landing usa superfícies neutras, sólidas e um único roxo.
 // No dark mode, mantém o visual roxo escuro original.
 
 const heroMetrics = [
@@ -65,7 +65,8 @@ export default function LandingPage() {
   }, [navigate]);
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#fbf8ff] text-[#2d0850] dark:bg-[#08070d] dark:text-white">
+    <main className="landing-light-theme min-h-screen overflow-hidden bg-[#f7f8fa] text-slate-950 dark:bg-[#08070d] dark:text-white">
+      <LandingLightThemeStyles />
       <LandingHero />
       <LandingIntroBlock />
       <LandingProductivityProblem />
@@ -73,8 +74,27 @@ export default function LandingPage() {
       <LandingAxonEvolution />
       <LandingPersonalExperience />
       <LandingFinalCTA />
-
     </main>
+  );
+}
+
+function LandingLightThemeStyles() {
+  return (
+    <style>{`
+      html:not(.dark) .landing-light-theme {
+        color-scheme: light;
+        --bg-app: #f7f8fa;
+        --surface: #ffffff;
+        --surface-elevated: #ffffff;
+        --surface-muted: #f1f5f9;
+        --border-soft: #e2e8f0;
+        --text-primary: #0f172a;
+        --text-secondary: #64748b;
+        --accent: #6d28d9;
+        --accent-strong: #6d28d9;
+        --accent-soft: rgba(109, 40, 217, 0.08);
+      }
+    `}</style>
   );
 }
 
@@ -89,12 +109,12 @@ function LandingHero() {
           um pouco mais abaixo, com opacidade decrescente (100% / 75% / 50%). */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 bottom-[-12px] h-24 rounded-b-[1.35rem] bg-[#7b2cbf]/75 lg:bottom-[-16px] lg:rounded-b-[1.9rem]"
+        className="pointer-events-none absolute inset-x-0 bottom-[-12px] h-24 rounded-b-[1.35rem] bg-slate-200 lg:bottom-[-16px] lg:rounded-b-[1.9rem] dark:bg-[#7b2cbf]/75"
       />
 
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 bottom-[-24px] h-24 rounded-b-[1rem] bg-[#7b2cbf]/50 lg:bottom-[-32px] lg:rounded-b-[1.45rem]"
+        className="pointer-events-none absolute inset-x-0 bottom-[-24px] h-24 rounded-b-[1rem] bg-slate-300/70 lg:bottom-[-32px] lg:rounded-b-[1.45rem] dark:bg-[#7b2cbf]/50"
       />
 
       {/* Sem `min-h` de viewport: com o bloco de introdução fora do hero, o
@@ -109,8 +129,10 @@ function LandingHero() {
           `lg:items-end` as métricas encostam na base da linha e os 96px cheios
           deixavam o hero com cara de inacabado.
           O de cima é menor nos dois, porque ali mora a barra com o logo. */}
-      <section className="relative z-10 isolate min-h-[100svh] overflow-hidden rounded-b-[1.75rem] bg-[#fbf8ff] px-4 pb-20 pt-7 text-[#2d0850] sm:px-6 lg:flex lg:min-h-0 lg:items-start lg:rounded-b-[2.4rem] lg:px-10 lg:pb-12 lg:pt-8 xl:px-14 dark:bg-[#2d0850] dark:text-white">
-        <LandingPurpleBackground intensity="strong" />
+      <section className="relative z-10 isolate min-h-[100svh] overflow-hidden rounded-b-[1.75rem] bg-white px-4 pb-20 pt-7 text-slate-950 sm:px-6 lg:flex lg:min-h-0 lg:items-start lg:rounded-b-[2.4rem] lg:px-10 lg:pb-12 lg:pt-8 xl:px-14 dark:bg-[#2d0850] dark:text-white">
+        <div className="hidden dark:block">
+          <LandingPurpleBackground intensity="strong" />
+        </div>
 
         {/* `lg:items-end`: a coluna de texto é mais baixa que a do mascote, e
             centralizada ela sobrava ~86px de folga embaixo das métricas antes
@@ -158,17 +180,17 @@ function LandingIntroBlock() {
     <section className="relative hidden px-4 lg:block lg:px-10 lg:pt-24 xl:px-14">
       <div className="mx-auto max-w-[1120px]">
         <div className="mx-auto max-w-[44rem] text-center">
-          <div className="mx-auto mb-5 h-1 w-20 rounded-full bg-[#2d0850] dark:bg-white" />
+          <div className="mx-auto mb-5 h-1 w-20 rounded-full bg-[#6d28d9] dark:bg-white" />
 
-          <h2 className="landing-section-title-md mx-auto max-w-[42rem] text-[#2d0850] dark:text-white">
+          <h2 className="landing-section-title-md mx-auto max-w-[42rem] text-slate-950 dark:text-white">
             {introCopy.title}
           </h2>
 
-          <p className="mx-auto mt-5 max-w-[36rem] text-sm leading-6 text-[#2d0850]/62 sm:text-base sm:leading-7 dark:text-white/62">
+          <p className="mx-auto mt-5 max-w-[36rem] text-sm leading-6 text-slate-600 sm:text-base sm:leading-7 dark:text-white/62">
             {introCopy.lead}
           </p>
 
-          <p className="mx-auto mt-4 max-w-[36rem] text-sm leading-6 text-[#2d0850]/62 sm:text-base sm:leading-7 dark:text-white/62">
+          <p className="mx-auto mt-4 max-w-[36rem] text-sm leading-6 text-slate-600 sm:text-base sm:leading-7 dark:text-white/62">
             {introCopy.body}
           </p>
         </div>
@@ -182,17 +204,17 @@ function LandingIntroBlock() {
 function HeroIntroBlock() {
   return (
     <div className="mx-auto mt-4 w-full max-w-[42rem] text-center lg:hidden">
-      <div className="w-full border-t border-[#2d0850]/12 pt-8 dark:border-white/12">
-        <h2 className="mx-auto max-w-[42rem] text-[1.85rem] font-black leading-[0.92] tracking-[-0.055em] text-[#2d0850] sm:text-[2.6rem] dark:text-white">
+      <div className="w-full border-t border-slate-200 pt-8 dark:border-white/12">
+        <h2 className="mx-auto max-w-[42rem] text-[1.85rem] font-black leading-[0.92] tracking-[-0.055em] text-slate-950 sm:text-[2.6rem] dark:text-white">
           {introCopy.title}
         </h2>
 
         <div className="mx-auto mt-4 max-w-[35rem]">
-          <p className="text-sm font-medium leading-6 text-[#2d0850]/72 sm:text-base sm:leading-7 dark:text-white/72">
+          <p className="text-sm font-medium leading-6 text-slate-700 sm:text-base sm:leading-7 dark:text-white/72">
             {introCopy.lead}
           </p>
 
-          <p className="mt-3 text-sm leading-6 text-[#2d0850]/62 sm:text-base sm:leading-7 dark:text-white/58">
+          <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base sm:leading-7 dark:text-white/58">
             {introCopy.body}
           </p>
         </div>
@@ -228,7 +250,7 @@ function HeroContent() {
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.48, delay: 0.04 }}
-        className="mt-3 max-w-[20rem] text-[2.35rem] font-black leading-[0.9] tracking-[-0.055em] text-[#2d0850] sm:max-w-[30rem] sm:text-[3.25rem] lg:mt-4 lg:max-w-[31rem] lg:text-[3.65rem] xl:text-[4.25rem] dark:text-white"
+        className="mt-3 max-w-[20rem] text-[2.35rem] font-black leading-[0.9] tracking-[-0.055em] text-slate-950 sm:max-w-[30rem] sm:text-[3.25rem] lg:mt-4 lg:max-w-[31rem] lg:text-[3.65rem] xl:text-[4.25rem] dark:text-white"
       >
         Seu assistente inteligente de produtividade
       </motion.h1>
@@ -237,9 +259,9 @@ function HeroContent() {
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.48, delay: 0.1 }}
-        className="mt-4 max-w-[20.5rem] sm:max-w-[29rem] lg:max-w-[33rem] lg:border-l lg:border-[#2d0850]/25 lg:pl-4 dark:lg:border-white/35"
+        className="mt-4 max-w-[20.5rem] sm:max-w-[29rem] lg:max-w-[33rem] lg:border-l lg:border-slate-200 lg:pl-4 dark:lg:border-white/35"
       >
-        <p className="text-[0.93rem] font-medium leading-5 text-[#2d0850]/72 sm:text-[0.95rem] sm:leading-7 lg:text-base dark:text-white/72">
+        <p className="text-[0.93rem] font-medium leading-5 text-slate-600 sm:text-[0.95rem] sm:leading-7 lg:text-base dark:text-white/72">
           O AXON aprende sua rotina, entende seus padrões de produtividade e
           ajuda você a organizar tarefas, hábitos e compromissos de forma
           personalizada, para que você tenha mais foco, clareza e equilíbrio
@@ -258,10 +280,10 @@ function HeroLogo() {
   return (
     <Link
       to="/"
-      className="inline-flex items-center justify-center gap-2 text-[#2d0850] dark:text-white"
+      className="inline-flex items-center justify-center gap-2 text-slate-950 dark:text-white"
       aria-label="Axon"
     >
-      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#8118ee] text-white shadow-[0_0_24px_rgba(123,44,191,0.18)] sm:h-8 sm:w-8 lg:h-9 lg:w-9 dark:bg-white dark:text-[#2d0850] dark:shadow-[0_0_24px_rgba(255,255,255,0.24)]">
+      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#6d28d9] text-white shadow-[0_8px_20px_rgba(109,40,217,0.18)] sm:h-8 sm:w-8 lg:h-9 lg:w-9 dark:bg-white dark:text-[#2d0850] dark:shadow-[0_0_24px_rgba(255,255,255,0.24)]">
         <img
           src="/axon-logo-inverted.svg"
           alt=""
@@ -341,17 +363,17 @@ function HeroInfoStack() {
 
 function HeroMetrics() {
   return (
-    <div className="grid w-full grid-cols-3 divide-x divide-[#2d0850]/25 dark:divide-white/35">
+    <div className="grid w-full grid-cols-3 divide-x divide-slate-200 dark:divide-white/35">
       {heroMetrics.map((metric) => (
         <div
           key={metric.label}
           className="px-2 text-center first:pl-0 last:pr-0 lg:text-left"
         >
-          <p className="text-[0.92rem] font-black leading-none text-[#2d0850] sm:text-base dark:text-white">
+          <p className="text-[0.92rem] font-black leading-none text-slate-950 sm:text-base dark:text-white">
             {metric.value}
           </p>
 
-          <p className="mx-auto mt-1 max-w-[5.4rem] text-[0.76rem] font-medium leading-3 text-[#2d0850]/62 sm:text-[0.68rem] sm:leading-4 lg:mx-0 dark:text-white/62">
+          <p className="mx-auto mt-1 max-w-[5.4rem] text-[0.76rem] font-medium leading-3 text-slate-500 sm:text-[0.68rem] sm:leading-4 lg:mx-0 dark:text-white/62">
             {metric.label}
           </p>
         </div>
@@ -363,11 +385,11 @@ function HeroMetrics() {
 function PlayStoreSoon() {
   return (
     <div className="w-full max-w-[13.2rem] sm:max-w-[16rem] lg:max-w-[12.5rem]">
-      <p className="mb-2 text-center text-[0.64rem] font-black text-[#2d0850] sm:text-xs lg:text-left dark:text-white">
+      <p className="mb-2 text-center text-[0.64rem] font-black text-slate-700 sm:text-xs lg:text-left dark:text-white">
         Em breve na
       </p>
 
-      <div className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 text-[#2d0850] shadow-[0_16px_34px_rgba(45,8,80,0.14)] dark:shadow-[0_16px_34px_rgba(0,0,0,0.20)]">
+      <div className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-slate-900 shadow-[0_10px_24px_rgba(15,23,42,0.08)] dark:border-transparent dark:text-[#2d0850] dark:shadow-[0_16px_34px_rgba(0,0,0,0.20)]">
         <PlayStoreIcon />
         <span className="text-[0.7rem] font-black sm:text-xs">
           Google Play
@@ -404,16 +426,16 @@ function HeroRobotStage() {
       transition={{ duration: 0.65, delay: 0.22, ease: "easeOut" }}
       className="pointer-events-none relative mx-auto mt-8 h-[350px] w-full max-w-[23rem] sm:h-[440px] sm:max-w-[30rem] lg:mt-0 lg:h-[459px] lg:max-w-none xl:h-[506px]"
     >
-      <div className="absolute left-1/2 top-[42%] h-[22.5rem] w-[22.5rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#7b2cbf]/28 blur-[80px] sm:top-[58%] sm:h-[24rem] sm:w-[24rem] lg:top-[46%] lg:h-[25rem] lg:w-[25rem] lg:blur-[110px] xl:h-[27rem] xl:w-[27rem] dark:bg-[#7b2cbf]/60" />
+      <div className="absolute left-1/2 top-[42%] h-[22.5rem] w-[22.5rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-slate-200/70 blur-[80px] sm:top-[58%] sm:h-[24rem] sm:w-[24rem] lg:top-[46%] lg:h-[25rem] lg:w-[25rem] lg:blur-[110px] xl:h-[27rem] xl:w-[27rem] dark:bg-[#7b2cbf]/60" />
 
       {/* Círculo e contorno cobrem da cabeça até a gola, e só. Os 20rem são a
           distância entre 8.8% e 55.6% da imagem na altura de mascote do `lg`. */}
-      <div className="absolute left-1/2 top-[47%] h-[18rem] w-[18rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#7b2cbf]/18 sm:top-[61%] sm:h-[22rem] sm:w-[22rem] lg:top-[40%] lg:h-[25rem] lg:w-[25rem] xl:h-[22rem] xl:w-[22rem] dark:bg-[#7b2cbf]/55" />
+      <div className="absolute left-1/2 top-[47%] h-[18rem] w-[18rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-slate-100 sm:top-[61%] sm:h-[22rem] sm:w-[22rem] lg:top-[40%] lg:h-[25rem] lg:w-[25rem] xl:h-[22rem] xl:w-[22rem] dark:bg-[#7b2cbf]/55" />
 
-      <div className="absolute left-1/2 top-[47%] h-[18rem] w-[18rem] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#2d0850]/10 sm:top-[61%] sm:h-[22rem] sm:w-[22rem] lg:top-[40%] lg:h-[25rem] lg:w-[25rem] xl:h-[22rem] xl:w-[22rem] dark:border-white/10" />
+      <div className="absolute left-1/2 top-[47%] h-[18rem] w-[18rem] -translate-x-1/2 -translate-y-1/2 rounded-full border border-slate-200 sm:top-[61%] sm:h-[22rem] sm:w-[22rem] lg:top-[40%] lg:h-[25rem] lg:w-[25rem] xl:h-[22rem] xl:w-[22rem] dark:border-white/10" />
 
-      <span className="absolute left-1/2 top-[4%] h-3 w-3 -translate-x-1/2 rounded-full bg-[#7b2cbf] sm:top-[13%] sm:h-4 sm:w-4 lg:top-[-4%] dark:bg-white" />
-      <span className="absolute bottom-[47%] right-[17%] h-3 w-3 rounded-full bg-[#7b2cbf] sm:bottom-[17%] sm:right-[21%] sm:h-4 sm:w-4 lg:bottom-[46%] lg:right-[15%] dark:bg-white" />
+      <span className="absolute left-1/2 top-[4%] h-3 w-3 -translate-x-1/2 rounded-full bg-[#6d28d9] sm:top-[13%] sm:h-4 sm:w-4 lg:top-[-4%] dark:bg-white" />
+      <span className="absolute bottom-[47%] right-[17%] h-3 w-3 rounded-full bg-[#6d28d9] sm:bottom-[17%] sm:right-[21%] sm:h-4 sm:w-4 lg:bottom-[46%] lg:right-[15%] dark:bg-white" />
 
       <img
         src={brainDecoration}
@@ -468,8 +490,8 @@ function HeroButton({ children, to, variant = "primary" }) {
       to={to}
       className={`relative z-30 inline-flex min-h-10 items-center justify-center gap-2 rounded-full px-5 text-[0.72rem] font-black transition active:scale-[0.98] sm:min-h-11 sm:text-sm ${
         isPrimary
-          ? "bg-[#8d31dd] text-white shadow-[0_14px_30px_rgba(0,0,0,0.2)] hover:bg-[#9b3bee]"
-          : "border border-[#2d0850]/45 bg-transparent text-[#2d0850] hover:bg-[#2d0850]/5 dark:border-white/80 dark:text-white dark:hover:bg-white/10"
+          ? "bg-[#6d28d9] text-white shadow-[0_12px_26px_rgba(109,40,217,0.22)] hover:bg-[#6d28d9]"
+          : "border border-slate-300 bg-white text-slate-700 shadow-[0_8px_18px_rgba(15,23,42,0.06)] hover:bg-slate-50 dark:border-white/80 dark:bg-transparent dark:text-white dark:shadow-none dark:hover:bg-white/10"
       }`}
     >
       {children}
@@ -485,8 +507,8 @@ function HeroTopButton({ children, to, variant = "outline" }) {
       to={to}
       className={`relative z-30 inline-flex min-h-9 items-center justify-center rounded-full px-5 text-sm font-black transition active:scale-[0.98] ${
         isFilled
-          ? "bg-[#8d31dd] text-white shadow-[0_14px_30px_rgba(0,0,0,0.2)] hover:bg-[#9b3bee]"
-          : "border border-[#2d0850]/45 bg-transparent text-[#2d0850] hover:bg-[#2d0850]/5 dark:border-white/80 dark:text-white dark:hover:bg-white/10"
+          ? "bg-[#6d28d9] text-white shadow-[0_12px_26px_rgba(109,40,217,0.22)] hover:bg-[#6d28d9]"
+          : "border border-slate-300 bg-white text-slate-700 shadow-[0_8px_18px_rgba(15,23,42,0.06)] hover:bg-slate-50 dark:border-white/80 dark:bg-transparent dark:text-white dark:shadow-none dark:hover:bg-white/10"
       }`}
     >
       {children}

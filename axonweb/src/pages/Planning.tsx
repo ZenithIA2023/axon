@@ -6,7 +6,7 @@ import {
   useState,
 } from "react";
 import type { CSSProperties, ElementType, ReactNode } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
   AlertCircle,
@@ -43,7 +43,6 @@ import { openAuthUrl } from "../lib/nativeAuth";
 import type { Task, TaskType, TaskStatus, Subtask, DailyStat, CalendarSetupChoice } from "../lib/api";
 import { shortenedMinutes } from "../lib/api";
 import AppBackground from "../components/layout/AppBackground";
-import PageHeader from "../components/layout/PageHeader";
 import BottomSheet from "../components/ui/BottomSheet";
 import ConfirmDialog from "../components/ui/ConfirmDialog";
 import TaskAdvancedOptions from "../components/tasks/TaskAdvancedOptions";
@@ -381,8 +380,6 @@ export default function Planning({
 }: {
   initialView?: View;
 } = {}) {
-  const navigate = useNavigate();
-
   // Aba ativa do hub e estado da sidebar global.
   const [view, setView] = useState<View>(initialView);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -445,23 +442,20 @@ export default function Planning({
   }, [refreshUnreadCount]);
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-app text-primary">
-      <AppBackground />
+    <main className="planning-light-theme relative min-h-screen overflow-hidden bg-app text-primary">
+      <PlanningLightThemeStyles />
+
+      <div className="hidden dark:block">
+        <AppBackground />
+      </div>
 
       {/* Mobile preservado: mantém a estrutura vertical atual. */}
       <div className="relative z-10 mx-auto min-h-screen w-full max-w-[430px] px-1 pb-6 pt-5 lg:hidden">
-        <div className="relative">
-          <PageHeader
-            title="Planejamento"
-            subtitle="Agenda, rotinas e objetivos"
-            onBack={() => navigate("/dashboard")}
-            onMenuClick={() => setIsSidebarOpen(true)}
-          />
-
+        <header className="mb-5 flex items-center justify-end gap-2 px-3">
           <button
             type="button"
             onClick={() => setIsNotificationsOpen(true)}
-            className="absolute right-14 top-0 flex h-11 w-11 items-center justify-center rounded-2xl border border-soft bg-surface-elevated text-muted shadow-card backdrop-blur-xl transition active:scale-[0.96]"
+            className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200/90 bg-white text-muted shadow-[0_8px_22px_rgba(15,23,42,0.07)] transition active:scale-[0.96] dark:border-soft dark:bg-surface-muted dark:shadow-card"
             aria-label="Abrir notificações"
           >
             <Bell className="h-5 w-5" />
@@ -469,7 +463,16 @@ export default function Planning({
               <span className="absolute right-[0.46rem] top-[0.46rem] h-2 w-2 rounded-full border border-[var(--surface-elevated)] bg-[var(--accent)] shadow-[0_0_10px_rgba(168,85,247,0.9)]" />
             )}
           </button>
-        </div>
+
+          <button
+            type="button"
+            onClick={() => setIsSidebarOpen(true)}
+            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200/90 bg-white text-muted shadow-[0_8px_22px_rgba(15,23,42,0.07)] transition active:scale-[0.96] dark:border-soft dark:bg-surface-muted dark:shadow-card"
+            aria-label="Abrir menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        </header>
 
         <div className="mb-4 flex rounded-full border border-soft bg-surface-elevated p-1.5 shadow-card backdrop-blur-2xl">
           {TABS.map((tab) => {
@@ -497,7 +500,7 @@ export default function Planning({
       </div>
 
       {/* Desktop: layout próprio, inspirado no calendário em painel. */}
-      <div className="relative z-10 hidden min-h-screen bg-[#f4effc]/70 px-4 py-4 lg:block xl:px-5 dark:bg-transparent">
+      <div className="relative z-10 hidden min-h-screen bg-[#f7f8fa] px-4 py-4 lg:block xl:px-5 dark:bg-transparent">
         {view === "agenda" ? (
           <AgendaView
             embedded
@@ -544,6 +547,42 @@ export default function Planning({
         onUnreadCountChange={setUnreadCount}
       />
     </main>
+  );
+}
+
+function PlanningLightThemeStyles() {
+  return (
+    <style>{`
+      html:not(.dark) body:not(.dark) .planning-light-theme {
+        --app-bg: #f7f8fa;
+        --app-bg-soft: #ffffff;
+        --surface-base: #ffffff;
+        --surface-elevated: #ffffff;
+        --surface-muted: #f3f4f6;
+        --border-soft: rgba(15, 23, 42, 0.10);
+        --border-medium: rgba(15, 23, 42, 0.16);
+        --text-primary: #111827;
+        --text-secondary: #374151;
+        --text-muted: #6b7280;
+        --text-soft: #9ca3af;
+        --accent: #6d28d9;
+        --accent-strong: #6d28d9;
+        --accent-soft: rgba(109, 40, 217, 0.08);
+        --accent-muted: rgba(109, 40, 217, 0.08);
+        --accent-border: rgba(109, 40, 217, 0.20);
+        --shadow-soft: 0 18px 52px rgba(15, 23, 42, 0.07);
+        --shadow-card: 0 14px 36px rgba(15, 23, 42, 0.06);
+        background: #f7f8fa;
+      }
+
+      html:not(.dark) body:not(.dark) .planning-light-theme .bg-app {
+        background: #f7f8fa;
+      }
+
+      html:not(.dark) body:not(.dark) .planning-light-theme [class*="bg-[radial-gradient"] {
+        display: none;
+      }
+    `}</style>
   );
 }
 
@@ -613,8 +652,6 @@ function AgendaView({
   unreadCount?: number | null;
   onOpenDesktopSidebar?: () => void;
 } = {}) {
-  const navigate = useNavigate();
-
   // Controles visuais da agenda.
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("week");
@@ -1391,17 +1428,25 @@ function AgendaView({
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-app text-primary">
-      <AppBackground />
+    <main className="planning-light-theme relative min-h-screen overflow-hidden bg-app text-primary">
+      <PlanningLightThemeStyles />
+
+      <div className="hidden dark:block">
+        <AppBackground />
+      </div>
 
       {/* Mesma medida do hub e da tela de Insights. */}
       <div className="relative z-10 mx-auto min-h-screen w-full max-w-[430px] px-1 pb-6 pt-5 lg:max-w-[1120px] lg:px-8 lg:pt-7">
-        <PageHeader
-          title="Planejamento"
-          subtitle="Rotina e tarefas"
-          onBack={() => navigate("/dashboard")}
-          onMenuClick={() => setIsSidebarOpen(true)}
-        />
+        <header className="mb-5 flex items-center justify-end px-3">
+          <button
+            type="button"
+            onClick={() => setIsSidebarOpen(true)}
+            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200/90 bg-white text-muted shadow-[0_8px_22px_rgba(15,23,42,0.07)] transition active:scale-[0.96] dark:border-soft dark:bg-surface-muted dark:shadow-card"
+            aria-label="Abrir menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        </header>
 
         {inner}
       </div>
@@ -1439,11 +1484,9 @@ function DesktopPlanningStaticShell({
 }) {
   return (
     <div className="mx-auto grid h-[calc(100vh-0.6rem)] max-w-[1500px] grid-cols-[272px_minmax(0,1fr)] gap-2.5">
-      <aside className="relative overflow-hidden rounded-[1.7rem] border border-white/8 bg-white/[0.035] p-4 shadow-[0_24px_90px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
-        <DesktopPlanningBrand />
-
-        <div className="mt-6 rounded-[1.55rem] border border-white/8 bg-black/10 p-4">
-          <p className="text-[0.7rem] font-black uppercase tracking-[0.16em] text-white/32">
+      <aside className="relative overflow-hidden rounded-[1.7rem] border border-slate-200/80 bg-white p-4 shadow-[0_18px_52px_rgba(15,23,42,0.07)] backdrop-blur-2xl dark:border-white/8 dark:bg-white/[0.035] dark:shadow-[0_24px_90px_rgba(0,0,0,0.28)]">
+        <div className="rounded-[1.55rem] border border-slate-200/80 bg-slate-50 p-4 dark:border-white/8 dark:bg-black/10">
+          <p className="text-[0.7rem] font-black uppercase tracking-[0.16em] text-slate-400 dark:text-white/32">
             Módulo aberto
           </p>
 
@@ -1457,7 +1500,7 @@ function DesktopPlanningStaticShell({
         </div>
       </aside>
 
-      <section className="relative flex min-w-0 flex-col overflow-hidden rounded-[1.55rem] border border-slate-200/80 bg-white/[0.82] shadow-[0_24px_90px_rgba(93,64,126,0.16)] dark:border-white/8 dark:bg-white/[0.035] dark:shadow-[0_24px_90px_rgba(0,0,0,0.26)] backdrop-blur-2xl">
+      <section className="relative flex min-w-0 flex-col overflow-hidden rounded-[1.55rem] border border-slate-200/80 bg-white shadow-[0_18px_52px_rgba(15,23,42,0.07)] dark:border-white/8 dark:bg-white/[0.035] dark:shadow-[0_24px_90px_rgba(0,0,0,0.26)] backdrop-blur-2xl">
         <DesktopPlanningTopbar
           title={view === "rotinas" ? "Rotinas" : "Objetivos"}
           view={view}
@@ -1572,7 +1615,7 @@ function DesktopAgendaExperience({
         onSelectDate={onSelectDate}
       />
 
-      <section className="relative flex min-w-0 flex-col overflow-hidden rounded-[1.55rem] border border-slate-200/80 bg-white/[0.82] shadow-[0_24px_90px_rgba(93,64,126,0.16)] dark:border-white/8 dark:bg-white/[0.035] dark:shadow-[0_24px_90px_rgba(0,0,0,0.26)] backdrop-blur-2xl">
+      <section className="relative flex min-w-0 flex-col overflow-hidden rounded-[1.55rem] border border-slate-200/80 bg-white shadow-[0_18px_52px_rgba(15,23,42,0.07)] dark:border-white/8 dark:bg-white/[0.035] dark:shadow-[0_24px_90px_rgba(0,0,0,0.26)] backdrop-blur-2xl">
         <DesktopPlanningTopbar
           title={monthLabel}
           view={view}
@@ -1584,9 +1627,9 @@ function DesktopAgendaExperience({
         />
 
         <div className="min-h-0 flex-1 px-2.5 pb-2.5">
-          <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[1.45rem] border border-slate-200/80 bg-white/90 text-slate-950 dark:border-white/8 dark:bg-[#0b0b14]/72 dark:text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
+          <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[1.45rem] border border-slate-200/80 bg-white text-slate-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl dark:border-white/8 dark:bg-[#0b0b14]/72 dark:text-white">
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/80 px-4 py-2 dark:border-white/8">
-              <div className="grid grid-cols-2 rounded-full border border-slate-200/80 bg-white/80 p-1 dark:border-white/8 dark:bg-white/[0.045]">
+              <div className="grid grid-cols-2 rounded-full border border-slate-200/80 bg-white p-1 dark:border-white/8 dark:bg-white/[0.045]">
                 {[
                   { key: "month" as const, label: "Mês" },
                   { key: "week" as const, label: "Semana" },
@@ -1699,26 +1742,6 @@ function DesktopAgendaExperience({
   );
 }
 
-function DesktopPlanningBrand() {
-  return (
-    <div className="flex items-center gap-2.5">
-      <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#a855f7]/26 bg-[#7b2cbf]/16 shadow-[0_14px_34px_rgba(123,44,191,0.22)]">
-        <img src="/axon-logo.svg" alt="AXON" className="h-6.5 w-6.5" />
-      </div>
-
-      <div className="min-w-0">
-        <p className="text-[0.95rem] font-black leading-none tracking-[-0.035em] text-primary">
-          AXON
-        </p>
-
-        <p className="mt-1 truncate text-[0.68rem] font-semibold text-muted">
-          Agenda, rotinas e objetivos
-        </p>
-      </div>
-    </div>
-  );
-}
-
 function DesktopPlanningTopbar({
   title = "Planejamento",
   view,
@@ -1764,7 +1787,7 @@ function DesktopPlanningTopbar({
           type="button"
           onClick={onOpenNotifications}
           disabled={!onOpenNotifications}
-          className="relative flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200/80 bg-white/80 text-muted shadow-card dark:border-white/8 dark:bg-white/[0.04] backdrop-blur-xl transition hover:text-primary active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-45"
+          className="relative flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200/80 bg-white text-muted shadow-card backdrop-blur-xl transition hover:text-primary active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-45 dark:border-white/8 dark:bg-white/[0.04]"
           aria-label="Abrir notificações"
         >
           <Bell className="h-4 w-4" />
@@ -1776,7 +1799,7 @@ function DesktopPlanningTopbar({
         <button
           type="button"
           onClick={onOpenSidebar}
-          className="flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200/80 bg-white/80 text-muted shadow-card dark:border-white/8 dark:bg-white/[0.04] backdrop-blur-xl transition hover:text-primary active:scale-[0.96]"
+          className="flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200/80 bg-white text-muted shadow-card backdrop-blur-xl transition hover:text-primary active:scale-[0.96] dark:border-white/8 dark:bg-white/[0.04]"
           aria-label="Abrir menu"
         >
           <Menu className="h-4.5 w-4.5" />
@@ -1794,7 +1817,7 @@ function DesktopPlanningTabs({
   onViewChange: (view: View) => void;
 }) {
   return (
-    <div className="grid w-[330px] grid-cols-3 rounded-full border border-slate-200/80 bg-white/80 p-1 shadow-card backdrop-blur-2xl dark:border-white/8 dark:bg-white/[0.04]">
+    <div className="grid w-[330px] grid-cols-3 rounded-full border border-slate-200/80 bg-white p-1 shadow-card backdrop-blur-2xl dark:border-white/8 dark:bg-white/[0.04]">
       {TABS.map((tab) => {
         const active = view === tab.key;
 
@@ -1864,9 +1887,7 @@ function DesktopAgendaSidebar({
 
   return (
     <>
-      <aside className="relative grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto_auto] gap-2.5 overflow-hidden rounded-[1.45rem] border border-slate-200/80 bg-white/[0.85] p-2.5 shadow-[0_24px_90px_rgba(93,64,126,0.16)] dark:border-white/8 dark:bg-white/[0.035] dark:shadow-[0_24px_90px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
-        <DesktopPlanningBrand />
-
+      <aside className="relative grid min-h-0 grid-rows-[minmax(0,1fr)_auto_auto] gap-2.5 overflow-hidden rounded-[1.45rem] border border-slate-200/80 bg-white p-2.5 shadow-[0_18px_52px_rgba(15,23,42,0.07)] dark:border-white/8 dark:bg-white/[0.035] dark:shadow-[0_24px_90px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
         <DesktopMiniMonthCalendar
           selectedDate={selectedDate}
           tasks={tasks}
@@ -1879,7 +1900,7 @@ function DesktopAgendaSidebar({
           totalItems={totalItems}
         />
 
-        <div className="rounded-[1.2rem] border border-slate-200/80 bg-white/70 p-2.5 dark:border-white/8 dark:bg-white/[0.035]">
+        <div className="rounded-[1.2rem] border border-slate-200/80 bg-white p-2.5 dark:border-white/8 dark:bg-white/[0.035]">
           <div className="mb-2.5 flex items-center justify-between gap-3">
             <p className="text-sm font-black text-primary">Meus calendários</p>
 
@@ -2196,7 +2217,7 @@ function DesktopMiniMonthCalendar({
   }
 
   return (
-    <div className="flex min-h-0 flex-col rounded-[1.2rem] border border-slate-200/80 bg-white/70 p-2.5 dark:border-white/8 dark:bg-white/[0.035]">
+    <div className="flex min-h-0 flex-col rounded-[1.2rem] border border-slate-200/80 bg-white p-2.5 dark:border-white/8 dark:bg-white/[0.035]">
       <div className="mb-2 flex shrink-0 items-center justify-between gap-3">
         <h2 className="text-[0.78rem] font-black tracking-[-0.02em] text-primary">
           {monthNames[month]} {year}
@@ -3913,11 +3934,11 @@ function TimelineItem({
   const barFillClass = isDisplayDone
     ? "bg-[var(--accent)]"
     : isMultiDayEvent
-    ? "bg-gradient-to-r from-cyan-300 to-purple-300"
+    ? "bg-[var(--accent)] dark:bg-gradient-to-r dark:from-cyan-300 dark:to-purple-300"
     : isRoutine
-    ? "bg-gradient-to-r from-fuchsia-300 to-purple-300"
+    ? "bg-[var(--accent)] dark:bg-gradient-to-r dark:from-fuchsia-300 dark:to-purple-300"
     : isDisplayProgress
-    ? "bg-gradient-to-r from-purple-400 to-fuchsia-300"
+    ? "bg-[var(--accent)] dark:bg-gradient-to-r dark:from-purple-400 dark:to-fuchsia-300"
     : "bg-[var(--border-medium)]";
 
   // Cor da superfície do card. Sem borda: a silhueta é recortada por

@@ -201,9 +201,6 @@ export default function ChatListDrawer({
     [openProject, projectConversations, looseConversations]
   );
 
-  // Na aba Projetos (fora de um projeto) a criação muda de alvo.
-  const isProjectsTab = view === "projects" && !openProject;
-
   const searchPlaceholder = openProject
     ? "Buscar neste projeto"
     : view === "projects"
@@ -242,39 +239,47 @@ export default function ChatListDrawer({
                   }
             }
             style={{ willChange: "transform" }}
-            className="fixed inset-y-0 left-0 z-[90] flex w-[86%] max-w-[21rem] flex-col bg-[var(--surface-elevated)] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] shadow-soft lg:hidden"
+            className="fixed inset-y-0 left-0 z-[90] flex w-[86%] max-w-[21rem] flex-col bg-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] shadow-soft dark:bg-[var(--surface-elevated)] lg:hidden"
             role="dialog"
             aria-label="Suas conversas"
           >
             <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-4">
-              <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-accent-soft bg-accent-soft">
-                  <img
-                    src="/axon-logo.svg"
-                    alt=""
-                    className="h-8 w-8 object-contain"
-                  />
-                </div>
-
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-primary">
-                    {openProject ? openProject.name : "Chat"}
-                  </p>
-
-                  <p className="truncate text-xs text-muted">
-                    {openProject
-                      ? "Conversas do projeto"
-                      : "Conversas com AXON"}
-                  </p>
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  onCreate(
+                    openProjectId,
+                    view === "projects" && !openProject
+                      ? "project"
+                      : "conversation"
+                  );
+                  onClose();
+                }}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#6d28d9] text-white shadow-[0_8px_22px_rgba(109,40,217,0.24)] transition hover:bg-[#5b21b6] active:scale-[0.96] dark:bg-[var(--accent-strong)] dark:shadow-card dark:hover:bg-[var(--accent-strong)]"
+                aria-label={
+                  openProject
+                    ? "Nova conversa no projeto"
+                    : view === "projects"
+                    ? "Novo projeto"
+                    : "Nova conversa"
+                }
+                title={
+                  openProject
+                    ? "Nova conversa no projeto"
+                    : view === "projects"
+                    ? "Novo projeto"
+                    : "Nova conversa"
+                }
+              >
+                <Plus className="h-5 w-5" />
+              </button>
 
               {/* Mesmo ícone que abre a gaveta, agora fechando: o botão volta
                   para o lugar de onde veio. */}
               <button
                 type="button"
                 onClick={onClose}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-soft bg-surface-muted text-secondary transition active:scale-[0.96]"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200/90 bg-white text-secondary shadow-[0_8px_22px_rgba(15,23,42,0.07)] transition active:scale-[0.96] dark:border-soft dark:bg-surface-muted dark:shadow-none"
                 aria-label="Fechar conversas"
               >
                 <PanelLeft className="h-5 w-5" />
@@ -297,7 +302,7 @@ export default function ChatListDrawer({
             {/* Alternância entre conversas soltas e projetos. Some ao entrar
                 em um projeto, onde o caminho de volta é o botão acima. */}
             {!openProject && (
-              <div className="mx-4 mb-1 flex gap-1 rounded-full bg-surface-muted p-1">
+              <div className="mx-4 mb-3 flex gap-1 rounded-full bg-surface-muted p-1">
                 <ViewTab
                   label="Todas"
                   isActive={view === "all"}
@@ -322,32 +327,6 @@ export default function ChatListDrawer({
                 Todos os projetos
               </button>
             )}
-
-            {/* A ação de criar segue a aba: em "Projetos" cria um projeto,
-                em "Todas" (e dentro de um projeto) cria uma conversa. */}
-            <button
-              type="button"
-              onClick={() => {
-                onCreate(
-                  openProjectId,
-                  isProjectsTab ? "project" : "conversation"
-                );
-                onClose();
-              }}
-              className="mx-4 my-1 flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition active:scale-[0.99]"
-            >
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent-strong)] text-white">
-                <Plus className="h-4 w-4" />
-              </span>
-
-              <span className="text-sm font-medium text-primary">
-                {isProjectsTab
-                  ? "Novo projeto"
-                  : openProject
-                  ? "Nova conversa no projeto"
-                  : "Nova conversa"}
-              </span>
-            </button>
 
             <ScrollArea className="min-h-0 flex-1" contentClassName="px-2 pb-6">
               {loading ? (

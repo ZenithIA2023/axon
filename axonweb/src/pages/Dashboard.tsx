@@ -11,6 +11,7 @@ import {
   Focus,
   MessageCircle,
   Flame,
+  Menu,
   Moon,
   Sparkles,
   Star,
@@ -26,7 +27,6 @@ import * as api from "../lib/api";
 import type { BlockTask, DashboardData, FocusBlock, Subtask } from "../lib/api";
 import { shortenedMinutes } from "../lib/api";
 import { AppBackground } from "../components/layout/AppBackground";
-import PageHeader from "../components/layout/PageHeader";
 import axonHeadHappy from "../assets/axon/axon-head-happy.png";
 import EmptyState from "../components/ui/EmptyState";
 import { ScrollArea } from "../components/ui/ScrollArea";
@@ -574,6 +574,44 @@ export default function Dashboard() {
     return firstName ? `${salutation.trim()}, ${firstName}` : raw;
   }, [data?.greeting]);
 
+  const profileAvatarUrl =
+    (data as (DashboardData & {
+      avatar_url?: string | null;
+      user_avatar_url?: string | null;
+      profile_image_url?: string | null;
+    }) | null)?.avatar_url ??
+    (data as (DashboardData & {
+      avatar_url?: string | null;
+      user_avatar_url?: string | null;
+      profile_image_url?: string | null;
+    }) | null)?.user_avatar_url ??
+    (data as (DashboardData & {
+      avatar_url?: string | null;
+      user_avatar_url?: string | null;
+      profile_image_url?: string | null;
+    }) | null)?.profile_image_url ??
+    null;
+
+  const profileInitials = useMemo(() => {
+    const raw = data?.greeting ?? "";
+    const [, ...rest] = raw.split(",");
+    const candidate = rest.join(",").trim() || raw.trim();
+    const withoutGreeting = candidate.replace(
+      /^(bom dia|boa tarde|boa noite)\s*,?\s*/i,
+      ""
+    );
+
+    const parts = withoutGreeting
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+
+    if (parts.length === 0) return "U";
+    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+
+    return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase();
+  }, [data?.greeting]);
+
   const energyPercent = data?.energy_percent ?? 78;
   const focusPercent = data?.focus_percent ?? 64;
 
@@ -667,72 +705,97 @@ export default function Dashboard() {
   };
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-app text-primary">
-      <AppBackground />
+    <main className="dashboard-light-theme relative min-h-screen overflow-hidden bg-app text-primary">
+      <DashboardLightThemeStyles />
+
+      <div className="hidden dark:block">
+        <AppBackground />
+      </div>
 
       <div className="relative z-10 mx-auto min-h-screen w-full max-w-[430px] px-4 pb-6 pt-5 lg:max-w-[1120px] lg:px-8 lg:pt-7">
-        <PageHeader
-          title="Dashboard"
-          subtitle="Central do Axon"
-          onBack={() => navigate("/dashboard")}
-          onMenuClick={() => setIsSidebarOpen(true)}
-          rightSlot={
-            <div className="flex items-center gap-2">
-              {/* Ofensiva: dias seguidos com registro diário. `frozen` sinaliza
-                  que a sequência está de pé só por causa do dia perdoado — sem
-                  esse aviso o usuário não teria como saber que precisa registrar
-                  hoje para não perder tudo. */}
-              <button
-                type="button"
-                className={`flex h-10 min-w-10 items-center justify-center gap-1.5 rounded-2xl border px-2.5 backdrop-blur-2xl transition active:scale-[0.96] ${
-                  data?.streak?.frozen
-                    ? "border-[var(--accent)] bg-accent-soft text-accent"
-                    : "border-soft bg-surface-muted text-secondary"
+        <header className="mb-5 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => navigate("/profile")}
+            className="group flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200/90 bg-white text-[0.75rem] font-black tracking-[-0.02em] text-accent shadow-[0_14px_34px_rgba(15,23,42,0.14),0_2px_8px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.95)] ring-1 ring-white/80 transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_18px_42px_rgba(15,23,42,0.16),0_3px_10px_rgba(15,23,42,0.07),inset_0_1px_0_rgba(255,255,255,0.95)] active:scale-[0.96] dark:border-white/10 dark:bg-surface-muted dark:text-accent dark:ring-white/5 dark:shadow-[0_14px_34px_rgba(0,0,0,0.30)]"
+            aria-label="Abrir perfil"
+            title="Perfil"
+          >
+            {profileAvatarUrl ? (
+              <img
+                src={profileAvatarUrl}
+                alt="Perfil"
+                className="h-full w-full rounded-full object-cover"
+              />
+            ) : (
+              <span>{profileInitials}</span>
+            )}
+          </button>
+
+          <div className="flex items-center gap-2">
+            {/* Ofensiva: dias seguidos com registro diário. `frozen` sinaliza
+                que a sequência está de pé só por causa do dia perdoado — sem
+                esse aviso o usuário não teria como saber que precisa registrar
+                hoje para não perder tudo. */}
+            <button
+              type="button"
+              className={`flex h-10 min-w-10 items-center justify-center gap-1.5 rounded-2xl border px-2.5 backdrop-blur-2xl transition active:scale-[0.96] ${
+                data?.streak?.frozen
+                  ? "border-[var(--accent)] bg-accent-soft text-accent"
+                  : "border-soft bg-white text-secondary shadow-[0_8px_22px_rgba(15,23,42,0.07)] dark:bg-surface-muted dark:shadow-none"
+              }`}
+              aria-label={
+                data?.streak
+                  ? `Ofensiva de ${data.streak.current} ${
+                      data.streak.current === 1 ? "dia" : "dias"
+                    }.${
+                      data.streak.frozen
+                        ? " Congelada: registre hoje para não perdê-la."
+                        : data.streak.at_risk
+                        ? " Registre o dia para mantê-la."
+                        : ""
+                    }`
+                  : "Ver ofensiva"
+              }
+              title={
+                data?.streak?.frozen
+                  ? "Ofensiva congelada — registre hoje para mantê-la"
+                  : undefined
+              }
+            >
+              <Flame className="h-4 w-4 text-accent" />
+              <span
+                className={`text-[0.65rem] font-black ${
+                  data?.streak?.frozen ? "text-accent" : "text-muted"
                 }`}
-                aria-label={
-                  data?.streak
-                    ? `Ofensiva de ${data.streak.current} ${
-                        data.streak.current === 1 ? "dia" : "dias"
-                      }.${
-                        data.streak.frozen
-                          ? " Congelada: registre hoje para não perdê-la."
-                          : data.streak.at_risk
-                          ? " Registre o dia para mantê-la."
-                          : ""
-                      }`
-                    : "Ver ofensiva"
-                }
-                title={
-                  data?.streak?.frozen
-                    ? "Ofensiva congelada — registre hoje para mantê-la"
-                    : undefined
-                }
               >
-                <Flame className="h-4 w-4 text-accent" />
-                <span
-                  className={`text-[0.65rem] font-black ${
-                    data?.streak?.frozen ? "text-accent" : "text-muted"
-                  }`}
-                >
-                  {data?.streak?.current ?? 0}
-                </span>
-              </button>
+                {data?.streak?.current ?? 0}
+              </span>
+            </button>
 
-              <button
-                type="button"
-                onClick={() => setIsNotificationsOpen(true)}
-                className="relative flex h-10 w-10 items-center justify-center rounded-2xl border border-soft bg-surface-muted text-secondary backdrop-blur-2xl transition active:scale-[0.96]"
-                aria-label="Abrir notificações"
-              >
-                <Bell className="h-4 w-4" />
+            <button
+              type="button"
+              onClick={() => setIsNotificationsOpen(true)}
+              className="relative flex h-10 w-10 items-center justify-center rounded-2xl border border-soft bg-white text-secondary shadow-[0_8px_22px_rgba(15,23,42,0.07)] backdrop-blur-2xl transition active:scale-[0.96] dark:bg-surface-muted dark:shadow-none"
+              aria-label="Abrir notificações"
+            >
+              <Bell className="h-4 w-4" />
 
-                {unreadCount !== null && unreadCount > 0 && (
-                  <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full border-2 border-[var(--app-bg)] bg-[var(--accent)]" />
-                )}
-              </button>
-            </div>
-          }
-        />
+              {unreadCount !== null && unreadCount > 0 && (
+                <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full border-2 border-[var(--app-bg)] bg-[var(--accent)]" />
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsSidebarOpen(true)}
+              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-soft bg-white text-secondary shadow-[0_8px_22px_rgba(15,23,42,0.07)] backdrop-blur-2xl transition active:scale-[0.96] dark:bg-surface-muted dark:shadow-none"
+              aria-label="Abrir menu"
+            >
+              <Menu className="h-4 w-4" />
+            </button>
+          </div>
+        </header>
 
         {loadError && (
           <section className="mt-5 rounded-[1.75rem] border border-amber-300/30 bg-amber-400/10 p-4 lg:p-5">
@@ -788,7 +851,7 @@ export default function Dashboard() {
                 </div>
 
                 <div className="relative flex h-[112px] w-[116px] shrink-0 items-center justify-center sm:h-[128px] sm:w-[138px] lg:h-[142px] lg:w-[180px]">
-                  <div className="absolute h-[104px] w-[104px] rounded-full bg-accent-soft blur-2xl sm:h-[118px] sm:w-[118px] lg:h-[132px] lg:w-[132px]" />
+                  <div className="absolute hidden h-[104px] w-[104px] rounded-full bg-accent-soft blur-2xl sm:h-[118px] sm:w-[118px] lg:h-[132px] lg:w-[132px] dark:block" />
 
                   <img
                     src={axonHeadHappy}
@@ -894,13 +957,13 @@ export default function Dashboard() {
               {/* O gesto é invisível por natureza: sem esta dica ninguém
                   descobre que dá para resolver a tarefa sem sair do Dashboard. */}
               {flatTasks.length > 0 && (
-                <p className="mt-1 flex items-center gap-1.5 text-[0.62rem] font-semibold text-soft">
+                <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-soft bg-white px-2.5 py-1 text-[0.68rem] font-black text-primary shadow-[0_8px_18px_rgba(15,23,42,0.05)] dark:bg-surface-muted dark:text-secondary dark:shadow-none">
                   Arraste
                   <span className="text-emerald-700 dark:text-emerald-100">
                     → concluir
                   </span>
                   ·
-                  <span className="text-indigo-700 dark:text-indigo-200">
+                  <span className="text-accent dark:text-indigo-200">
                     ← amanhã
                   </span>
                 </p>
@@ -1244,6 +1307,65 @@ export default function Dashboard() {
   );
 }
 
+
+function DashboardLightThemeStyles() {
+  return (
+    <style>{`
+      html:not(.dark) body:not(.dark) .dashboard-light-theme {
+        --app-bg: #f7f8fa;
+        --app-bg-soft: #ffffff;
+        --surface-base: #ffffff;
+        --surface-elevated: #ffffff;
+        --surface-muted: #f3f4f6;
+        --border-soft: rgba(15, 23, 42, 0.10);
+        --border-medium: rgba(15, 23, 42, 0.16);
+        --text-primary: #111827;
+        --text-secondary: #374151;
+        --text-muted: #6b7280;
+        --text-soft: #9ca3af;
+        --accent: #6d28d9;
+        --accent-strong: #6d28d9;
+        --accent-soft: rgba(109, 40, 217, 0.08);
+        --accent-muted: rgba(109, 40, 217, 0.08);
+        --accent-border: rgba(109, 40, 217, 0.20);
+        --shadow-soft: 0 18px 52px rgba(15, 23, 42, 0.07);
+        --shadow-card: 0 14px 36px rgba(15, 23, 42, 0.06);
+      }
+
+      html:not(.dark) body:not(.dark) .dashboard-light-theme {
+        background: #f7f8fa;
+      }
+
+      html:not(.dark) body:not(.dark) .dashboard-light-theme .bg-app {
+        background: #f7f8fa;
+      }
+
+      html:not(.dark) body:not(.dark) .dashboard-light-theme .bg-accent-soft {
+        background-color: rgba(109, 40, 217, 0.08);
+      }
+
+      html:not(.dark) body:not(.dark) .dashboard-light-theme .border-accent-soft {
+        border-color: rgba(109, 40, 217, 0.20);
+      }
+
+      html:not(.dark) body:not(.dark) .dashboard-light-theme .shadow-card,
+      html:not(.dark) body:not(.dark) .dashboard-light-theme .shadow-soft {
+        box-shadow: 0 14px 36px rgba(15, 23, 42, 0.06);
+      }
+
+      html:not(.dark) body:not(.dark) .dashboard-light-theme [class*="bg-[radial-gradient"],
+      html:not(.dark) body:not(.dark) .dashboard-light-theme [class*="bg-gradient-to-b"],
+      html:not(.dark) body:not(.dark) .dashboard-light-theme [class*="bg-gradient-to-r"] {
+        display: none;
+      }
+
+      html:not(.dark) body:not(.dark) .dashboard-light-theme .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: rgba(107, 114, 128, 0.55);
+      }
+    `}</style>
+  );
+}
+
 // ============================================================================
 // Componentes internos do Dashboard
 // Cards visuais usados apenas nesta página.
@@ -1399,10 +1521,10 @@ function SwipeableTaskRow({
           direction === 1
             ? "bg-emerald-500/15"
             : direction === -1
-            ? "bg-indigo-500/15"
+            ? "bg-[color:var(--accent)]/15"
             : ""
         }`}
-        style={{ opacity: direction === 0 ? 0 : 0.35 + progress * 0.65 }}
+        style={{ opacity: direction === 0 ? 0 : 0.78 + progress * 0.22 }}
       >
         <span
           className={`flex items-center gap-2 text-emerald-700 dark:text-emerald-100 ${
@@ -1418,7 +1540,7 @@ function SwipeableTaskRow({
         </span>
 
         <span
-          className={`flex items-center gap-2 text-indigo-700 dark:text-indigo-200 ${
+          className={`flex items-center gap-2 text-accent dark:text-indigo-200 ${
             direction === -1 ? "" : "invisible"
           }`}
         >
@@ -1458,7 +1580,7 @@ function DashboardGreetingSkeleton() {
           </div>
 
           <div className="relative flex h-[112px] w-[116px] shrink-0 items-center justify-center sm:h-[128px] sm:w-[138px] lg:h-[142px] lg:w-[180px]">
-            <div className="absolute h-[104px] w-[104px] rounded-full bg-accent-soft blur-2xl sm:h-[118px] sm:w-[118px] lg:h-[132px] lg:w-[132px]" />
+            <div className="absolute hidden h-[104px] w-[104px] rounded-full bg-accent-soft blur-2xl sm:h-[118px] sm:w-[118px] lg:h-[132px] lg:w-[132px] dark:block" />
             <div className="relative z-10 h-[88px] w-[104px] rounded-[2rem] bg-surface-muted" />
           </div>
         </div>
@@ -1661,7 +1783,7 @@ function CurrentFocusBlockCard({
 
           <div className="h-1.5 overflow-hidden rounded-full bg-surface-muted">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-purple-400 to-fuchsia-300 shadow-[0_0_16px_rgba(192,132,252,0.45)]"
+              className="h-full rounded-full bg-[var(--accent)] shadow-[0_0_14px_rgba(109,40,217,0.22)]"
               style={{
                 width: `${fallbackProgressSafe}%`,
               }}
@@ -1700,7 +1822,7 @@ function CurrentFocusBlockCard({
 
         <div className="h-1.5 overflow-hidden rounded-full bg-surface-muted">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-purple-400 to-fuchsia-300 shadow-[0_0_16px_rgba(192,132,252,0.42)]"
+            className="h-full rounded-full bg-[var(--accent)] shadow-[0_0_14px_rgba(109,40,217,0.22)]"
             style={{ width: `${progress}%` }}
           />
         </div>
@@ -1959,7 +2081,7 @@ function NotificationItem({
               event.stopPropagation();
               onAccept(notification.id);
             }}
-            className="inline-flex min-h-10 items-center justify-center rounded-2xl bg-purple-500 px-4 text-xs font-semibold text-white shadow-lg shadow-purple-950/25 active:scale-[0.98]"
+            className="inline-flex min-h-10 items-center justify-center rounded-2xl bg-[var(--accent)] px-4 text-xs font-semibold text-white shadow-[0_10px_24px_rgba(109,40,217,0.18)] active:scale-[0.98]"
           >
             Aceitar
           </button>
@@ -2239,7 +2361,7 @@ function NotificationsSheet({
               onClick={() => setNotificationView("unread")}
               className={`min-h-10 flex-1 rounded-xl text-xs font-semibold transition active:scale-[0.98] ${
                 notificationView === "unread"
-                  ? "bg-purple-500 text-white shadow-lg shadow-purple-950/25"
+                  ? "bg-[var(--accent)] text-white shadow-[0_10px_24px_rgba(109,40,217,0.18)]"
                   : "text-muted"
               }`}
             >
@@ -2256,7 +2378,7 @@ function NotificationsSheet({
               onClick={() => setNotificationView("read")}
               className={`min-h-10 flex-1 rounded-xl text-xs font-semibold transition active:scale-[0.98] ${
                 notificationView === "read"
-                  ? "bg-purple-500 text-white shadow-lg shadow-purple-950/25"
+                  ? "bg-[var(--accent)] text-white shadow-[0_10px_24px_rgba(109,40,217,0.18)]"
                   : "text-muted"
               }`}
             >

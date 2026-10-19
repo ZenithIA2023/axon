@@ -227,24 +227,29 @@ export default function Goals({
   // Conteúdo compartilhado entre a página própria e o modo embedded no Planning.
   const inner = (
     <>
-      <div className="lg:hidden">
+      {embedded && (
+        <button
+          type="button"
+          onClick={() => setIsCreateOpen(true)}
+          className="absolute left-3 top-5 z-20 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#6d28d9] text-white shadow-[0_8px_22px_rgba(109,40,217,0.24)] transition active:scale-[0.96] dark:bg-[var(--accent-strong)] dark:shadow-card"
+          aria-label="Criar objetivo"
+          title="Criar objetivo"
+        >
+          <Plus className="h-5 w-5" />
+        </button>
+      )}
+
+      <div className={`lg:hidden ${embedded ? "px-3" : ""}`}>
         {embedded && (
-          <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="mb-4">
             <div>
-              <h1 className="text-[1.7rem] font-semibold leading-tight tracking-[-0.04em] text-white">
+              <h1 className="text-[1.7rem] font-semibold leading-tight tracking-[-0.04em] text-slate-950 dark:text-white">
                 Meus Objetivos
               </h1>
               <p className="mt-1 text-sm text-slate-500 dark:text-white/45">
                 Metas que o Axon ajuda a alcançar.
               </p>
             </div>
-            <button
-              onClick={() => setIsCreateOpen(true)}
-              className="flex shrink-0 items-center gap-2 rounded-full border border-purple-300/20 bg-purple-500/20 px-4 py-2.5 text-sm font-semibold text-[#7e22ce] dark:text-purple-100 shadow-lg shadow-purple-950/20 active:scale-[0.97]"
-            >
-              <Plus className="h-4 w-4" />
-              Novo
-            </button>
           </div>
         )}
 
@@ -255,16 +260,16 @@ export default function Goals({
           </div>
         ) : objectives.length === 0 ? (
           <div className="flex flex-col items-center rounded-[2rem] border border-dashed border-slate-200/80 dark:border-white/12 bg-slate-100/80 dark:bg-black/15 px-6 py-14 text-center">
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-purple-300/20 bg-purple-500/10 text-purple-200">
+            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#6d28d9]/20 bg-[#6d28d9]/[0.08] text-[#6d28d9] dark:border-purple-300/20 dark:bg-purple-500/10 dark:text-purple-200">
               <Target className="h-6 w-6" />
             </div>
-            <p className="text-base font-semibold text-white">Nenhum objetivo ainda</p>
+            <p className="text-base font-semibold text-slate-950 dark:text-white">Nenhum objetivo ainda</p>
             <p className="mt-2 max-w-[260px] text-sm leading-6 text-slate-500 dark:text-white/42">
               Defina uma meta com um total de etapas e acompanhe o contador avançar.
             </p>
             <button
               onClick={() => setIsCreateOpen(true)}
-              className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-purple-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-purple-950/30 active:scale-[0.97]"
+              className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-[#6d28d9] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(109,40,217,0.22)] active:scale-[0.97] dark:bg-purple-500 dark:shadow-lg dark:shadow-purple-950/30"
             >
               <Plus className="h-4 w-4" />
               Criar objetivo
@@ -385,36 +390,28 @@ export default function Goals({
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#11111a] text-white">
+    <main className="relative min-h-screen overflow-hidden bg-[#f7f8fa] text-slate-950 dark:bg-[#11111a] dark:text-white">
       <Background />
 
       <div className="relative z-10 min-h-screen px-4 pb-6 pt-5">
         <header className="mb-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-purple-300/20 bg-purple-500/15 text-purple-200">
-              <Target className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-white">Objetivos</p>
-              <p className="text-xs text-slate-500 dark:text-white/40">Suas metas de longo prazo</p>
-            </div>
-          </div>
+          <button
+            type="button"
+            onClick={() => setIsCreateOpen(true)}
+            className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#6d28d9] text-white shadow-[0_8px_22px_rgba(109,40,217,0.22)] active:scale-[0.96] dark:bg-purple-500/15 dark:text-purple-200 dark:shadow-none"
+            aria-label="Criar objetivo"
+          >
+            <Plus className="h-5 w-5" />
+          </button>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsCreateOpen(true)}
-              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-purple-300/20 bg-purple-500/15 text-purple-200 active:scale-[0.96]"
-              aria-label="Criar objetivo"
-            >
-              <Plus className="h-5 w-5" />
-            </button>
-            <button
-              onClick={() => setIsSidebarOpen(true)}
-              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white/[0.84] dark:bg-white/[0.06] text-white/65 active:scale-[0.96]"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setIsSidebarOpen(true)}
+            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200/80 bg-white text-slate-600 shadow-[0_8px_22px_rgba(15,23,42,0.07)] active:scale-[0.96] dark:border-white/10 dark:bg-white/[0.06] dark:text-white/65 dark:shadow-none"
+            aria-label="Abrir menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
         </header>
 
         {inner}
@@ -805,10 +802,8 @@ function DesktopGoalsPanel({
 
   return (
     <section className="hidden min-h-0 lg:block">
-      <div className="mx-auto grid h-[calc(100vh-0.6rem)] max-w-[1500px] grid-cols-[272px_minmax(0,1fr)] gap-2.5">
-        <aside className="relative grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-2.5 overflow-hidden rounded-[1.45rem] border border-slate-200/80 dark:border-white/8 bg-white/[0.85] dark:bg-white/[0.035] p-2.5 shadow-[0_24px_90px_rgba(93,64,126,0.16)] dark:shadow-[0_24px_90px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
-          <DesktopGoalsBrand />
-
+      <div className="mx-auto grid h-[calc(100vh-0.6rem)] max-w-[1120px] grid-cols-[252px_minmax(0,1fr)] gap-3">
+        <aside className="relative grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2.5 overflow-hidden rounded-[1.45rem] border border-slate-200/80 bg-white p-2.5 shadow-[0_18px_52px_rgba(15,23,42,0.07)] dark:border-white/8 dark:bg-white/[0.035] dark:shadow-[0_24px_90px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
           <DesktopGoalsProgressCard
             averageProgress={averageProgress}
             activeObjectives={activeObjectives}
@@ -820,7 +815,7 @@ function DesktopGoalsPanel({
           <DesktopCompletedObjectivesCard objectives={completedObjectives} />
         </aside>
 
-        <section className="relative flex min-w-0 flex-col overflow-hidden rounded-[1.55rem] border border-slate-200/80 dark:border-white/8 bg-white/[0.85] dark:bg-white/[0.035] shadow-[0_24px_90px_rgba(93,64,126,0.16)] dark:shadow-[0_24px_90px_rgba(0,0,0,0.26)] backdrop-blur-2xl">
+        <section className="relative flex min-w-0 flex-col overflow-hidden rounded-[1.55rem] border border-slate-200/80 bg-white shadow-[0_18px_52px_rgba(15,23,42,0.07)] dark:border-white/8 dark:bg-white/[0.035] dark:shadow-[0_24px_90px_rgba(0,0,0,0.26)] backdrop-blur-2xl">
           <DesktopGoalsTopbar
             title="Objetivos"
             activeView={activeView}
@@ -832,7 +827,7 @@ function DesktopGoalsPanel({
           />
 
           <div className="min-h-0 flex-1 px-2.5 pb-2.5">
-            <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[1.45rem] border border-slate-200/80 dark:border-white/8 bg-white/[0.88] dark:bg-[#0b0b14]/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
+            <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[1.45rem] border border-slate-200/80 bg-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl dark:border-white/8 dark:bg-[#0b0b14]/72">
               <DesktopGoalsSearchFilters
                 searchTerm={searchTerm}
                 activeFilter={activeFilter}
@@ -991,25 +986,6 @@ function DesktopGoalsSearchFilters({
             Limpar
           </button>
         ) : null}
-      </div>
-    </div>
-  );
-}
-
-function DesktopGoalsBrand() {
-  return (
-    <div className="flex items-center gap-2.5">
-      <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#a855f7]/26 bg-[#7b2cbf]/16 shadow-[0_14px_34px_rgba(123,44,191,0.22)]">
-        <img src="/axon-logo.svg" alt="AXON" className="h-6.5 w-6.5" />
-      </div>
-
-      <div className="min-w-0">
-        <p className="text-[0.95rem] font-black leading-none tracking-[-0.035em] text-slate-950 dark:text-white">
-          AXON
-        </p>
-        <p className="mt-1 truncate text-[0.68rem] font-semibold text-muted">
-          Metas e etapas
-        </p>
       </div>
     </div>
   );
@@ -1568,8 +1544,10 @@ function ObjectiveCard({
   const progress = Math.min(Math.max(objective.progress ?? 0, 0), 100);
 
   return (
-    <div className={`overflow-hidden rounded-[1.7rem] border shadow-xl shadow-black/20 backdrop-blur-2xl ${
-      isDone ? "border-emerald-300/20 bg-emerald-400/[0.06]" : "border-slate-200/80 dark:border-white/10 bg-[#1b1b27]/82"
+    <div className={`overflow-hidden rounded-[1.7rem] border shadow-[0_14px_36px_rgba(15,23,42,0.07)] backdrop-blur-2xl dark:shadow-xl dark:shadow-black/20 ${
+      isDone
+        ? "border-emerald-300/35 bg-emerald-50 dark:border-emerald-300/20 dark:bg-emerald-400/[0.06]"
+        : "border-slate-200/80 bg-white dark:border-white/10 dark:bg-[#1b1b27]/82"
     }`}>
       <div className="p-4">
         {/* Cabeçalho: título + ações */}
@@ -1616,7 +1594,11 @@ function ObjectiveCard({
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
             <div
-              className={`h-full rounded-full transition-all ${isDone ? "bg-emerald-400" : "bg-gradient-to-r from-purple-400 to-fuchsia-300"}`}
+              className={`h-full rounded-full transition-all ${
+                isDone
+                  ? "bg-emerald-400"
+                  : "bg-[#6d28d9] dark:bg-gradient-to-r dark:from-purple-400 dark:to-fuchsia-300"
+              }`}
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -1655,7 +1637,7 @@ function ObjectiveCard({
               <button
                 type="button"
                 onClick={onAddProgress}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-purple-300/25 bg-purple-500/[0.06] py-2.5 text-xs font-semibold text-purple-200/70 active:scale-[0.98]"
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-[#6d28d9]/25 bg-[#6d28d9]/[0.06] py-2.5 text-xs font-semibold text-[#6d28d9] active:scale-[0.98] dark:border-purple-300/25 dark:bg-purple-500/[0.06] dark:text-purple-200/70"
               >
                 <Plus className="h-3.5 w-3.5" />
                 Registrar avanço
@@ -2365,7 +2347,7 @@ function EditStepModal({
 
 function Background() {
   return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+    <div className="pointer-events-none absolute inset-0 hidden overflow-hidden dark:block">
       <div className="absolute inset-0 bg-[linear-gradient(to_bottom,#151520_0%,#101018_48%,#13131d_100%)]" />
       <div className="absolute left-1/2 top-[-14rem] h-[32rem] w-[32rem] -translate-x-1/2 rounded-full bg-purple-700/22 blur-[120px]" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.055)_1px,transparent_1px)] [background-size:30px_30px] opacity-[0.12]" />
