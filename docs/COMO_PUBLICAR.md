@@ -121,3 +121,24 @@ Causa comum: migration não aplicada no Supabase.
 
 **APK baixa como página HTML** — a porta 8080 está privada. No painel PORTS,
 botão direito na 8080 → Port Visibility → Public.
+
+**404 NOT_FOUND ao recarregar uma rota interna** (ex.: `/app-loading`,
+`/dashboard`) — falta o fallback de SPA no host.
+
+Na web o app usa `BrowserRouter`, então `/dashboard` existe só dentro do
+JavaScript: enquanto se navega pelo app o React resolve a rota, mas ao
+RECARREGAR o navegador pede aquele caminho ao servidor, que não tem arquivo
+nenhum ali. Aparece muito depois do login, porque a URL fica em
+`/app-loading`.
+
+O Nginx do VPS já resolve — é o `try_files $uri $uri/ /index.html` do
+`docs/play-store/DEPLOY_VPS.md`. **Qualquer host estático novo precisa do
+equivalente**, senão esse 404 volta. A regra é sempre a mesma: caminho que não
+corresponde a um arquivo cai no `index.html`. O fallback é avaliado depois da
+busca por arquivo, então `assets/` e `legal/` continuam sendo servidos como
+arquivos de verdade.
+
+> Hospedagem nova também precisa entrar no CORS do backend: o `main.py` libera
+> só o `FRONTEND_URL` e o que estiver em `CORS_ORIGINS`. Sem isso o login falha
+> por CORS, e não por 404. Lembre que a variável mora no `.env` da VPS e **não
+> viaja no deploy** — tem que ser editada lá.
