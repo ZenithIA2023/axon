@@ -73,7 +73,6 @@ def apple_callback(
             raise ValueError("Apple não devolveu refresh_token")
 
         update = {
-            "id": user_id,
             "email": email,
             "apple_refresh_token": refresh_token,
             "apple_client_id": client_id,
@@ -85,7 +84,17 @@ def apple_callback(
         if name:
             update["name"] = name
 
-        supabase.table("profiles").upsert(update).execute()
+        # update/insert separados em vez de upsert: profiles.name é NOT NULL em
+        # produção, e o Postgres checa o NOT NULL da linha proposta ANTES de
+        # resolver o conflito — um upsert sem name falha mesmo com o perfil já
+        # existente (era o que quebrava o segundo login).
+        existing = supabase.table("profiles").select("id").eq("id", user_id).execute()
+        if existing.data:
+            supabase.table("profiles").update(update).eq("id", user_id).execute()
+        else:
+            supabase.table("profiles").insert(
+                {**update, "id": user_id, "name": name or ""}
+            ).execute()
 
         profile = (
             supabase.table("profiles")
