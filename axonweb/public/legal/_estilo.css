@@ -10,6 +10,7 @@ h1{font-size:1.9rem;line-height:1.25;margin:0 0 8px}
 h2{font-size:1.15rem;margin:36px 0 12px;color:#fff}
 p,li{color:var(--texto);font-size:.96rem}
 a{color:var(--roxo-claro)}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--card);border:1px solid #2a2637;border-radius:5px;padding:1px 5px;white-space:nowrap}
 ul{padding-left:20px}
 table{width:100%;border-collapse:collapse;margin:16px 0;font-size:.9rem;display:block;overflow-x:auto}
 th,td{text-align:left;padding:10px 12px;border-bottom:1px solid #2a2637}

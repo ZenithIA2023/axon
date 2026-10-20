@@ -12,7 +12,7 @@
 <header><img src="/axon-logo.svg" alt=""><a href="/">Axon</a></header>
 
 <h1>Política de Privacidade</h1>
-<p class="data">Última atualização: 25 de setembro de 2026</p>
+<p class="data">Última atualização: 19 de outubro de 2026</p>
 
 <h2>Quem somos</h2>
 <p>O Axon é um assistente de produtividade pessoal que ajuda a organizar tarefas, rotinas e objetivos, com apoio de inteligência artificial.</p>
@@ -22,42 +22,84 @@
 <ul>
 <li><strong>Cadastro:</strong> nome e e-mail. Se você entrar com o Google, recebemos essas informações da sua conta Google.</li>
 <li><strong>Conteúdo que você cria:</strong> tarefas, rotinas, objetivos, registros diários, respostas do questionário de cronotipo e conversas com o assistente.</li>
+<li><strong>Registro diário:</strong> horas de sono, horário de dormir e acordar, uma nota de 1 a 5 para a qualidade do sono, uma nota de 1 a 5 para o humor e se você se exercitou. Esses dados são opcionais — o app funciona sem eles.</li>
 <li><strong>Foto de perfil</strong>, se você escolher enviar uma.</li>
-<li><strong>Eventos da sua agenda</strong>, se você conectar o Google Agenda.</li>
+<li><strong>Áudio da sua fala</strong>, quando você usa a tela de voz. Veja a seção <a href="#voz">Conversa por voz</a>.</li>
 <li><strong>Token de notificação do aparelho</strong>, se você permitir notificações. Não identifica você pessoalmente e serve apenas para entregar os avisos.</li>
 </ul>
 
 <div class="card destaque">
-<p style="margin:0"><strong>Não coletamos</strong> localização, contatos, arquivos do aparelho, dados financeiros ou de saúde. Não usamos ferramentas de analytics nem identificadores de publicidade. <strong>Não exibimos anúncios e não vendemos seus dados.</strong></p>
+<p style="margin:0"><strong>Não coletamos</strong> localização, contatos, SMS, chamadas, arquivos do aparelho, dados financeiros, lista de aplicativos instalados nem histórico de navegação. Não usamos ferramentas de analytics nem identificadores de publicidade. <strong>Não exibimos anúncios e não vendemos seus dados.</strong></p>
 </div>
 
 <h2>Como usamos</h2>
 <p>Para o app funcionar: guardar suas tarefas, montar seu planejamento, enviar lembretes e gerar as análises e sugestões que são a proposta do Axon.</p>
+<p>Os dados de sono, humor e exercício do registro diário são usados para calibrar seus blocos de energia e para gerar os insights, as correlações e os relatórios — por exemplo, relacionar noites mal dormidas com dias menos produtivos. Esse processamento envolve os provedores de IA descritos abaixo.</p>
+
+<h2 id="voz">Conversa por voz</h2>
+<p>Na tela de voz, o áudio que você fala é enviado ao nosso servidor e de lá a um serviço de transcrição (<strong>OpenAI</strong>, ou <strong>OpenRouter</strong> como alternativa) para ser convertido em texto. O texto da resposta do Axon é enviado a um serviço de síntese de voz (<strong>ElevenLabs</strong>, <strong>OpenAI</strong> ou <strong>Google Cloud Text-to-Speech</strong>, conforme a voz escolhida) para virar áudio.</p>
+<p><strong>Não guardamos o áudio.</strong> Ele atravessa o servidor e é descartado; não é gravado em banco de dados nem em armazenamento de arquivos. O que fica salvo é a <strong>transcrição em texto</strong>, como parte da sua conversa com o assistente.</p>
+<p>A gravação só acontece na tela de voz, enquanto você mantém o botão pressionado. O chat por texto não grava áudio.</p>
 
 <h2>Inteligência artificial</h2>
-<p>O Axon usa a API da <strong>Anthropic (Claude)</strong> para gerar respostas, sugestões e relatórios. Para isso, trechos do seu conteúdo — a tarefa em questão, o registro do dia, a conversa em andamento — são enviados à Anthropic.</p>
-<p>Segundo a política da Anthropic para uso via API, esses dados <strong>não são usados para treinar modelos</strong>. Saiba mais em <a href="https://www.anthropic.com/legal/privacy" target="_blank" rel="noopener">anthropic.com/legal/privacy</a>.</p>
+<p>O Axon usa modelos de IA de terceiros para conversar com você e para redigir análises. Para isso, trechos do seu conteúdo — a tarefa em questão, o registro do dia, a conversa em andamento, seu primeiro nome — são enviados a esses provedores.</p>
+<ul>
+<li><strong>Anthropic (Claude)</strong> — conversa no chat e na voz, sugestões e execução de ações que você pedir.</li>
+<li><strong>OpenRouter</strong> — redação dos insights, das correlações e dos relatórios. Usamos apenas rotas configuradas para <em>não retenção</em> e <em>não treinamento</em>; nessa configuração o modelo é servido pela infraestrutura da <strong>Microsoft Azure</strong>.</li>
+<li><strong>OpenAI</strong> — transcrição da sua fala e, opcionalmente, síntese de voz.</li>
+<li><strong>ElevenLabs</strong> e <strong>Google Cloud Text-to-Speech</strong> — síntese de voz.</li>
+</ul>
+<p>Em todos os casos contratamos esses serviços em modo de API, no qual <strong>os dados não são usados para treinar modelos</strong>. Políticas dos provedores: <a href="https://www.anthropic.com/legal/privacy" target="_blank" rel="noopener">Anthropic</a>, <a href="https://openai.com/policies/privacy-policy" target="_blank" rel="noopener">OpenAI</a>, <a href="https://openrouter.ai/privacy" target="_blank" rel="noopener">OpenRouter</a>, <a href="https://elevenlabs.io/privacy" target="_blank" rel="noopener">ElevenLabs</a>, <a href="https://cloud.google.com/terms/cloud-privacy-notice" target="_blank" rel="noopener">Google Cloud</a>.</p>
+
+<h2>Google Agenda e login com o Google</h2>
+
+<p><strong>O que acessamos.</strong> Ao entrar com o Google, pedimos os escopos <code>openid</code>, <code>userinfo.email</code> e <code>userinfo.profile</code>, de onde recebemos seu <strong>nome, e-mail e foto de perfil</strong>. Se você optar por conectar a agenda, pedimos também o escopo <code>calendar.events</code>.</p>
+
+<p><strong>Como usamos.</strong> O nome, o e-mail e a foto servem para criar e identificar sua conta. O acesso à agenda é usado para <strong>criar, atualizar e excluir no seu Google Agenda os eventos correspondentes às tarefas que você agenda dentro do Axon</strong> — a sincronização vai do Axon para o Google.</p>
+
+<div class="card destaque">
+<p style="margin:0"><strong>O Axon não lê a sua agenda.</strong> Não listamos, não importamos e não exibimos no app os compromissos que já existem no seu Google Agenda. Mexemos somente nos eventos que o próprio Axon criou a seu pedido. O escopo <code>calendar.events</code> é o escopo mais restrito que o Google oferece para escrever eventos — ele concede leitura junto, mas nós não a exercemos.</p>
+</div>
+
+<p><strong>Com quem compartilhamos.</strong> Os dados recebidos do Google <strong>não</strong> são compartilhados com os provedores de IA nem com qualquer outro terceiro, com uma única exceção: seu <strong>primeiro nome</strong> entra no contexto enviado ao provedor de IA, para que o assistente possa se dirigir a você pelo nome. Seu e-mail, sua foto e o conteúdo da sua agenda nunca são enviados a esses provedores.</p>
+
+<p><strong>Proteção.</strong> Os tokens de acesso ao Google ficam no nosso banco de dados, acessíveis apenas pelo nosso servidor, e trafegam só por HTTPS.</p>
+
+<p><strong>Retenção e exclusão.</strong> Guardamos os tokens enquanto a conexão existir. Você pode desconectar a qualquer momento nas configurações do app — o que apaga os tokens imediatamente — ou revogar o acesso em <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">myaccount.google.com/permissions</a>. Excluir sua conta do Axon também apaga os tokens. Os eventos já criados permanecem no seu Google Agenda, sob seu controle; você pode apagá-los lá.</p>
+
+<h2>Uso limitado dos dados do Google</h2>
+<div class="card">
+<p>O uso e a transferência, pelo Axon, de informações recebidas das APIs do Google seguem a <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener">Política de Dados do Usuário dos Serviços de API do Google</a>, incluindo os requisitos de Uso Limitado.</p>
+<p>Em particular: <strong>não usamos dados obtidos das APIs do Google Workspace para desenvolver, aprimorar ou treinar modelos generalizados de inteligência artificial ou de aprendizado de máquina</strong>, nem os transferimos a terceiros com essa finalidade.</p>
+<p style="margin-bottom:0"><em>Axon's use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener">Google API Services User Data Policy</a>, including the Limited Use requirements. Axon does not use Google Workspace APIs data to develop, improve, or train generalized artificial intelligence or machine learning models, nor does it transfer such data to third parties for those purposes.</em></p>
+</div>
 
 <h2>Com quem compartilhamos</h2>
 <table>
 <tr><th>Serviço</th><th>O que recebe</th><th>Para quê</th></tr>
-<tr><td>Anthropic (Claude)</td><td>trechos do seu conteúdo</td><td>gerar respostas e sugestões</td></tr>
 <tr><td>Supabase</td><td>dados da sua conta</td><td>banco de dados e login</td></tr>
-<tr><td>Google</td><td>e-mail, nome, eventos de agenda</td><td>login e sincronização</td></tr>
+<tr><td>Anthropic (Claude)</td><td>primeiro nome e trechos do seu conteúdo, incluindo sono, humor e exercício</td><td>conversar, sugerir e executar ações</td></tr>
+<tr><td>OpenRouter (via Azure)</td><td>trechos do seu conteúdo, incluindo sono, humor e exercício</td><td>redigir insights, correlações e relatórios</td></tr>
+<tr><td>OpenAI</td><td>áudio da sua fala; texto da resposta do Axon</td><td>transcrever voz e sintetizar voz</td></tr>
+<tr><td>ElevenLabs</td><td>texto da resposta do Axon</td><td>sintetizar voz</td></tr>
+<tr><td>Google (login)</td><td>nada — nós recebemos dados dele</td><td>autenticação</td></tr>
+<tr><td>Google (Agenda)</td><td>título, horário e duração dos eventos que o Axon cria</td><td>sincronizar as tarefas que você agenda</td></tr>
+<tr><td>Google (Cloud TTS)</td><td>texto da resposta do Axon</td><td>sintetizar voz</td></tr>
 <tr><td>Google (FCM)</td><td>token do aparelho, texto do aviso</td><td>entregar notificações</td></tr>
 </table>
-<p>Compartilhamos apenas o necessário para o app funcionar. Podemos divulgar dados se formos obrigados por lei.</p>
-
-<h2>Google Agenda</h2>
-<p>Se você conectar sua agenda, pedimos permissão para <strong>ver e gerenciar eventos</strong>. Usamos isso para mostrar seus compromissos junto às tarefas e criar eventos que você agendar pelo Axon.</p>
-<p><strong>Não lemos outras informações da sua conta Google.</strong> Você pode desconectar a qualquer momento nas configurações do app ou em <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">myaccount.google.com/permissions</a>.</p>
-
-<h2>Seus direitos (LGPD)</h2>
-<p>Você pode acessar, corrigir e excluir seus dados, além de pedir a portabilidade ou revogar consentimentos.</p>
-<p><strong>Exclusão:</strong> dentro do app, em Configurações → Excluir conta — ou pela <a href="/legal/excluir-conta.html">página de exclusão de conta</a>. A exclusão apaga seus dados de forma permanente e imediata. Por segurança contra recadastro automático, <strong>guardamos apenas o seu e-mail por 60 dias</strong> após a exclusão; depois disso ele também é apagado.</p>
+<p>Compartilhamos apenas o necessário para o app funcionar. Nenhum desses serviços recebe dados para finalidade própria de publicidade. Podemos divulgar dados se formos obrigados por lei.</p>
 
 <h2>Segurança</h2>
-<p>Todo o tráfego usa HTTPS. O acesso é protegido por autenticação, e as credenciais ficam sob os controles do Supabase. Nenhum sistema é totalmente imune, mas trabalhamos para proteger seus dados.</p>
+<p>Todo o tráfego usa HTTPS. O acesso é protegido por autenticação, e as credenciais ficam sob os controles do Supabase. O aplicativo nunca fala diretamente com o banco de dados: todo acesso passa pelo nosso servidor, que verifica a identidade do usuário e restringe cada consulta aos dados daquela conta. Nenhum sistema é totalmente imune, mas trabalhamos para proteger seus dados.</p>
+
+<h2>Retenção e exclusão</h2>
+<p>Mantemos seus dados enquanto sua conta existir.</p>
+<p><strong>Exclusão:</strong> dentro do app, em Configurações → Excluir conta — ou pela <a href="/legal/excluir-conta.html">página de exclusão de conta</a>. A exclusão apaga seus dados de forma permanente e imediata, incluindo tarefas, rotinas, objetivos, registros diários, conversas, foto de perfil e os tokens do Google.</p>
+<p>Por segurança contra recadastro automático, <strong>guardamos apenas o seu e-mail por 60 dias</strong> após a exclusão; depois disso ele também é apagado. É o único dado que sobrevive à exclusão.</p>
+<p>O áudio da sua fala não é retido em nenhum momento (veja <a href="#voz">Conversa por voz</a>).</p>
+
+<h2>Seus direitos (LGPD)</h2>
+<p>Você pode acessar, corrigir e excluir seus dados, além de pedir a portabilidade ou revogar consentimentos. Para qualquer um desses pedidos, escreva para <a href="mailto:equipe.zenith2023@gmail.com">equipe.zenith2023@gmail.com</a>.</p>
 
 <h2>Menores de idade</h2>
 <p>O Axon não se destina a menores de 13 anos, e não coletamos dados de crianças conscientemente. Se soubermos que uma conta pertence a alguém com menos de 13 anos, ela será excluída.</p>

@@ -1,10 +1,26 @@
 # Política de Privacidade — Axon
 
-**Última atualização: 20 de agosto de 2026**
+> **SUPERADO — NÃO É A POLÍTICA VIGENTE.**
+>
+> A política publicada é `axonweb/public/legal/privacidade.html`, servida em
+> <https://axonapp.tech/legal/privacidade.html>. É ela que o Google e a Play
+> Store leem, e **só ela** deve ser editada.
+>
+> Este arquivo é o rascunho de 20/08/2026, anterior à página de voz e à troca
+> de modelos. Ele ficou para trás e **contradiz** a política vigente em três
+> pontos que foram corrigidos em 19/10/2026:
+>
+> 1. diz que coletamos "eventos da sua agenda" — o app **não lê** a agenda,
+>    só escreve nela (`google_service.py`: POST, PATCH e DELETE, sem GET);
+> 2. diz que usamos a agenda para "mostrar seus compromissos" — nunca
+>    mostramos;
+> 3. não menciona voz, áudio, OpenAI, ElevenLabs nem OpenRouter.
+>
+> Mantido apenas como histórico. Se não houver motivo para guardá-lo, apague.
 
-> RASCUNHO para revisão. Antes de publicar, preencher os campos marcados com
-> `[...]` e submeter a revisão jurídica. Precisa estar numa URL pública antes
-> do envio à Play Store.
+---
+
+**Última atualização: 20 de agosto de 2026** *(rascunho congelado)*
 
 ## Quem somos
 
