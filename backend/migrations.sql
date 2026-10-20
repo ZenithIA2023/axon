@@ -1309,3 +1309,31 @@ create index if not exists api_usage_events_feature_created_idx
 
 comment on table public.api_usage_events is
   'Uma linha por chamada a API paga (Claude, transcrição, síntese). Unidades são a fonte da verdade; cost_usd é estimativa no momento da chamada.';
+
+-- =============================================
+-- Migration 37: Sign in with Apple — token para revogar na exclusão de conta
+-- ---------------------------------------------
+-- A Apple exige (diretriz 5.1.1(v)) que excluir a conta revogue a autorização
+-- na Apple, não só apague os dados aqui. A revogação só aceita um refresh token
+-- (ou access token) emitido para o app; o id_token do login não serve. Por isso
+-- o refresh token é guardado no login, trocando o `code` em /auth/token.
+--
+-- `apple_client_id` guarda QUAL client ID emitiu o token: o Services ID da web
+-- (tech.axonapp.web) ou o Bundle ID do app iOS (tech.axonapp.app). A revogação
+-- exige o mesmo client_id que emitiu, e o client secret é assinado com ele no
+-- `sub`; sem saber a origem, o token do nativo seria revogado com o client
+-- errado e a Apple recusaria em silêncio.
+--
+-- NULL nas duas = a conta nunca entrou pela Apple; a exclusão não chama a Apple.
+-- =============================================
+alter table public.profiles
+  add column if not exists apple_refresh_token text;
+
+alter table public.profiles
+  add column if not exists apple_client_id text;
+
+comment on column public.profiles.apple_refresh_token is
+  'Refresh token do Sign in with Apple. Usado só para revogar a autorização na exclusão de conta. Nunca sai do backend.';
+
+comment on column public.profiles.apple_client_id is
+  'Client ID que emitiu apple_refresh_token (Services ID da web ou Bundle ID do iOS). A revogação exige o mesmo.';

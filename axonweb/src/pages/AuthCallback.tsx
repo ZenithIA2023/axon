@@ -9,7 +9,7 @@ export default function AuthCallback() {
   // O hook lê a query do próprio router e funciona nas duas plataformas.
   const [params] = useSearchParams();
 
-  // Fluxo de retorno do Google: valida a URL, cria sessão local e decide a próxima tela.
+  // Fluxo de retorno do Google e da Apple: valida a URL, cria sessão local e decide a próxima tela.
   useEffect(() => {
     // Erros vindos do backend/OAuth voltam para o login com a mensagem preservada.
     const error = params.get("error");
@@ -21,7 +21,7 @@ export default function AuthCallback() {
     // O backend envia um código temporário usado para buscar os tokens reais da sessão.
     const sessionCode = params.get("session_code");
     if (!sessionCode) {
-      navigate("/login?error=Falha+na+autenticação+com+Google");
+      navigate("/login?error=Falha+na+autenticação");
       return;
     }
 
@@ -39,14 +39,14 @@ export default function AuthCallback() {
         }
       })
       .catch(() => {
-        navigate("/login?error=Falha+na+autenticação+com+Google");
+        navigate("/login?error=Falha+na+autenticação");
       });
   }, []);
 
-  // Feedback mínimo enquanto o código do Google é convertido em sessão do Axon.
+  // Feedback mínimo enquanto o código do login social é convertido em sessão do Axon.
   return (
     <div className="flex min-h-screen items-center justify-center bg-app">
-      <p className="text-sm text-muted">Autenticando com Google...</p>
+      <p className="text-sm text-muted">Autenticando...</p>
     </div>
   );
 }
