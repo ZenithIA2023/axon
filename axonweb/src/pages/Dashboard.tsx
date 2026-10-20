@@ -11,7 +11,6 @@ import {
   Focus,
   MessageCircle,
   Flame,
-  Menu,
   Moon,
   Sparkles,
   Star,
@@ -22,6 +21,7 @@ import {
 } from "lucide-react";
 
 import DayReview from "./DayReview";
+import StreakModal from "../components/dashboard/StreakModal";
 import Sidebar from "../components/layout/Sidebar";
 import * as api from "../lib/api";
 import type { BlockTask, DashboardData, FocusBlock, Subtask } from "../lib/api";
@@ -145,6 +145,7 @@ export default function Dashboard() {
   // aparecesse sempre, o usuário fecharia no automático justamente no dia
   // em que a ofensiva está em jogo.
   const [streakWarnOpen, setStreakWarnOpen] = useState(false);
+  const [streakModalOpen, setStreakModalOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState<number | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -717,7 +718,7 @@ export default function Dashboard() {
           <button
             type="button"
             onClick={() => navigate("/profile")}
-            className="group flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200/90 bg-white text-[0.75rem] font-black tracking-[-0.02em] text-accent shadow-[0_14px_34px_rgba(15,23,42,0.14),0_2px_8px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.95)] ring-1 ring-white/80 transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_18px_42px_rgba(15,23,42,0.16),0_3px_10px_rgba(15,23,42,0.07),inset_0_1px_0_rgba(255,255,255,0.95)] active:scale-[0.96] dark:border-white/10 dark:bg-surface-muted dark:text-accent dark:ring-white/5 dark:shadow-[0_14px_34px_rgba(0,0,0,0.30)]"
+            className="group flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200/90 bg-surface-elevated text-[0.75rem] font-black tracking-[-0.02em] text-accent shadow-[0_14px_34px_rgba(15,23,42,0.14),0_2px_8px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.95)] ring-1 ring-[var(--border-soft)] transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_18px_42px_rgba(15,23,42,0.16),0_3px_10px_rgba(15,23,42,0.07),inset_0_1px_0_rgba(255,255,255,0.95)] active:scale-[0.96] dark:border-soft dark:ring-0 dark:ring-transparent dark:outline-none dark:text-accent dark:shadow-none dark:hover:border-soft dark:hover:ring-0 dark:hover:shadow-none dark:focus-visible:outline-none"
             aria-label="Abrir perfil"
             title="Perfil"
           >
@@ -739,10 +740,11 @@ export default function Dashboard() {
                 hoje para não perder tudo. */}
             <button
               type="button"
+              onClick={() => setStreakModalOpen(true)}
               className={`flex h-10 min-w-10 items-center justify-center gap-1.5 rounded-2xl border px-2.5 backdrop-blur-2xl transition active:scale-[0.96] ${
                 data?.streak?.frozen
                   ? "border-[var(--accent)] bg-accent-soft text-accent"
-                  : "border-soft bg-white text-secondary shadow-[0_8px_22px_rgba(15,23,42,0.07)] dark:bg-surface-muted dark:shadow-none"
+                  : "border-soft bg-surface-elevated text-secondary shadow-card"
               }`}
               aria-label={
                 data?.streak
@@ -773,27 +775,6 @@ export default function Dashboard() {
               </span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => setIsNotificationsOpen(true)}
-              className="relative flex h-10 w-10 items-center justify-center rounded-2xl border border-soft bg-white text-secondary shadow-[0_8px_22px_rgba(15,23,42,0.07)] backdrop-blur-2xl transition active:scale-[0.96] dark:bg-surface-muted dark:shadow-none"
-              aria-label="Abrir notificações"
-            >
-              <Bell className="h-4 w-4" />
-
-              {unreadCount !== null && unreadCount > 0 && (
-                <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full border-2 border-[var(--app-bg)] bg-[var(--accent)]" />
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsSidebarOpen(true)}
-              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-soft bg-white text-secondary shadow-[0_8px_22px_rgba(15,23,42,0.07)] backdrop-blur-2xl transition active:scale-[0.96] dark:bg-surface-muted dark:shadow-none"
-              aria-label="Abrir menu"
-            >
-              <Menu className="h-4 w-4" />
-            </button>
           </div>
         </header>
 
@@ -957,7 +938,7 @@ export default function Dashboard() {
               {/* O gesto é invisível por natureza: sem esta dica ninguém
                   descobre que dá para resolver a tarefa sem sair do Dashboard. */}
               {flatTasks.length > 0 && (
-                <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-soft bg-white px-2.5 py-1 text-[0.68rem] font-black text-primary shadow-[0_8px_18px_rgba(15,23,42,0.05)] dark:bg-surface-muted dark:text-secondary dark:shadow-none">
+                <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-soft bg-surface-elevated px-2.5 py-1 text-[0.68rem] font-black text-primary shadow-[0_8px_18px_rgba(15,23,42,0.05)] dark:text-secondary">
                   Arraste
                   <span className="text-emerald-700 dark:text-emerald-100">
                     → concluir
@@ -1173,6 +1154,14 @@ export default function Dashboard() {
         energyPeak={data?.energy_peak}
       />
 
+      {/* Clique na chama: resumo normal da ofensiva (sem ações destrutivas). */}
+      <StreakModal
+        isOpen={streakModalOpen && !autoReviewOpen && !streakWarnOpen && !reviewOpen}
+        variant="default"
+        onClose={() => setStreakModalOpen(false)}
+        streakDays={data?.streak?.current ?? 0}
+      />
+
       <DayReview
         isOpen={reviewOpen}
         onClose={() => setReviewOpen(false)}
@@ -1187,7 +1176,10 @@ export default function Dashboard() {
           // Fechar sem registrar com a ofensiva por um fio: pergunta antes de
           // deixar passar. O aviso NÃO marca nada sozinho — só o botão de
           // confirmação dentro dele desiste do dia.
-          if (data?.streak?.frozen) setStreakWarnOpen(true);
+          if (data?.streak?.frozen) {
+            setStreakModalOpen(false);
+            setStreakWarnOpen(true);
+          }
         }}
         existing={autoReviewDate ? yesterdayLog : todayLog}
         targetDate={autoReviewDate}
@@ -1199,67 +1191,28 @@ export default function Dashboard() {
         }}
       />
 
-      {/* Aviso de perda da ofensiva. Aparece só quando `streak.frozen` — ou
-          seja, quando ontem ficou em branco e hoje é a última chance. Fechar
-          este aviso (X, toque fora, botão voltar) NÃO pune: apenas o botão
-          "Perder a ofensiva" chama a API, porque um toque acidental não pode
-          custar uma sequência de forma irreversível. */}
-      {streakWarnOpen && data?.streak && (
-        <div
-          className="fixed inset-0 z-[130] flex items-end justify-center bg-black/50 p-4 backdrop-blur-sm sm:items-center"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="streak-warn-title"
-          onClick={() => setStreakWarnOpen(false)}
-        >
-          <div
-            className="w-full max-w-sm rounded-3xl border border-soft bg-surface p-5 shadow-card"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-2">
-              <Flame className="h-5 w-5 text-accent" />
-              <h2 id="streak-warn-title" className="text-base font-black text-primary">
-                Sua ofensiva de {data.streak.current}{" "}
-                {data.streak.current === 1 ? "dia" : "dias"} vai acabar
-              </h2>
-            </div>
-
-            <p className="mt-2 text-sm text-secondary">
-              Você ainda não registrou ontem. Se fechar sem preencher, a
-              sequência recomeça do zero — e não dá para voltar atrás.
-            </p>
-
-            <div className="mt-5 flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setStreakWarnOpen(false);
-                  setAutoReviewOpen(true);
-                }}
-                className="min-h-12 rounded-2xl bg-[var(--accent-strong)] px-6 text-sm font-semibold text-white transition active:scale-[0.98]"
-              >
-                Fazer o registro
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  // Desistência explícita: só aqui o dia é marcado como
-                  // perdido no servidor. Falha de rede não trava a tela — o
-                  // prazo vence sozinho na virada de qualquer forma.
-                  void api
-                    .forfeitStreak(data.streak.pending_date ?? undefined)
-                    .catch(() => {});
-                  setStreakWarnOpen(false);
-                  loadDashboard();
-                }}
-                className="min-h-12 rounded-2xl border border-soft bg-surface-muted px-6 text-sm font-semibold text-muted transition active:scale-[0.98]"
-              >
-                Perder a ofensiva
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* O mesmo componente visual tem uma variante para o aviso de perda.
+          Fechar não desiste da ofensiva; somente a ação explícita chama a API. */}
+      <StreakModal
+        isOpen={streakWarnOpen && !autoReviewOpen && Boolean(data?.streak)}
+        variant="warning"
+        onClose={() => setStreakWarnOpen(false)}
+        streakDays={data?.streak?.current ?? 0}
+        pendingDate={data?.streak?.pending_date}
+        onSaveStreak={() => {
+          setStreakWarnOpen(false);
+          setAutoReviewOpen(true);
+        }}
+        onForfeitStreak={() => {
+          if (!data?.streak) return;
+          // Mantém o comportamento original: desistência explícita.
+          void api
+            .forfeitStreak(data.streak.pending_date ?? undefined)
+            .catch(() => {});
+          setStreakWarnOpen(false);
+          loadDashboard();
+        }}
+      />
 
       <NotificationsSheet
         isOpen={isNotificationsOpen}

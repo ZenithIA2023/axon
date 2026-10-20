@@ -5,13 +5,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Info,
-  Menu,
   Moon,
   NotebookPen,
   RefreshCw,
   Smile,
   Sparkles,
-  Sun,
   Target,
   Zap,
 } from "lucide-react";
@@ -27,8 +25,7 @@ import {
   YAxis,
 } from "recharts";
 
-import { results, type ChronotypeResultKey } from "../data/results";
-import Sidebar from "../components/layout/Sidebar";
+import type { ChronotypeResultKey } from "../data/results";
 import DayReview from "./DayReview";
 import * as api from "../lib/api";
 import type { TaskInsights, FocusBlockItem } from "../lib/api";
@@ -45,21 +42,21 @@ import axonHeadHappy from "../assets/axon/axon-head-happy.png";
 // cartão. O respiro do conteúdo vem do padding de cada caixa interna, não
 // deste — assim sobra largura para os gráficos no telefone.
 const CARD =
-  "rounded-[1.75rem] border border-slate-200/90 bg-white p-2 text-slate-950 shadow-[0_12px_35px_rgba(15,23,42,0.07)] dark:border-soft dark:bg-surface-elevated dark:text-primary dark:shadow-card dark:backdrop-blur-2xl";
+  "insights-card rounded-[1.75rem] border border-slate-200/90 bg-white p-2 text-slate-950 shadow-[0_12px_35px_rgba(15,23,42,0.07)] dark:border-soft dark:bg-surface-elevated dark:text-primary dark:shadow-card dark:backdrop-blur-2xl";
 
 // Caixa interna que envolve os gráficos dentro de cada cartão.
 const CHART_BOX =
-  "rounded-[1.4rem] border border-slate-200/90 bg-[#f7f8fa] p-4 dark:border-soft dark:bg-surface-muted";
+  "insights-chart-box rounded-[1.4rem] border border-slate-200/90 bg-[#f7f8fa] p-4 dark:border-soft dark:bg-surface-muted";
 
 // Variante do gráfico de linhas: recuo lateral mínimo para os rótulos dos
 // eixos encostarem nas bordas. A área que sobra fica toda para os dias.
 const CHART_BOX_AXES =
-  "rounded-[1.4rem] border border-slate-200/90 bg-[#f7f8fa] px-1 py-3 dark:border-soft dark:bg-surface-muted";
+  "insights-chart-box rounded-[1.4rem] border border-slate-200/90 bg-[#f7f8fa] px-1 py-3 dark:border-soft dark:bg-surface-muted";
 
 function InsightsLightThemeStyles() {
   return (
     <style>{`
-      html:not(.dark) .insights-light-theme {
+      html:not(.dark) body:not(.dark) .insights-light-theme {
         --bg-app: #f7f8fa;
         --surface-elevated: #ffffff;
         --surface-muted: #f7f8fa;
@@ -71,6 +68,48 @@ function InsightsLightThemeStyles() {
         --accent: #6d28d9;
         --accent-strong: #6d28d9;
         --accent-soft: rgba(109, 40, 217, 0.10);
+      }
+
+      /* O tema pode ser ativado no html ou no body. As variáveis claras
+         acima não devem continuar ativas quando só o body recebe .dark. */
+      html.dark .insights-light-theme,
+      body.dark .insights-light-theme,
+      .dark.insights-light-theme {
+        --bg-app: #0c0a13;
+        --app-bg: #0c0a13;
+        --surface-elevated: #1b1725;
+        --surface-muted: #24202f;
+        --border-soft: rgba(255,255,255,0.10);
+        --border-medium: rgba(255,255,255,0.17);
+        --text-primary: #f8f7fc;
+        --text-secondary: #d2cedb;
+        --text-muted: #aaa4b8;
+        --text-soft: #827c94;
+        --accent: #b778ff;
+        --accent-strong: #9333ea;
+        --accent-soft: rgba(168,85,247,0.14);
+        color: var(--text-primary);
+        background-color: var(--bg-app);
+      }
+      html.dark .insights-light-theme .insights-card,
+      body.dark .insights-light-theme .insights-card,
+      html.dark .insights-light-theme .insights-register-card,
+      body.dark .insights-light-theme .insights-register-card {
+        background-color: var(--surface-elevated);
+        border-color: var(--border-soft);
+        color: var(--text-primary);
+        box-shadow: 0 12px 35px rgba(0,0,0,0.22);
+      }
+      html.dark .insights-light-theme .insights-chart-box,
+      body.dark .insights-light-theme .insights-chart-box {
+        background-color: var(--surface-muted);
+        border-color: var(--border-soft);
+      }
+      html.dark .insights-light-theme .insights-menu-button,
+      body.dark .insights-light-theme .insights-menu-button {
+        background-color: var(--surface-muted);
+        border-color: var(--border-soft);
+        color: var(--text-secondary);
       }
     `}</style>
   );
@@ -213,9 +252,6 @@ const SWIPE_THRESHOLD = 56;
 // ===========================================================================
 // Consolida padrões de tarefas, sono, humor, produtividade e blocos de foco.
 export default function Insights() {
-  // Sidebar global da página.
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
   // Períodos independentes: cada gráfico tem seu próprio toggle
   // semana/mês — alterar um não deve afetar o outro.
   const [taskPeriod, setTaskPeriod] = useState<"week" | "month">("week");
@@ -596,8 +632,6 @@ export default function Insights() {
     return "Misto";
   }, []);
 
-  const result = results[resultKey];
-
   // Os 7 dias da semana exibida, com ou sem registro — dias vazios entram
   // como `log: null` para o gráfico manter a coluna do dia.
   const sleepDays = useMemo(() => {
@@ -644,27 +678,6 @@ export default function Insights() {
           margem externa era espaço morto. No desktop entra a mesma medida do
           Dashboard — coluna centrada de 1120px. */}
       <div className="relative z-10 mx-auto min-h-screen w-full max-w-[430px] space-y-4 px-1 pb-6 pt-5 lg:max-w-[1120px] lg:space-y-5 lg:px-8 lg:pt-7">
-        <header className="flex items-center justify-between px-3 lg:px-0">
-          <button
-            type="button"
-            onClick={() => setReviewOpen(true)}
-            className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#6d28d9] text-white shadow-[0_8px_22px_rgba(109,40,217,0.24)] transition active:scale-[0.96] dark:bg-[var(--accent-strong)] dark:shadow-card"
-            aria-label={todayLog ? "Editar registro de hoje" : "Registrar o dia"}
-            title={todayLog ? "Editar registro de hoje" : "Registrar o dia"}
-          >
-            <Sun className="h-5 w-5" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsSidebarOpen(true)}
-            className="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200/90 bg-white text-slate-600 shadow-[0_8px_22px_rgba(15,23,42,0.07)] transition active:scale-[0.96] dark:border-soft dark:bg-surface-muted dark:text-muted dark:shadow-card"
-            aria-label="Abrir menu"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
-        </header>
-
         {/* ============================================================
             O QUE O AXON DESCOBRIU — carrossel de padrões
             ============================================================ */}
@@ -877,7 +890,7 @@ export default function Insights() {
               {/* ============================================================
                 REGISTRO DIÁRIO — alimenta toda a análise abaixo
                 ============================================================ */}
-            <section className="order-1 rounded-[1.75rem] border border-slate-200/90 bg-white p-4 shadow-[0_12px_35px_rgba(15,23,42,0.07)] dark:border-accent-soft dark:bg-accent-soft dark:shadow-card dark:backdrop-blur-2xl">
+            <section className="insights-register-card order-1 rounded-[1.75rem] border border-slate-200/90 bg-white p-4 shadow-[0_12px_35px_rgba(15,23,42,0.07)] dark:border-accent-soft dark:bg-accent-soft dark:shadow-card dark:backdrop-blur-2xl">
               <div className="flex items-center gap-3">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#6d28d9]/10 text-[#6d28d9] dark:bg-transparent dark:text-accent">
                   {todayLog ? (
@@ -1751,13 +1764,6 @@ export default function Insights() {
           </div>
         </div>
       </div>
-
-      <Sidebar
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        chronotypeLabel={result.label}
-        energyPeak={result.energyPeak}
-      />
 
       <DayReview
         isOpen={reviewOpen}

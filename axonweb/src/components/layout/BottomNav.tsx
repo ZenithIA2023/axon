@@ -1,701 +1,1399 @@
 import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ElementType,
-  type FormEvent,
+
+  useCallback,
+
+  useEffect,
+
+  useRef,
+
+  useState,
+
+  type ElementType,
+
+  type FormEvent,
+
 } from "react";
+
 import { useLocation, useNavigate } from "react-router-dom";
+
 import { motion } from "framer-motion";
+
 import {
-  AudioLines,
-  BarChart3,
-  CalendarDays,
-  Home,
-  Plus,
-  Send,
-  User,
+
+  AudioLines,
+
+  BarChart3,
+
+  CalendarDays,
+
+  Home,
+
+  Plus,
+
+  Send,
+
+  Focus,
+
 } from "lucide-react";
 
+
+
 import { useLarguraDeCelular } from "../../lib/useLarguraDeCelular";
+
 import { useTheme } from "../theme/ThemeProvider";
+
 // Versão reduzida (192px) do rosto: a barra aparece em todas as telas do app,
+
 // e o original de 1080px pesa 687KB para ser exibido a 44px.
+
 import axonHead from "../../assets/axon/axon-head-happy-sm.png";
 
+
+
 // ===========================================================================
+
 // TIPOS DO COMPONENTE
+
 // ===========================================================================
+
+
 
 type TabItem = {
-  label: string;
-  icon: ElementType;
-  path: string;
-  // Rotas extras que também deixam esta aba acesa (ex.: /rotinas cai em
-  // Planejamento, que é a mesma tela com outra aba interna).
-  alsoActiveOn?: string[];
+
+  label: string;
+
+  icon: ElementType;
+
+  path: string;
+
+  // Rotas extras que também deixam esta aba acesa (ex.: /rotinas cai em
+
+  // Planejamento, que é a mesma tela com outra aba interna).
+
+  alsoActiveOn?: string[];
+
 };
 
+
+
 // ===========================================================================
+
 // ABAS DA BARRA
+
 // ===========================================================================
+
 // Quatro destinos onde o usuário FICA. Chat e voz não entram aqui: são ações,
+
 // e moram na bolinha do Axon.
+
 const tabs: TabItem[] = [
-  {
-    label: "Início",
-    icon: Home,
-    path: "/dashboard",
-  },
-  {
-    label: "Planejar",
-    icon: CalendarDays,
-    path: "/planning",
-    alsoActiveOn: ["/planejamento", "/rotinas", "/objetivos", "/rotina"],
-  },
-  {
-    label: "Insights",
-    icon: BarChart3,
-    path: "/insights",
-  },
-  {
-    label: "Perfil",
-    icon: User,
-    path: "/profile",
-    alsoActiveOn: ["/settings"],
-  },
+
+  {
+
+    label: "Início",
+
+    icon: Home,
+
+    path: "/dashboard",
+
+  },
+
+  {
+
+    label: "Planejar",
+
+    icon: CalendarDays,
+
+    path: "/planning",
+
+    alsoActiveOn: ["/planejamento", "/rotinas", "/objetivos", "/rotina"],
+
+  },
+
+  {
+
+    label: "Insights",
+
+    icon: BarChart3,
+
+    path: "/insights",
+
+  },
+
+  {
+
+    label: "Foco",
+
+    icon: Focus,
+
+    path: "/focus",
+
+  },
+
 ];
 
-// Telas de imersão: têm composer ou orb no rodapé e ocupam a altura toda. A
-// barra some nelas para não brigar por espaço nem por atenção.
-const hiddenOn = ["/voz", "/focus"];
+
+
+// Na tela de voz a barra fica oculta para não competir com os controles.
+
+// A página de Foco agora é uma aba principal e mantém a navegação visível.
+
+const hiddenOn = ["/voz"];
+
+
 
 // Rotas do app interno. Fora desta lista (landing, login, onboarding) a barra
+
 // não aparece: navegar entre abas ali não faz sentido, e a lista explícita
+
 // evita que uma rota nova de fluxo linear ganhe a barra por acidente.
+
 const appRoutes = [
-  "/dashboard",
-  "/chat",
-  "/planning",
-  "/planejamento",
-  "/insights",
-  "/rotinas",
-  "/rotina",
-  "/objetivos",
-  "/profile",
-  "/settings",
-  "/relatorio",
-  "/voz",
-  "/focus",
+
+  "/dashboard",
+
+  "/chat",
+
+  "/planning",
+
+  "/planejamento",
+
+  "/insights",
+
+  "/rotinas",
+
+  "/rotina",
+
+  "/objetivos",
+
+  "/profile",
+
+  "/settings",
+
+  "/relatorio",
+
+  "/voz",
+
+  "/focus",
+
 ];
 
+
+
 // Quanto tempo o dedo precisa ficar na bolinha para pular o leque e ir direto
+
 // para a voz. Curto o bastante para não parecer travado, longo o bastante para
+
 // não disparar num toque normal.
+
 const HOLD_MS = 400;
 
+
+
 // ===========================================================================
+
 // FUNDO E SOMBRA DAS CAIXAS, POR TEMA
+
 // ===========================================================================
+
 // O resto da barra (textos, ícones, fundo da aba ativa) usa os tokens do design
+
 // system, que já trocam sozinhos com a classe `.dark` no <html>. Estas quatro
+
 // combinações vêm do JS por dois motivos:
+
 //
-//  1. O fundo e a sombra da caixa direita são ANIMADOS pelo framer-motion por
-//     `style` inline, que tem precedência sobre classe — um `dark:bg-...` ali
-//     seria ignorado.
-//  2. As sombras são strings de quatro camadas. Como valor arbitrário de
-//     Tailwind elas não sobrevivem (o parser não gera a classe), e repetidas no
-//     className cobrariam duas linhas cada uma.
+
+//  1. O fundo e a sombra da caixa direita são ANIMADOS pelo framer-motion por
+
+//     `style` inline, que tem precedência sobre classe — um `dark:bg-...` ali
+
+//     seria ignorado.
+
+//  2. As sombras são strings de quatro camadas. Como valor arbitrário de
+
+//     Tailwind elas não sobrevivem (o parser não gera a classe), e repetidas no
+
+//     className cobrariam duas linhas cada uma.
+
 //
+
 // As quatro variantes têm as MESMAS quatro camadas (anel + contato + corpo +
+
 // halo): o framer-motion interpola sombra camada a camada, e com contagens
+
 // diferentes a transição salta em vez de deslizar.
+
 //
+
 // O anel `inset` é o que separa a barra do fundo no tema claro, onde ela é
+
 // branca sobre o quase-branco do app (--app-bg: #f7f2ff). No escuro ele fica
+
 // quase invisível, só marcando a quina de cima.
 
+
+
 type NavPalette = {
-  /** Superfície da barra: as abas, e a caixa direita no modo composer. */
-  surface: string;
-  surfaceShadow: string;
-  /** A bolinha do Axon é roxa nos dois temas: é identidade, não cor de tema. */
-  orb: string;
-  orbShadow: string;
+
+  /** Superfície da barra: as abas, e a caixa direita no modo composer. */
+
+  surface: string;
+
+  surfaceShadow: string;
+
+  /** A bolinha do Axon é roxa nos dois temas: é identidade, não cor de tema. */
+
+  orb: string;
+
+  orbShadow: string;
+
 };
+
+
 
 const LIGHT_NAV: NavPalette = {
-  surface: "#ffffff",
-  surfaceShadow:
-    "inset 0 0 0 1px rgba(123,44,191,0.12), 0 2px 8px rgba(48,26,82,0.08), 0 12px 28px rgba(48,26,82,0.10), 0 24px 60px rgba(48,26,82,0.14)",
-  orb: "#7c34b8",
-  orbShadow:
-    "inset 0 0 0 1px rgba(123,44,191,0.18), 0 2px 8px rgba(48,26,82,0.10), 0 12px 28px rgba(48,26,82,0.14), 0 20px 48px rgba(123,44,191,0.30)",
+
+  surface: "#ffffff",
+
+  surfaceShadow:
+
+    "inset 0 0 0 1px rgba(123,44,191,0.12), 0 2px 8px rgba(48,26,82,0.08), 0 12px 28px rgba(48,26,82,0.10), 0 24px 60px rgba(48,26,82,0.14)",
+
+  orb: "#7c34b8",
+
+  orbShadow:
+
+    "inset 0 0 0 1px rgba(123,44,191,0.18), 0 2px 8px rgba(48,26,82,0.10), 0 12px 28px rgba(48,26,82,0.14), 0 20px 48px rgba(123,44,191,0.30)",
+
 };
+
+
 
 const DARK_NAV: NavPalette = {
-  surface: "#1F1E2A",
-  surfaceShadow:
-    "inset 0 0 0 1px rgba(255,255,255,0.04), 0 2px 8px rgba(0,0,0,0.45), 0 12px 28px rgba(0,0,0,0.6), 0 24px 60px rgba(0,0,0,0.75)",
-  orb: "#7c34b8",
-  orbShadow:
-    "inset 0 0 0 1px rgba(255,255,255,0.06), 0 2px 8px rgba(0,0,0,0.45), 0 12px 28px rgba(0,0,0,0.6), 0 20px 48px rgba(123,44,191,0.35)",
+
+  surface: "#1F1E2A",
+
+  surfaceShadow:
+
+    "inset 0 0 0 1px rgba(255,255,255,0.04), 0 2px 8px rgba(0,0,0,0.45), 0 12px 28px rgba(0,0,0,0.6), 0 24px 60px rgba(0,0,0,0.75)",
+
+  orb: "#7c34b8",
+
+  orbShadow:
+
+    "inset 0 0 0 1px rgba(255,255,255,0.06), 0 2px 8px rgba(0,0,0,0.45), 0 12px 28px rgba(0,0,0,0.6), 0 20px 48px rgba(123,44,191,0.35)",
+
 };
 
+
+
 // ===========================================================================
+
 // BARRA DE NAVEGAÇÃO INFERIOR (MOBILE)
+
 // ===========================================================================
+
 // Substitui a Sidebar no app instalado. A web continua na Sidebar: numa tela
+
 // grande a barra de baixo desperdiça a largura disponível.
 
+
+
 export default function BottomNav() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { resolvedTheme } = useTheme();
-  const palette = resolvedTheme === "dark" ? DARK_NAV : LIGHT_NAV;
 
-  // ---------------------------------------------------------------------------
-  // Estado interno
-  // ---------------------------------------------------------------------------
-  // Texto digitado no composer, quando a barra está em modo chat.
-  const [message, setMessage] = useState("");
-  // O teclado do Android encolhe a viewport em vez de flutuar por cima. No
-  // modo composer ele NÃO esconde a barra: é justamente quando ela é usada.
-  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  const navigate = useNavigate();
 
-  const holdTimer = useRef<number | null>(null);
-  const didHold = useRef(false);
-  // Aba em que o usuário estava antes de entrar no chat. Guarda a aba inteira
-  // (não só a rota) porque o botão de volta mostra o ÍCONE dela — é assim que
-  // o usuário reconhece para onde está voltando.
-  const [returnTab, setReturnTab] = useState<TabItem>(tabs[0]);
+  const location = useLocation();
 
-  const pathname = location.pathname;
+  const { resolvedTheme } = useTheme();
 
-  // ---------------------------------------------------------------------------
-  // Visibilidade
-  // ---------------------------------------------------------------------------
-  // No chat a barra troca de forma: as abas dão lugar ao campo de mensagem.
-  const isComposerMode =
-    pathname === "/chat" || pathname.startsWith("/chat/");
+  const palette = resolvedTheme === "dark" ? DARK_NAV : LIGHT_NAV;
 
-  const isAppRoute = appRoutes.some(
-    (route) => pathname === route || pathname.startsWith(`${route}/`),
-  );
 
-  const isHidden =
-    !isAppRoute ||
-    hiddenOn.some(
-      (route) => pathname === route || pathname.startsWith(`${route}/`),
-    ) ||
-    // No modo composer o teclado é esperado: esconder a barra tiraria da tela
-    // justamente o campo que o usuário acabou de tocar.
-    (isKeyboardOpen && !isComposerMode);
 
-  // Guarda de onde o usuário veio, para o botão da esquerda saber voltar. Só
-  // rotas de aba entram: voltar do chat para o próprio chat não faria sentido.
-  useEffect(() => {
-    if (isComposerMode) return;
+  // ---------------------------------------------------------------------------
 
-    const current = tabs.find(
-      (tab) =>
-        pathname === tab.path ||
-        pathname.startsWith(`${tab.path}/`) ||
-        (tab.alsoActiveOn ?? []).some(
-          (route) => pathname === route || pathname.startsWith(`${route}/`),
-        ),
-    );
+  // Estado interno
 
-    if (current) {
-      setReturnTab(current);
-    }
-  }, [pathname, isComposerMode]);
+  // ---------------------------------------------------------------------------
 
-  // Sair do chat limpa o rascunho: ele pertence àquela visita.
-  useEffect(() => {
-    if (!isComposerMode) {
-      setMessage("");
-    }
-  }, [isComposerMode]);
+  // Texto digitado no composer, quando a barra está em modo chat.
 
-  // ---------------------------------------------------------------------------
-  // Teclado do Android
-  // ---------------------------------------------------------------------------
-  // A altura da visualViewport cai quando o teclado abre. É o sinal mais
-  // confiável aqui porque não depende do plugin de teclado estar instalado.
-  useEffect(() => {
-    const viewport = window.visualViewport;
+  const [message, setMessage] = useState("");
 
-    if (!viewport) return;
+  // O teclado do Android encolhe a viewport em vez de flutuar por cima. No
 
-    // Guarda a altura com o teclado fechado para comparar depois. Rotacionar o
-    // aparelho atualiza esta referência junto.
-    let baseHeight = viewport.height;
+  // modo composer ele NÃO esconde a barra: é justamente quando ela é usada.
 
-    function handleResize() {
-      if (!viewport) return;
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
 
-      const shrank = baseHeight - viewport.height;
 
-      // 160px é maior que qualquer barra de sistema que apareça/suma sozinha,
-      // e menor que qualquer teclado.
-      if (shrank > 160) {
-        setIsKeyboardOpen(true);
-      } else {
-        setIsKeyboardOpen(false);
-        baseHeight = Math.max(baseHeight, viewport.height);
-      }
-    }
 
-    viewport.addEventListener("resize", handleResize);
+  const holdTimer = useRef<number | null>(null);
 
-    return () => viewport.removeEventListener("resize", handleResize);
-  }, []);
+  const didHold = useRef(false);
 
-  // ---------------------------------------------------------------------------
-  // Navegação
-  // ---------------------------------------------------------------------------
-  function isTabActive(tab: TabItem) {
-    if (pathname === tab.path || pathname.startsWith(`${tab.path}/`)) {
-      return true;
-    }
+  // Aba em que o usuário estava antes de entrar no chat. Guarda a aba inteira
 
-    return (tab.alsoActiveOn ?? []).some(
-      (route) => pathname === route || pathname.startsWith(`${route}/`),
-    );
-  }
+  // (não só a rota) porque o botão de volta mostra o ÍCONE dela — é assim que
 
-  function goToTab(tab: TabItem) {
-    // Tocar na aba onde já se está rola até o topo em vez de renavegar.
-    if (isTabActive(tab) && pathname === tab.path) {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      return;
-    }
+  // o usuário reconhece para onde está voltando.
 
-    navigate(tab.path);
-  }
+  const [returnTab, setReturnTab] = useState<TabItem>(tabs[0]);
 
-  // Volta do chat para a última aba visitada.
-  function leaveComposer() {
-    navigate(returnTab.path);
-  }
 
-  // Entrega a mensagem para a tela de chat, que cuida de criar a conversa e
-  // enviar. A barra só transporta o texto: manter a lógica de envio aqui
-  // duplicaria o que ChatConversation já faz.
-  function handleSend(event: FormEvent) {
-    event.preventDefault();
 
-    const text = message.trim();
+  const pathname = location.pathname;
 
-    if (!text) return;
 
-    setMessage("");
-    navigate("/chat", { state: { draft: text, from: returnTab.path } });
-  }
 
-  // ---------------------------------------------------------------------------
-  // Gestos da bolinha
-  // ---------------------------------------------------------------------------
-  function startHold() {
-    didHold.current = false;
+  // ---------------------------------------------------------------------------
 
-    holdTimer.current = window.setTimeout(() => {
-      didHold.current = true;
-      navigate("/voz");
-    }, HOLD_MS);
-  }
+  // Visibilidade
 
-  function cancelHold() {
-    if (holdTimer.current !== null) {
-      window.clearTimeout(holdTimer.current);
-      holdTimer.current = null;
-    }
-  }
+  // ---------------------------------------------------------------------------
 
-  // Segurar já navegou; o clique que vem depois do dedo sair precisa ser
-  // ignorado, senão abriria o leque por cima da tela de voz.
-  function handleOrbClick() {
-    if (didHold.current) {
-      didHold.current = false;
-      return;
-    }
+  // No chat a barra troca de forma: as abas dão lugar ao campo de mensagem.
 
-    navigate("/chat");
-  }
+  const isComposerMode =
 
-  // Limpa o timer se o componente sair enquanto o dedo ainda está na bolinha.
-  useEffect(() => cancelHold, []);
+    pathname === "/chat" || pathname.startsWith("/chat/");
 
-  // Largura do trilho, medida do próprio <nav>. Precisa ser em PIXELS: um
-  // `calc(100% - ...)` seria resolvido contra a largura do elemento que está
-  // animando, realimentando o valor — a caixa inflava para milhares de pixels
-  // antes de encolher. É a origem do "estica tudo e só então troca".
-  const [railWidth, setRailWidth] = useState(0);
-  const observerRef = useRef<ResizeObserver | null>(null);
 
-  // Callback ref em vez de useEffect com []: a barra desmonta nas telas onde
-  // fica escondida, então um efeito de montagem única mediria `null` na
-  // primeira vez e nunca mais rodaria — o trilho ficava com largura 0 e só a
-  // bolinha aparecia. O callback dispara toda vez que o nó entra ou sai.
-  const railRef = useCallback((rail: HTMLElement | null) => {
-    observerRef.current?.disconnect();
 
-    if (!rail) {
-      observerRef.current = null;
-      return;
-    }
+  const isAppRoute = appRoutes.some(
 
-    const measure = () => {
-      // O padding lateral do nav (px-3 = 0.75rem de cada lado) não faz parte
-      // do trilho onde as caixas vivem.
-      const styles = window.getComputedStyle(rail);
-      const inner =
-        rail.clientWidth -
-        parseFloat(styles.paddingLeft) -
-        parseFloat(styles.paddingRight);
+    (route) => pathname === route || pathname.startsWith(`${route}/`),
 
-      // Largura 0 acontece enquanto o nó ainda não foi disposto; guardá-la
-      // travaria a barra fechada.
-      if (inner > 0) {
-        setRailWidth(inner);
-      }
-    };
+  );
 
-    measure();
 
-    const observer = new ResizeObserver(measure);
-    observer.observe(rail);
-    observerRef.current = observer;
-  }, []);
 
-  // Solta o observer quando o componente sai de vez.
-  useEffect(() => {
-    return () => observerRef.current?.disconnect();
-  }, []);
+  const isHidden =
 
-  if (isHidden) {
-    return null;
-  }
+    !isAppRoute ||
 
-  const ReturnIcon = returnTab.icon;
+    hiddenOn.some(
 
-  // ---------------------------------------------------------------------------
-  // Geometria da transformação
-  // ---------------------------------------------------------------------------
-  // As duas caixas trocam de largura ao mesmo tempo, animando PIXELS medidos do
-  // trilho (ver railWidth acima). Quatro armadilhas que isto evita:
-  //
-  // 1. `layout` do framer-motion anima caixas por ESCALA, e escala estica o
-  //    conteúdo junto — era o que deformava ícones, texto e o rosto do Axon.
-  // 2. `width: "auto"` não é interpolável: o motor não sabe animar até um valor
-  //    que só existe depois do layout, então saltava de um estado ao outro.
-  // 3. Animar `flexGrow` nas duas caixas faz uma esperar a outra ceder espaço,
-  //    o que produzia aquele "estica tudo, depois troca".
-  // 4. `calc(100% - ...)` é resolvido contra a largura do PRÓPRIO elemento
-  //    enquanto ele anima, realimentando o valor: a caixa inflava a milhares de
-  //    pixels antes de encolher.
-  //
-  // Com pixels explícitos nos dois lados, o encolher de um e o crescer do outro
-  // acontecem no MESMO quadro — a soma das larguras nunca muda.
+      (route) => pathname === route || pathname.startsWith(`${route}/`),
 
-  // 3.75rem do círculo e 0.625rem (gap-2.5) de respiro, em pixels.
-  const rootFontSize = 16;
-  const ORB_PX = 3.75 * rootFontSize;
-  const GAP_PX = 0.625 * rootFontSize;
-  // Antes da primeira medição não há largura: usar 0 faria a barra piscar
-  // fechada, então o lado largo só é calculado quando o trilho é conhecido.
-  // Antes da primeira medição não há largura em pixels. Renderizar 0 deixaria
-  // a barra como só a bolinha (o lado largo fechado), que foi exatamente o
-  // sintoma da barra "pela metade": o CSS abaixo cai para flex-1 enquanto
-  // `isMeasured` é falso, então o primeiro quadro já sai certo.
-  const isMeasured = railWidth > 0;
-  const widePx = isMeasured ? railWidth - ORB_PX - GAP_PX : 0;
+    ) ||
 
-  const leftWidth = isComposerMode ? ORB_PX : widePx;
-  const rightWidth = isComposerMode ? widePx : ORB_PX;
+    // No modo composer o teclado é esperado: esconder a barra tiraria da tela
 
-  // Uma curva só para as duas caixas: tempos diferentes abririam ou fechariam
-  // o espaço entre elas no meio do caminho.
-  const morph = {
-    type: "spring" as const,
-    stiffness: 420,
-    damping: 38,
-    mass: 0.9,
-  };
+    // justamente o campo que o usuário acabou de tocar.
 
-  // O conteúdo que sai desaparece antes de a caixa fechar; o que entra só
-  // aparece quando ela já está quase aberta.
-  const fadeOut = { duration: 0.12, ease: "easeOut" as const };
-  const fadeIn = { duration: 0.18, delay: 0.12, ease: "easeOut" as const };
+    (isKeyboardOpen && !isComposerMode);
 
-  return (
-    <motion.nav
-      ref={railRef}
-      data-bottom-nav
-      // Fica fora da regra genérica de rodapé do index.css, que anularia o
-      // respiro acima dos botões do sistema (ver o comentário lá).
-      data-own-safe-bottom
-      initial={{ y: "130%" }}
-      animate={{ y: 0 }}
-      transition={{ type: "spring", stiffness: 320, damping: 32 }}
-      className="fixed inset-x-0 bottom-0 z-[90] flex items-end gap-2.5 px-3 pb-3"
-    >
-      {/* -----------------------------------------------------------------
-          ESQUERDA — abas que, no chat, comprimem até virar um único círculo
-          com o ícone da página de onde o usuário veio.
-          ----------------------------------------------------------------- */}
-      <motion.div
-        animate={isMeasured ? { width: leftWidth } : undefined}
-        transition={morph}
-        style={{
-          ...(isMeasured ? { width: leftWidth } : {}),
-          backgroundColor: palette.surface,
-          boxShadow: palette.surfaceShadow,
-        }}
-        initial={false}
-        className={`relative h-[3.75rem] shrink-0 overflow-hidden rounded-[1.875rem] ${
-          isMeasured ? "" : "flex-1"
-        }`}
-      >
-        {/* As abas são ancoradas à ESQUERDA com largura fixa de 100% da caixa
-            larga. Sem isso, `inset-0` faria elas encolherem junto com a caixa e
-            o conteúdo seria espremido — a máscara é o `overflow-hidden` do pai,
-            que vai cobrindo as abas conforme a caixa fecha. */}
-        <motion.div
-          animate={{ opacity: isComposerMode ? 0 : 1 }}
-          transition={isComposerMode ? fadeOut : fadeIn}
-          style={{
-            width: isMeasured ? widePx : undefined,
-            right: isMeasured ? undefined : 0,
-            pointerEvents: isComposerMode ? "none" : "auto",
-          }}
-          className="absolute inset-y-0 left-0 flex items-center gap-0.5 p-1.5"
-        >
-          {/* Cores das abas, medidas em contraste WCAG sobre a superfície de
-              cada tema (o label tem 0,6rem, então vale o mínimo de 4,5:1):
 
-              · Inativa usa --text-secondary (claro 6,3:1, escuro 8,2:1).
-                --text-muted seria o token mais óbvio, mas dá 4,2:1 no claro —
-                reprova para texto deste tamanho.
-              · Ativa usa --accent no claro (7,1:1) e mantém o #c084fc no
-                escuro. Deixar o token nos dois parecia mais limpo, mas o
-                --accent escuro (#a855f7) cai para 4,2:1 contra os 6,2:1 do
-                #c084fc: seria trocar contraste por elegância de código. */}
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = isTabActive(tab);
 
-            return (
-              <button
-                key={tab.path}
-                type="button"
-                onClick={() => goToTab(tab)}
-                aria-current={isActive ? "page" : undefined}
-                aria-hidden={isComposerMode}
-                tabIndex={isComposerMode ? -1 : 0}
-                className={`relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-[1.45rem] px-1 pb-1.5 pt-2 transition-colors active:scale-[0.94] ${
-                  isActive
-                    ? "text-[var(--accent)] dark:text-[#c084fc]"
-                    : "text-[var(--text-secondary)]"
-                }`}
-              >
-                {/* Fundo da aba ativa pintado em CADA aba, revelado por
-                    opacidade. Um só elemento com `layoutId` voava de uma aba à
-                    outra atravessando as do meio — a "bola roxa" que cruzava a
-                    barra. */}
-                <span
-                  aria-hidden
-                  className={`absolute inset-0 -z-10 rounded-[1.45rem] bg-[var(--surface-muted)] transition-opacity duration-200 ${
-                    isActive ? "opacity-100" : "opacity-0"
-                  }`}
-                />
+  // Guarda de onde o usuário veio, para o botão da esquerda saber voltar. Só
 
-                <Icon className="h-[1.15rem] w-[1.15rem] shrink-0" />
+  // rotas de aba entram: voltar do chat para o próprio chat não faria sentido.
 
-                <span className="max-w-full truncate text-[0.6rem] font-semibold leading-none">
-                  {tab.label}
-                </span>
-              </button>
-            );
-          })}
-        </motion.div>
+  useEffect(() => {
 
-        {/* Botão de volta: largura do círculo e ancorado à direita, que é onde
-            a caixa termina nos dois estados — assim ele nasce já no lugar
-            final, sem deslizar enquanto a caixa fecha. */}
-        <motion.button
-          type="button"
-          onClick={leaveComposer}
-          aria-label={`Voltar para ${returnTab.label}`}
-          aria-hidden={!isComposerMode}
-          tabIndex={isComposerMode ? 0 : -1}
-          animate={{ opacity: isComposerMode ? 1 : 0 }}
-          transition={isComposerMode ? fadeIn : fadeOut}
-          style={{
-            width: ORB_PX,
-            pointerEvents: isComposerMode ? "auto" : "none",
-          }}
-          className="absolute inset-y-0 right-0 flex items-center justify-center text-[var(--text-secondary)]"
-        >
-          <ReturnIcon className="h-5 w-5 shrink-0" />
-        </motion.button>
-      </motion.div>
+    if (isComposerMode) return;
 
-      {/* -----------------------------------------------------------------
-          DIREITA — bolinha do Axon que, no chat, expande e vira o campo de
-          mensagem.
-          ----------------------------------------------------------------- */}
-      <motion.div
-        animate={
-          isMeasured
-            ? {
-                width: rightWidth,
-                backgroundColor: isComposerMode ? palette.surface : palette.orb,
-                // A sombra acompanha o que a caixa É naquele momento: halo roxo
-                // enquanto ela é a bolinha do Axon, sombra preta quando vira o
-                // campo de texto. Deixá-la fixa no className projetava um brilho
-                // roxo atrás de um campo escuro, sem nada na tela que o
-                // justificasse.
-                boxShadow: isComposerMode
-                  ? palette.surfaceShadow
-                  : palette.orbShadow,
-              }
-            : undefined
-        }
-        transition={morph}
-        initial={false}
-        style={
-          isMeasured
-            ? {
-                width: rightWidth,
-                boxShadow: isComposerMode
-                  ? palette.surfaceShadow
-                  : palette.orbShadow,
-              }
-            : { width: ORB_PX, boxShadow: palette.orbShadow }
-        }
-        className="relative h-[3.75rem] shrink-0 overflow-hidden rounded-[1.875rem]"
-      >
-        {/* Degradê da bolinha: sai junto com o rosto para não arrastar roxo
-            para dentro do campo de mensagem. */}
-        <motion.span
-          aria-hidden
-          animate={{ opacity: isComposerMode ? 0 : 1 }}
-          transition={isComposerMode ? fadeOut : fadeIn}
-          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#a45ae0] to-[#6a26a8]"
-        />
 
-        {/* Composer ancorado à DIREITA: é a borda que não se move quando esta
-            caixa cresce, então o campo não desliza enquanto abre. */}
-        <motion.form
-          onSubmit={handleSend}
-          animate={{ opacity: isComposerMode ? 1 : 0 }}
-          transition={isComposerMode ? fadeIn : fadeOut}
-          style={{
-            width: isMeasured ? widePx : undefined,
-            right: isMeasured ? undefined : 0,
-            pointerEvents: isComposerMode ? "auto" : "none",
-          }}
-          aria-hidden={!isComposerMode}
-          className="absolute inset-y-0 right-0 flex items-center gap-1 px-2"
-        >
-          <button
-            type="button"
-            onClick={() => navigate("/chat")}
-            aria-label="Nova conversa"
-            tabIndex={isComposerMode ? 0 : -1}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] transition active:scale-[0.92]"
-          >
-            <Plus className="h-5 w-5" />
-          </button>
 
-          <input
-            id="bottom-nav-composer"
-            value={message}
-            onChange={(event) => setMessage(event.target.value)}
-            placeholder="Mensagem AXON"
-            tabIndex={isComposerMode ? 0 : -1}
-            className="min-w-0 flex-1 bg-transparent text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-soft)]"
-          />
+    const current = tabs.find(
 
-          {/* Sem texto o botão oferece a voz; com texto, o envio. Mesmo padrão
-              do composer que já existe dentro da conversa. */}
-          {message.trim() ? (
-            <button
-              type="submit"
-              aria-label="Enviar mensagem"
-              tabIndex={isComposerMode ? 0 : -1}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--accent-strong)] text-white transition active:scale-[0.92]"
-            >
-              <Send className="h-4 w-4" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => navigate("/voz")}
-              aria-label="Conversar por voz"
-              tabIndex={isComposerMode ? 0 : -1}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[var(--text-secondary)] transition active:scale-[0.92]"
-            >
-              <AudioLines className="h-5 w-5" />
-            </button>
-          )}
-        </motion.form>
+      (tab) =>
 
-        {/* Rosto do Axon: largura do círculo, ancorado à direita pelo mesmo
-            motivo do composer. */}
-        <motion.button
-          type="button"
-          onClick={handleOrbClick}
-          onPointerDown={startHold}
-          onPointerUp={cancelHold}
-          onPointerLeave={cancelHold}
-          onPointerCancel={cancelHold}
-          onContextMenu={(event) => event.preventDefault()}
-          aria-label="Falar com o Axon"
-          aria-hidden={isComposerMode}
-          tabIndex={isComposerMode ? -1 : 0}
-          animate={{ opacity: isComposerMode ? 0 : 1 }}
-          transition={isComposerMode ? fadeOut : fadeIn}
-          style={{
-            width: ORB_PX,
-            pointerEvents: isComposerMode ? "none" : "auto",
-          }}
-          className="absolute inset-y-0 right-0 flex items-center justify-center"
-        >
-          <img
-            src={axonHead}
-            alt=""
-            className="h-11 w-11 min-w-[2.75rem] max-w-none select-none object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]"
-            draggable={false}
-          />
-        </motion.button>
-      </motion.div>
-    </motion.nav>
-  );
+        pathname === tab.path ||
+
+        pathname.startsWith(`${tab.path}/`) ||
+
+        (tab.alsoActiveOn ?? []).some(
+
+          (route) => pathname === route || pathname.startsWith(`${route}/`),
+
+        ),
+
+    );
+
+
+
+    if (current) {
+
+      setReturnTab(current);
+
+    }
+
+  }, [pathname, isComposerMode]);
+
+
+
+  // Sair do chat limpa o rascunho: ele pertence àquela visita.
+
+  useEffect(() => {
+
+    if (!isComposerMode) {
+
+      setMessage("");
+
+    }
+
+  }, [isComposerMode]);
+
+
+
+  // ---------------------------------------------------------------------------
+
+  // Teclado do Android
+
+  // ---------------------------------------------------------------------------
+
+  // A altura da visualViewport cai quando o teclado abre. É o sinal mais
+
+  // confiável aqui porque não depende do plugin de teclado estar instalado.
+
+  useEffect(() => {
+
+    const viewport = window.visualViewport;
+
+
+
+    if (!viewport) return;
+
+
+
+    // Guarda a altura com o teclado fechado para comparar depois. Rotacionar o
+
+    // aparelho atualiza esta referência junto.
+
+    let baseHeight = viewport.height;
+
+
+
+    function handleResize() {
+
+      if (!viewport) return;
+
+
+
+      const shrank = baseHeight - viewport.height;
+
+
+
+      // 160px é maior que qualquer barra de sistema que apareça/suma sozinha,
+
+      // e menor que qualquer teclado.
+
+      if (shrank > 160) {
+
+        setIsKeyboardOpen(true);
+
+      } else {
+
+        setIsKeyboardOpen(false);
+
+        baseHeight = Math.max(baseHeight, viewport.height);
+
+      }
+
+    }
+
+
+
+    viewport.addEventListener("resize", handleResize);
+
+
+
+    return () => viewport.removeEventListener("resize", handleResize);
+
+  }, []);
+
+
+
+  // ---------------------------------------------------------------------------
+
+  // Navegação
+
+  // ---------------------------------------------------------------------------
+
+  function isTabActive(tab: TabItem) {
+
+    if (pathname === tab.path || pathname.startsWith(`${tab.path}/`)) {
+
+      return true;
+
+    }
+
+
+
+    return (tab.alsoActiveOn ?? []).some(
+
+      (route) => pathname === route || pathname.startsWith(`${route}/`),
+
+    );
+
+  }
+
+
+
+  function goToTab(tab: TabItem) {
+
+    // Tocar na aba onde já se está rola até o topo em vez de renavegar.
+
+    if (isTabActive(tab) && pathname === tab.path) {
+
+      window.scrollTo({ top: 0, behavior: "smooth" });
+
+      return;
+
+    }
+
+
+
+    navigate(tab.path);
+
+  }
+
+
+
+  // Volta do chat para a última aba visitada.
+
+  function leaveComposer() {
+
+    navigate(returnTab.path);
+
+  }
+
+
+
+  // Entrega a mensagem para a tela de chat, que cuida de criar a conversa e
+
+  // enviar. A barra só transporta o texto: manter a lógica de envio aqui
+
+  // duplicaria o que ChatConversation já faz.
+
+  function handleSend(event: FormEvent) {
+
+    event.preventDefault();
+
+
+
+    const text = message.trim();
+
+
+
+    if (!text) return;
+
+
+
+    setMessage("");
+
+    navigate("/chat", { state: { draft: text, from: returnTab.path } });
+
+  }
+
+
+
+  // ---------------------------------------------------------------------------
+
+  // Gestos da bolinha
+
+  // ---------------------------------------------------------------------------
+
+  function startHold() {
+
+    didHold.current = false;
+
+
+
+    holdTimer.current = window.setTimeout(() => {
+
+      didHold.current = true;
+
+      navigate("/voz");
+
+    }, HOLD_MS);
+
+  }
+
+
+
+  function cancelHold() {
+
+    if (holdTimer.current !== null) {
+
+      window.clearTimeout(holdTimer.current);
+
+      holdTimer.current = null;
+
+    }
+
+  }
+
+
+
+  // Segurar já navegou; o clique que vem depois do dedo sair precisa ser
+
+  // ignorado, senão abriria o leque por cima da tela de voz.
+
+  function handleOrbClick() {
+
+    if (didHold.current) {
+
+      didHold.current = false;
+
+      return;
+
+    }
+
+
+
+    navigate("/chat");
+
+  }
+
+
+
+  // Limpa o timer se o componente sair enquanto o dedo ainda está na bolinha.
+
+  useEffect(() => cancelHold, []);
+
+
+
+  // Largura do trilho, medida do próprio <nav>. Precisa ser em PIXELS: um
+
+  // `calc(100% - ...)` seria resolvido contra a largura do elemento que está
+
+  // animando, realimentando o valor — a caixa inflava para milhares de pixels
+
+  // antes de encolher. É a origem do "estica tudo e só então troca".
+
+  const [railWidth, setRailWidth] = useState(0);
+
+  const observerRef = useRef<ResizeObserver | null>(null);
+
+
+
+  // Callback ref em vez de useEffect com []: a barra desmonta nas telas onde
+
+  // fica escondida, então um efeito de montagem única mediria `null` na
+
+  // primeira vez e nunca mais rodaria — o trilho ficava com largura 0 e só a
+
+  // bolinha aparecia. O callback dispara toda vez que o nó entra ou sai.
+
+  const railRef = useCallback((rail: HTMLElement | null) => {
+
+    observerRef.current?.disconnect();
+
+
+
+    if (!rail) {
+
+      observerRef.current = null;
+
+      return;
+
+    }
+
+
+
+    const measure = () => {
+
+      // O padding lateral do nav (px-3 = 0.75rem de cada lado) não faz parte
+
+      // do trilho onde as caixas vivem.
+
+      const styles = window.getComputedStyle(rail);
+
+      const inner =
+
+        rail.clientWidth -
+
+        parseFloat(styles.paddingLeft) -
+
+        parseFloat(styles.paddingRight);
+
+
+
+      // Largura 0 acontece enquanto o nó ainda não foi disposto; guardá-la
+
+      // travaria a barra fechada.
+
+      if (inner > 0) {
+
+        setRailWidth(inner);
+
+      }
+
+    };
+
+
+
+    measure();
+
+
+
+    const observer = new ResizeObserver(measure);
+
+    observer.observe(rail);
+
+    observerRef.current = observer;
+
+  }, []);
+
+
+
+  // Solta o observer quando o componente sai de vez.
+
+  useEffect(() => {
+
+    return () => observerRef.current?.disconnect();
+
+  }, []);
+
+
+
+  if (isHidden) {
+
+    return null;
+
+  }
+
+
+
+  const ReturnIcon = returnTab.icon;
+
+
+
+  // ---------------------------------------------------------------------------
+
+  // Geometria da transformação
+
+  // ---------------------------------------------------------------------------
+
+  // As duas caixas trocam de largura ao mesmo tempo, animando PIXELS medidos do
+
+  // trilho (ver railWidth acima). Quatro armadilhas que isto evita:
+
+  //
+
+  // 1. `layout` do framer-motion anima caixas por ESCALA, e escala estica o
+
+  //    conteúdo junto — era o que deformava ícones, texto e o rosto do Axon.
+
+  // 2. `width: "auto"` não é interpolável: o motor não sabe animar até um valor
+
+  //    que só existe depois do layout, então saltava de um estado ao outro.
+
+  // 3. Animar `flexGrow` nas duas caixas faz uma esperar a outra ceder espaço,
+
+  //    o que produzia aquele "estica tudo, depois troca".
+
+  // 4. `calc(100% - ...)` é resolvido contra a largura do PRÓPRIO elemento
+
+  //    enquanto ele anima, realimentando o valor: a caixa inflava a milhares de
+
+  //    pixels antes de encolher.
+
+  //
+
+  // Com pixels explícitos nos dois lados, o encolher de um e o crescer do outro
+
+  // acontecem no MESMO quadro — a soma das larguras nunca muda.
+
+
+
+  // 3.75rem do círculo e 0.625rem (gap-2.5) de respiro, em pixels.
+
+  const rootFontSize = 16;
+
+  const ORB_PX = 3.75 * rootFontSize;
+
+  const GAP_PX = 0.625 * rootFontSize;
+
+  // Antes da primeira medição não há largura: usar 0 faria a barra piscar
+
+  // fechada, então o lado largo só é calculado quando o trilho é conhecido.
+
+  // Antes da primeira medição não há largura em pixels. Renderizar 0 deixaria
+
+  // a barra como só a bolinha (o lado largo fechado), que foi exatamente o
+
+  // sintoma da barra "pela metade": o CSS abaixo cai para flex-1 enquanto
+
+  // `isMeasured` é falso, então o primeiro quadro já sai certo.
+
+  const isMeasured = railWidth > 0;
+
+  const widePx = isMeasured ? railWidth - ORB_PX - GAP_PX : 0;
+
+
+
+  const leftWidth = isComposerMode ? ORB_PX : widePx;
+
+  const rightWidth = isComposerMode ? widePx : ORB_PX;
+
+
+
+  // Uma curva só para as duas caixas: tempos diferentes abririam ou fechariam
+
+  // o espaço entre elas no meio do caminho.
+
+  const morph = {
+
+    type: "spring" as const,
+
+    stiffness: 420,
+
+    damping: 38,
+
+    mass: 0.9,
+
+  };
+
+
+
+  // O conteúdo que sai desaparece antes de a caixa fechar; o que entra só
+
+  // aparece quando ela já está quase aberta.
+
+  const fadeOut = { duration: 0.12, ease: "easeOut" as const };
+
+  const fadeIn = { duration: 0.18, delay: 0.12, ease: "easeOut" as const };
+
+
+
+  return (
+
+    <motion.nav
+
+      ref={railRef}
+
+      data-bottom-nav
+
+      // Fica fora da regra genérica de rodapé do index.css, que anularia o
+
+      // respiro acima dos botões do sistema (ver o comentário lá).
+
+      data-own-safe-bottom
+
+      initial={{ y: "130%" }}
+
+      animate={{ y: 0 }}
+
+      transition={{ type: "spring", stiffness: 320, damping: 32 }}
+
+      className="fixed inset-x-0 bottom-0 z-[90] flex items-end gap-2.5 px-3 pb-3"
+
+    >
+
+      {/* -----------------------------------------------------------------
+
+          ESQUERDA — abas que, no chat, comprimem até virar um único círculo
+
+          com o ícone da página de onde o usuário veio.
+
+          ----------------------------------------------------------------- */}
+
+      <motion.div
+
+        animate={isMeasured ? { width: leftWidth } : undefined}
+
+        transition={morph}
+
+        style={{
+
+          ...(isMeasured ? { width: leftWidth } : {}),
+
+          backgroundColor: palette.surface,
+
+          boxShadow: palette.surfaceShadow,
+
+        }}
+
+        initial={false}
+
+        className={`relative h-[3.75rem] shrink-0 overflow-hidden rounded-[1.875rem] ${
+
+          isMeasured ? "" : "flex-1"
+
+        }`}
+
+      >
+
+        {/* As abas são ancoradas à ESQUERDA com largura fixa de 100% da caixa
+
+            larga. Sem isso, `inset-0` faria elas encolherem junto com a caixa e
+
+            o conteúdo seria espremido — a máscara é o `overflow-hidden` do pai,
+
+            que vai cobrindo as abas conforme a caixa fecha. */}
+
+        <motion.div
+
+          animate={{ opacity: isComposerMode ? 0 : 1 }}
+
+          transition={isComposerMode ? fadeOut : fadeIn}
+
+          style={{
+
+            width: isMeasured ? widePx : undefined,
+
+            right: isMeasured ? undefined : 0,
+
+            pointerEvents: isComposerMode ? "none" : "auto",
+
+          }}
+
+          className="absolute inset-y-0 left-0 flex items-center gap-0.5 p-1.5"
+
+        >
+
+          {/* Cores das abas, medidas em contraste WCAG sobre a superfície de
+
+              cada tema (o label tem 0,6rem, então vale o mínimo de 4,5:1):
+
+
+
+              · Inativa usa --text-secondary (claro 6,3:1, escuro 8,2:1).
+
+                --text-muted seria o token mais óbvio, mas dá 4,2:1 no claro —
+
+                reprova para texto deste tamanho.
+
+              · Ativa usa --accent no claro (7,1:1) e mantém o #c084fc no
+
+                escuro. Deixar o token nos dois parecia mais limpo, mas o
+
+                --accent escuro (#a855f7) cai para 4,2:1 contra os 6,2:1 do
+
+                #c084fc: seria trocar contraste por elegância de código. */}
+
+          {tabs.map((tab) => {
+
+            const Icon = tab.icon;
+
+            const isActive = isTabActive(tab);
+
+
+
+            return (
+
+              <button
+
+                key={tab.path}
+
+                type="button"
+
+                onClick={() => goToTab(tab)}
+
+                aria-current={isActive ? "page" : undefined}
+
+                aria-hidden={isComposerMode}
+
+                tabIndex={isComposerMode ? -1 : 0}
+
+                className={`relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-[1.45rem] px-1 pb-1.5 pt-2 transition-colors active:scale-[0.94] ${
+
+                  isActive
+
+                    ? "text-[var(--accent)] dark:text-[#c084fc]"
+
+                    : "text-[var(--text-secondary)]"
+
+                }`}
+
+              >
+
+                {/* Fundo da aba ativa pintado em CADA aba, revelado por
+
+                    opacidade. Um só elemento com `layoutId` voava de uma aba à
+
+                    outra atravessando as do meio — a "bola roxa" que cruzava a
+
+                    barra. */}
+
+                <span
+
+                  aria-hidden
+
+                  className={`absolute inset-0 -z-10 rounded-[1.45rem] bg-[var(--surface-muted)] transition-opacity duration-200 ${
+
+                    isActive ? "opacity-100" : "opacity-0"
+
+                  }`}
+
+                />
+
+
+
+                <Icon className="h-[1.15rem] w-[1.15rem] shrink-0" />
+
+
+
+                <span className="max-w-full truncate text-[0.6rem] font-semibold leading-none">
+
+                  {tab.label}
+
+                </span>
+
+              </button>
+
+            );
+
+          })}
+
+        </motion.div>
+
+
+
+        {/* Botão de volta: largura do círculo e ancorado à direita, que é onde
+
+            a caixa termina nos dois estados — assim ele nasce já no lugar
+
+            final, sem deslizar enquanto a caixa fecha. */}
+
+        <motion.button
+
+          type="button"
+
+          onClick={leaveComposer}
+
+          aria-label={`Voltar para ${returnTab.label}`}
+
+          aria-hidden={!isComposerMode}
+
+          tabIndex={isComposerMode ? 0 : -1}
+
+          animate={{ opacity: isComposerMode ? 1 : 0 }}
+
+          transition={isComposerMode ? fadeIn : fadeOut}
+
+          style={{
+
+            width: ORB_PX,
+
+            pointerEvents: isComposerMode ? "auto" : "none",
+
+          }}
+
+          className="absolute inset-y-0 right-0 flex items-center justify-center text-[var(--text-secondary)]"
+
+        >
+
+          <ReturnIcon className="h-5 w-5 shrink-0" />
+
+        </motion.button>
+
+      </motion.div>
+
+
+
+      {/* -----------------------------------------------------------------
+
+          DIREITA — bolinha do Axon que, no chat, expande e vira o campo de
+
+          mensagem.
+
+          ----------------------------------------------------------------- */}
+
+      <motion.div
+
+        animate={
+
+          isMeasured
+
+            ? {
+
+                width: rightWidth,
+
+                backgroundColor: isComposerMode ? palette.surface : palette.orb,
+
+                // A sombra acompanha o que a caixa É naquele momento: halo roxo
+
+                // enquanto ela é a bolinha do Axon, sombra preta quando vira o
+
+                // campo de texto. Deixá-la fixa no className projetava um brilho
+
+                // roxo atrás de um campo escuro, sem nada na tela que o
+
+                // justificasse.
+
+                boxShadow: isComposerMode
+
+                  ? palette.surfaceShadow
+
+                  : palette.orbShadow,
+
+              }
+
+            : undefined
+
+        }
+
+        transition={morph}
+
+        initial={false}
+
+        style={
+
+          isMeasured
+
+            ? {
+
+                width: rightWidth,
+
+                boxShadow: isComposerMode
+
+                  ? palette.surfaceShadow
+
+                  : palette.orbShadow,
+
+              }
+
+            : { width: ORB_PX, boxShadow: palette.orbShadow }
+
+        }
+
+        className="relative h-[3.75rem] shrink-0 overflow-hidden rounded-[1.875rem]"
+
+      >
+
+        {/* Degradê da bolinha: sai junto com o rosto para não arrastar roxo
+
+            para dentro do campo de mensagem. */}
+
+        <motion.span
+
+          aria-hidden
+
+          animate={{ opacity: isComposerMode ? 0 : 1 }}
+
+          transition={isComposerMode ? fadeOut : fadeIn}
+
+          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#a45ae0] to-[#6a26a8]"
+
+        />
+
+
+
+        {/* Composer ancorado à DIREITA: é a borda que não se move quando esta
+
+            caixa cresce, então o campo não desliza enquanto abre. */}
+
+        <motion.form
+
+          onSubmit={handleSend}
+
+          animate={{ opacity: isComposerMode ? 1 : 0 }}
+
+          transition={isComposerMode ? fadeIn : fadeOut}
+
+          style={{
+
+            width: isMeasured ? widePx : undefined,
+
+            right: isMeasured ? undefined : 0,
+
+            pointerEvents: isComposerMode ? "auto" : "none",
+
+          }}
+
+          aria-hidden={!isComposerMode}
+
+          className="absolute inset-y-0 right-0 flex items-center gap-1 px-2"
+
+        >
+
+          <button
+
+            type="button"
+
+            onClick={() => navigate("/chat")}
+
+            aria-label="Nova conversa"
+
+            tabIndex={isComposerMode ? 0 : -1}
+
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] transition active:scale-[0.92]"
+
+          >
+
+            <Plus className="h-5 w-5" />
+
+          </button>
+
+
+
+          <input
+
+            id="bottom-nav-composer"
+
+            value={message}
+
+            onChange={(event) => setMessage(event.target.value)}
+
+            placeholder="Mensagem AXON"
+
+            tabIndex={isComposerMode ? 0 : -1}
+
+            className="min-w-0 flex-1 bg-transparent text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-soft)]"
+
+          />
+
+
+
+          {/* Sem texto o botão oferece a voz; com texto, o envio. Mesmo padrão
+
+              do composer que já existe dentro da conversa. */}
+
+          {message.trim() ? (
+
+            <button
+
+              type="submit"
+
+              aria-label="Enviar mensagem"
+
+              tabIndex={isComposerMode ? 0 : -1}
+
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--accent-strong)] text-white transition active:scale-[0.92]"
+
+            >
+
+              <Send className="h-4 w-4" />
+
+            </button>
+
+          ) : (
+
+            <button
+
+              type="button"
+
+              onClick={() => navigate("/voz")}
+
+              aria-label="Conversar por voz"
+
+              tabIndex={isComposerMode ? 0 : -1}
+
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[var(--text-secondary)] transition active:scale-[0.92]"
+
+            >
+
+              <AudioLines className="h-5 w-5" />
+
+            </button>
+
+          )}
+
+        </motion.form>
+
+
+
+        {/* Rosto do Axon: largura do círculo, ancorado à direita pelo mesmo
+
+            motivo do composer. */}
+
+        <motion.button
+
+          type="button"
+
+          onClick={handleOrbClick}
+
+          onPointerDown={startHold}
+
+          onPointerUp={cancelHold}
+
+          onPointerLeave={cancelHold}
+
+          onPointerCancel={cancelHold}
+
+          onContextMenu={(event) => event.preventDefault()}
+
+          aria-label="Falar com o Axon"
+
+          aria-hidden={isComposerMode}
+
+          tabIndex={isComposerMode ? -1 : 0}
+
+          animate={{ opacity: isComposerMode ? 0 : 1 }}
+
+          transition={isComposerMode ? fadeOut : fadeIn}
+
+          style={{
+
+            width: ORB_PX,
+
+            pointerEvents: isComposerMode ? "none" : "auto",
+
+          }}
+
+          className="absolute inset-y-0 right-0 flex items-center justify-center"
+
+        >
+
+          <img
+
+            src={axonHead}
+
+            alt=""
+
+            className="h-11 w-11 min-w-[2.75rem] max-w-none select-none object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]"
+
+            draggable={false}
+
+          />
+
+        </motion.button>
+
+      </motion.div>
+
+    </motion.nav>
+
+  );
+
 }
 
+
+
 // ===========================================================================
+
 // MONTAGEM CONDICIONAL
+
 // ===========================================================================
+
 // A barra aparece em LARGURA de celular, não só no APK: a web estreita serve
+
 // como pré-visualização do design mobile (ver useLarguraDeCelular). No desktop
+
 // a navegação continua sendo a Sidebar de cada página.
+
 //
+
 // DESMONTAR, e não esconder com `lg:hidden`: a regra
+
 // `body:has([data-bottom-nav]) main:not(.h-[100dvh])` do index.css reserva
+
 // espaço no rodapé, e o `:has()` enxerga o elemento mesmo invisível — esconder
+
 // por CSS deixaria um vão morto no rodapé de todo o desktop.
 
+
+
 export function BottomNavGate() {
-  const ehCelular = useLarguraDeCelular();
 
-  if (!ehCelular) {
-    return null;
-  }
+  const ehCelular = useLarguraDeCelular();
 
-  return <BottomNav />;
+
+
+  if (!ehCelular) {
+
+    return null;
+
+  }
+
+
+
+  return <BottomNav />;
+
 }

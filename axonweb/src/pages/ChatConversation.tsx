@@ -1296,24 +1296,6 @@ export function ChatConversationPanel({
 
               )}
 
-
-
-              <button
-
-                type="button"
-
-                onClick={handleOpenSidebar}
-
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-soft bg-surface-muted text-secondary shadow-card backdrop-blur-2xl transition active:scale-[0.96]"
-
-                aria-label="Abrir menu"
-
-              >
-
-                <Menu className="h-5 w-5" />
-
-              </button>
-
             </div>
 
           </div>
