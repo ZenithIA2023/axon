@@ -115,7 +115,9 @@ export default function Login() {
             </h1>
 
             <p className="mx-auto mt-4 max-w-[16.5rem] text-[0.68rem] font-medium leading-5 text-[#6d28d9] dark:text-[#d8b4fe]/62 dark:text-white/62">
-              Acesse seu ambiente inteligente de produtividade e foco
+              Acesse seu ambiente inteligente 
+              <br /> 
+              de produtividade e foco
             </p>
           </div>
 
