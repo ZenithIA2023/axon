@@ -72,11 +72,21 @@ Bernardo se ainda não souber.
 
 ```
 Bundle ID / App ID:  tech.axonapp.app      (imutável, o mesmo do Android)
+Team ID:             AR8WL2CU44            (confirmado no portal em 20/10/2026)
+Services ID:         tech.axonapp.web      (Sign in with Apple na web)
 Deep link scheme:    tech.axonapp.app      (backend: MOBILE_SCHEME em google_auth.py:16)
 Site:                https://axonapp.tech
 API:                 https://api.axonapp.tech
 Repositório:         github.com/ZenithIA2023/AxonWeb  (privado)
 ```
+
+> **O Team ID não é segredo.** Ele aparece no `apple-app-site-association`, que
+> é servido publicamente, e dentro de qualquer `.ipa`. Pode ficar em doc e em
+> commit. O que é segredo são as chaves `.p8` — essas nunca.
+>
+> No portal a Apple mostra App IDs como `TEAMID.bundleid`, ou seja
+> `AR8WL2CU44.tech.axonapp.app`. O prefixo **não faz parte do bundle ID**;
+> onde o plano pede o bundle, é `tech.axonapp.app` sozinho.
 
 ### Como o OAuth nativo funciona hoje
 
@@ -166,26 +176,88 @@ com transferência futura — o mesmo caminho adotado na Play Console.
 
 ## Fase 0 — Conta e identificadores (Bernardo faz, fora do código)
 
-1. ~~Criar a conta Apple Developer com a conta Apple da Zenith, não a pessoal.~~
-   **Solicitada em 28/09/2026, em análise.** Os itens abaixo esperam a aprovação.
-2. Registrar o App ID `tech.axonapp.app` no portal, habilitando as capabilities:
-   **Sign in with Apple**, **Push Notifications**, **Associated Domains**.
-3. Criar um **Services ID** (necessário para o Sign in with Apple na web).
-   No Services ID, em "Sign in with Apple → Configure", cadastrar:
-   - **Domínio:** `api.axonapp.tech`
-   - **Return URL:** `https://api.axonapp.tech/auth/apple/callback`
+1. ~~Criar a conta Apple Developer.~~ ✅ **APROVADA em 19/10/2026.**
+   Enrollment ID `DAAGPCM88H`, tipo **Individual** (não organização — sem CNPJ,
+   mesma decisão da Play Console). A primeira inscrição ficou 2 semanas travada
+   na validação de endereço; o que destravou foi **ligar**, não o formulário
+   (ver memória `apple-enrollment-caso-suporte`).
+
+   > Divergência do plano original, registrada de propósito: este item dizia
+   > "usar a conta Apple da Zenith, não a pessoal". A inscrição saiu como
+   > Individual, no nome do Bernardo. Consequência prática: transferir o app
+   > para uma entidade no futuro exige a transferência de app da Apple, igual
+   > ao caminho já aceito na Play Console. Não bloqueia nada agora.
+
+   **Os itens 2 a 7 abaixo estão liberados desde 19/10/2026.**
+2. ~~Registrar o App ID `tech.axonapp.app`~~ ✅ **FEITO em 20/10/2026.**
+   Capabilities habilitadas: Sign in with Apple, Push Notifications,
+   Associated Domains. Team ID descoberto aqui: `AR8WL2CU44`.
+3. ~~Criar um **Services ID**~~ ✅ **FEITO em 20/10/2026.**
+   `tech.axonapp.web`, com Primary App ID `tech.axonapp.app`,
+   domínio `api.axonapp.tech` e Return URL
+   `https://api.axonapp.tech/auth/apple/callback`.
 
    A Apple **não aceita `localhost`** nem HTTP. Para testar a partir do Codespace,
    uma URL `*.app.github.dev` fixa também pode ser cadastrada, mas ela muda se o
    Codespace for recriado.
-4. Criar o app no App Store Connect com esse bundle ID.
+
+   > Armadilha encontrada na prática: a lista de Identifiers tem um **filtro**
+   > no canto superior direito que vem em "App IDs". O Services ID existe mas
+   > não aparece até trocar o filtro para "Services IDs". E a tela de Configure
+   > tem **dois níveis de salvamento** (Next → Done, e depois Save na tela de
+   > fora); fechar no primeiro deixa o Services ID vazio.
+4. ~~Criar o app no App Store Connect~~ ✅ **FEITO em 20/10/2026.**
+   Nome `Axon: IA de produtividade` (o mesmo da Play Store, agora **reservado**),
+   SKU `axon-ios-001`, idioma Português (Brasil), User Access **Full Access**
+   (enrollment Individual — só existe um usuário; Limited Access esconderia o
+   app de quem for adicionado depois, sem mensagem de erro).
+> ### ⏸️ A Fase 0 parou aqui em 20/10/2026.
+>
+> Os itens 2, 3 e 4 são **configuração pura** e estão feitos. Os itens 5, 6 e 7
+> geram **chaves privadas `.p8` que só podem ser baixadas uma vez**, e por isso
+> ficaram para depois de decidir onde elas vão morar.
+>
+> **Dos três, só o item 7 é necessário agora** — ele destrava o teste da Fase 1.
+> Os itens 5 (CI) e 6 (push) só são usados nas Fases 3 e 4. Chave gerada e não
+> usada é só mais um segredo para zelar e perder.
+>
+> O `.gitignore` da raiz foi protegido em 20/10/2026 (`*.p8`, `*.mobileprovision`,
+> `*.cer`, `*.certSigningRequest`) — antes disso um `.p8` solto no repo seria
+> commitado.
+
 5. Gerar a **chave de API do App Store Connect** (`.p8`) para o CI publicar sem
    senha. **Só dá para baixar uma vez** — guarde no cofre imediatamente.
-6. Gerar a **chave APNs** (`.p8`) para push.
-7. Gerar uma **chave com Sign in with Apple habilitado** (`.p8`), anotando o
-   **Key ID** e o **Team ID**. O backend usa essa chave para trocar o código da
-   Apple por um refresh token e para **revogar** o acesso na exclusão de conta
-   (1.5). Também só baixa uma vez.
+   *(Fase 3 — não precisa ainda.)*
+6. Gerar a **chave APNs** (`.p8`) para push. *(Fase 4 — não precisa ainda.)*
+> ### Onde as chaves e os identificadores moram (decidido em 20/10/2026)
+>
+> | O quê | Onde | Por quê |
+> |---|---|---|
+> | Team ID, Key IDs, Services ID, Bundle ID | página **compartilhada** do Notion | não são segredo; o Team ID é servido publicamente no `apple-app-site-association` |
+> | Conteúdo dos `.p8` | `.env` do VPS **+** página **privada** do Notion | é onde a chave é usada, mais uma reserva de acesso estreito |
+>
+> Na página compartilhada, no lugar da chave, fica **onde ela está** — não o
+> valor.
+>
+> **Por que não é preciso cofre mais robusto:** chave `.p8` da Apple é
+> **substituível**. Perdeu, revoga no portal, gera outra, atualiza o `.env`.
+> Não quebra nada para quem já usa o app. É o oposto da keystore do Android,
+> onde perder significa nunca mais atualizar o app publicado. Aqui o risco real
+> é **vazamento**, não perda — a chave de Sign in with Apple permite a quem a
+> tiver **forjar login de qualquer usuário do Axon**.
+>
+> O `.env` do VPS **não viaja no `deploy.sh`**: as variáveis novas são copiadas
+> à mão, como aconteceu com a `OPENROUTER_API_KEY`
+> (memória `env-producao-nao-viaja-no-deploy`).
+
+7. ~~Gerar uma **chave com Sign in with Apple habilitado** (`.p8`)~~
+   ✅ **FEITO em 20/10/2026.** Arquivo baixado e guardado, com o Key ID, na
+   página privada do Notion (ver tabela acima). O backend usa essa chave para
+   trocar o código da Apple por um refresh token e para **revogar** o acesso na
+   exclusão de conta (1.5).
+
+   > **Fase 0 concluída.** Faltam só os itens 5 (CI) e 6 (push), adiados de
+   > propósito para as Fases 3 e 4, quando forem realmente usados.
 
 > O bundle ID é imutável depois da primeira publicação. `tech.axonapp.app` mantém as
 > duas lojas coerentes.
@@ -260,11 +332,20 @@ supabase_session = supabase_auth.auth.sign_in_with_id_token({
   (item 7), com `iss` = Team ID, `sub` = client ID (Services ID na web,
   `tech.axonapp.app` no nativo), `aud` = `https://appleid.apple.com`. Gere-o sob
   demanda com validade curta, em vez de guardar um fixo (o máximo aceito pela
-  Apple são 6 meses, e um fixo vence em silêncio). Verifique se `PyJWT` com
-  `cryptography` já está no ambiente antes de adicionar dependência.
-- **Migration 36** (a última aplicada é a 35): coluna para o refresh token da
-  Apple em `profiles` (ex.: `apple_refresh_token text`), com comentário do porquê.
-  Aplicada à mão pelo Bernardo antes de reiniciar o backend.
+  Apple são 6 meses, e um fixo vence em silêncio).
+
+  > **Resolvido em 20/10/2026 — não adicione dependência.** Use
+  > **`python-jose`**, que já está declarado no `requirements.txt` como
+  > `python-jose[cryptography]` e assina ES256 com `kid` no header (testado na
+  > versão 3.5.0 instalada). O `PyJWT` **também** está no ambiente (2.13.0),
+  > mas **não está no `requirements.txt`** — é dependência transitiva e pode
+  > sumir num install limpo. Usá-lo funcionaria hoje e quebraria depois.
+- **Migration 37** (corrigido em 20/10/2026 — a última em `migrations.sql` é a
+  **36**, `api_usage_events`; o plano original dizia 36 porque foi escrito antes
+  dela). Coluna para o refresh token da Apple em `profiles` (ex.:
+  `apple_refresh_token text`) **mais** a coluna que guarda qual client ID o
+  emitiu (ver 1.5, item 2), com comentário do porquê. Aplicada à mão pelo
+  Bernardo antes de reiniciar o backend.
 
 **Diferenças de dados que quebram quem assume simetria com o Google:**
 

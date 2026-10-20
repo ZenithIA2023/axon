@@ -10,6 +10,12 @@ google-services.json
 *.keystore
 keystore.properties
 
+# Chaves privadas da Apple (.p8). São TRÊS e cada uma só pode ser baixada UMA
+# vez: API do App Store Connect, APNs (push) e Sign in with Apple. Vazar a de
+# Sign in with Apple permite a terceiros forjar login de qualquer usuário nosso;
+# vazar a do App Store Connect permite publicar na nossa conta.
+*.p8
+
 # Rede de segurança: qualquer .json solto na RAIZ do repo. Nenhum arquivo
 # legítimo do projeto mora aqui — os que importam estão em axonweb/ e backend/.
 # Credenciais baixadas costumam cair na raiz, e é assim que vazam.
@@ -19,6 +25,11 @@ keystore.properties
 
 # Mesma lógica para áudio solto na raiz: amostras de voz gravadas para testar
 # a Fase 2 (transcrição) — dados pessoais, não fazem parte do projeto.
+# Mesma rede de segurança para certificados e perfis da Apple soltos na raiz.
+/*.mobileprovision
+/*.cer
+/*.certSigningRequest
+
 /*.ogg
 /*.webm
 /*.m4a

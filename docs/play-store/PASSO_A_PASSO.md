@@ -88,12 +88,26 @@ O Google exige provar que `axonapp.tech` é seu:
 O Google exige um vídeo **não listado no YouTube** mostrando o uso do escopo
 sensível. Grave a tela do celular (ou do site) mostrando, nesta ordem:
 
+> ⚠️ **Corrigido em 20/10/2026.** O passo 4 desta lista dizia "mostrar um evento
+> da agenda aparecendo dentro do Axon". **O app não faz isso** — ele só escreve
+> no Google Agenda, nunca lê (`google_service.py`: POST, PATCH e DELETE, sem
+> GET). Era a mesma afirmação falsa que estava na política de privacidade e na
+> ficha da loja. Gravar esse passo contradiria a justificativa enviada ao
+> Google, que diz "a sincronização ocorre do Axon para o Google Agenda".
+
 1. A tela de login do Axon
 2. Clicar em "Entrar com Google" e a tela de consentimento **aparecendo por
    completo** (o Google quer ver os escopos pedidos)
-3. Já dentro do app, ir em Planejamento → conectar Google Agenda
-4. Mostrar um evento da agenda aparecendo dentro do Axon
-5. Criar uma tarefa no Axon e mostrar que ela virou evento no Google Agenda
+3. Já dentro do app, ir em Configurações → conectar o Google Agenda
+4. Criar uma tarefa no Axon com horário
+5. **Abrir o Google Agenda do próprio usuário, na mesma gravação**, e mostrar o
+   evento lá, com o horário e a duração batendo
+6. Excluir a tarefa no Axon e mostrar que o evento **desapareceu** da agenda
+
+Os passos 5 e 6 são o que o Google chama de **"Source Account Impact"**: como o
+escopo concede escrita e exclusão, o vídeo tem que mostrar o efeito acontecendo
+*dentro da conta Google do usuário*, não só dentro do app. Vídeo que só mostra a
+tela do Axon é devolvido por esse item.
 
 Duração típica: 2 a 4 minutos. Fale ou escreva na tela o que está fazendo.
 Publique como **"Não listado"** e guarde o link.
