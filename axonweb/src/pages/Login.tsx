@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { AlertCircle, ArrowRight, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 
+import AppleAuthButton from "../components/auth/AppleAuthButton";
 import GoogleAuthButton from "../components/auth/GoogleAuthButton";
 import AuthGlow from "../components/auth/AuthGlow";
 import InputField from "../components/auth/InputField";
@@ -193,7 +194,10 @@ export default function Login() {
               </div>
             </div>
 
-            <GoogleAuthButton label="Continuar com o Google" />
+            <div className="flex flex-col gap-2.5">
+              <GoogleAuthButton label="Continuar com o Google" />
+              <AppleAuthButton label="Continuar com a Apple" />
+            </div>
           </form>
 
           <p className="mt-7 text-center text-[0.68rem] text-[#6d28d9] dark:text-[#d8b4fe]/62 dark:text-white/62">

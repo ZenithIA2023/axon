@@ -52,6 +52,7 @@ Backend (`backend/.env`, nunca commitado):
 - Ambiente/CORS: `ENV` (padrão `production`; `development` libera a regex do Codespace), `FRONTEND_URL`, `CORS_ORIGINS`.
 - Google: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `GCP_PROJECT_ID`.
 - Push: `FIREBASE_CREDENTIALS_JSON` ou `FIREBASE_CREDENTIALS_PATH`.
+- Apple: `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (conteúdo da .p8), `APPLE_SERVICES_ID` (web), `APPLE_BUNDLE_ID` (nativo); opcional `APPLE_REDIRECT_URI` (padrão `https://api.axonapp.tech/auth/apple/callback`).
 - Voz: `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `ELEVENLABS_API_KEY` e os ajustes `VOICE_*`, `*_STT_MODEL`, `*_TTS_MODEL`.
 
 Frontend: `VITE_API_URL` (URL do backend). `VITE_BUILD_COMMIT` é carimbado pelo `vite.config.ts` a partir do `git rev-parse`.
@@ -60,7 +61,7 @@ Android (live reload): `CAP_SERVER_URL` liga `server.url` no `capacitor.config.t
 
 ## Mapa rápido
 
-- **Entrada do backend:** `backend/main.py` registra os 19 routers, os middlewares de segurança e o APScheduler (`planning_scheduler.run` a cada 5 min).
+- **Entrada do backend:** `backend/main.py` registra os 20 routers, os middlewares de segurança e o APScheduler (`planning_scheduler.run` a cada 5 min).
 - **Modelo do Claude:** constante `_MODEL` em `backend/services/claude_service.py`. Prompts em `services/prompts.py`; contexto do chat em `services/chat_context.py`.
 - **Esquema do banco:** `backend/supabase_schema.sql` (base) + `backend/migrations.sql` (numeradas). **Confira o número da última no próprio arquivo antes de escrever uma nova** — `grep -n "^-- Migration" backend/migrations.sql | tail -1`. Este texto já ficou duas migrations atrasado uma vez (dizia 34 quando a última era a 36, em 20/10/2026), e um número errado aqui faz a migration nova colidir com uma existente.
 - **Frontend:** rotas em `axonweb/src/app/App.tsx`; todo HTTP em `axonweb/src/lib/api.ts` (~2.100 linhas; procure a função existente antes de criar outra). Alias `@` → `axonweb/src`.

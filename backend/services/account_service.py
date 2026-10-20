@@ -9,6 +9,7 @@ Fluxo:
 
 from datetime import datetime, timezone, timedelta
 from database import supabase
+from services import apple_service
 
 BLOCK_DAYS = 60
 
@@ -38,9 +39,19 @@ def check_email_blocked(email: str) -> dict | None:
 
 def delete_account(user_id: str, email: str) -> None:
     """
-    1. Registra o e-mail em deleted_accounts.
-    2. Remove o usuário do Supabase Auth (cascade apaga todos os dados).
+    1. Revoga a autorização na Apple, se o usuário entrou pela Apple.
+    2. Registra o e-mail em deleted_accounts.
+    3. Remove o usuário do Supabase Auth (cascade apaga todos os dados).
     """
+    # Antes do delete_user: o cascade apaga o perfil, e com ele o refresh token.
+    # Falha na Apple NÃO impede a exclusão — o usuário pediu para apagar os
+    # dados, e isso vale mais que a revogação. Registra só o tipo do erro, sem
+    # dado pessoal.
+    try:
+        apple_service.revoke_for_user(user_id)
+    except Exception as e:
+        print(f"[account] revogação na Apple falhou: {type(e).__name__}")
+
     supabase.table("deleted_accounts").insert({
         "email": email.lower().strip(),
         "deleted_at": datetime.now(timezone.utc).isoformat(),

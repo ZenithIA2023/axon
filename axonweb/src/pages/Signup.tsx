@@ -11,6 +11,7 @@ import {
   User,
 } from "lucide-react";
 
+import AppleAuthButton from "../components/auth/AppleAuthButton";
 import GoogleAuthButton from "../components/auth/GoogleAuthButton";
 import AuthGlow from "../components/auth/AuthGlow";
 import * as api from "../lib/api";
@@ -287,7 +288,10 @@ export default function Signup() {
               </div>
             </div>
 
-            <GoogleAuthButton label="Continuar com o Google" />
+            <div className="flex flex-col gap-2.5">
+              <GoogleAuthButton label="Continuar com o Google" />
+              <AppleAuthButton label="Continuar com a Apple" />
+            </div>
           </form>
 
           <p className="mt-6 text-center text-[0.68rem] text-[#6d28d9] dark:text-[#d8b4fe]/62 dark:text-white/62">
