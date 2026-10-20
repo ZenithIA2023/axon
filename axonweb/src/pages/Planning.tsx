@@ -25,7 +25,6 @@ import {
   Plus,
   Repeat,
   RotateCcw,
-  Menu,
   Sparkles,
   Star,
   Target,
@@ -451,28 +450,7 @@ export default function Planning({
 
       {/* Mobile preservado: mantém a estrutura vertical atual. */}
       <div className="relative z-10 mx-auto min-h-screen w-full max-w-[430px] px-1 pb-6 pt-5 lg:hidden">
-        <header className="mb-5 flex items-center justify-end gap-2 px-3">
-          <button
-            type="button"
-            onClick={() => setIsNotificationsOpen(true)}
-            className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200/90 bg-white text-muted shadow-[0_8px_22px_rgba(15,23,42,0.07)] transition active:scale-[0.96] dark:border-soft dark:bg-surface-muted dark:shadow-card"
-            aria-label="Abrir notificações"
-          >
-            <Bell className="h-5 w-5" />
-            {(unreadCount ?? 0) > 0 && (
-              <span className="absolute right-[0.46rem] top-[0.46rem] h-2 w-2 rounded-full border border-[var(--surface-elevated)] bg-[var(--accent)] shadow-[0_0_10px_rgba(168,85,247,0.9)]" />
-            )}
-          </button>
 
-          <button
-            type="button"
-            onClick={() => setIsSidebarOpen(true)}
-            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200/90 bg-white text-muted shadow-[0_8px_22px_rgba(15,23,42,0.07)] transition active:scale-[0.96] dark:border-soft dark:bg-surface-muted dark:shadow-card"
-            aria-label="Abrir menu"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
-        </header>
 
         <div className="mb-4 flex rounded-full border border-soft bg-surface-elevated p-1.5 shadow-card backdrop-blur-2xl">
           {TABS.map((tab) => {
@@ -1437,16 +1415,7 @@ function AgendaView({
 
       {/* Mesma medida do hub e da tela de Insights. */}
       <div className="relative z-10 mx-auto min-h-screen w-full max-w-[430px] px-1 pb-6 pt-5 lg:max-w-[1120px] lg:px-8 lg:pt-7">
-        <header className="mb-5 flex items-center justify-end px-3">
-          <button
-            type="button"
-            onClick={() => setIsSidebarOpen(true)}
-            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200/90 bg-white text-muted shadow-[0_8px_22px_rgba(15,23,42,0.07)] transition active:scale-[0.96] dark:border-soft dark:bg-surface-muted dark:shadow-card"
-            aria-label="Abrir menu"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
-        </header>
+
 
         {inner}
       </div>
@@ -1747,9 +1716,6 @@ function DesktopPlanningTopbar({
   view,
   onViewChange,
   onCreate,
-  onOpenNotifications,
-  unreadCount,
-  onOpenSidebar,
 }: {
   title?: string;
   view?: View;
@@ -1783,27 +1749,7 @@ function DesktopPlanningTopbar({
           </button>
         ) : null}
 
-        <button
-          type="button"
-          onClick={onOpenNotifications}
-          disabled={!onOpenNotifications}
-          className="relative flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200/80 bg-white text-muted shadow-card backdrop-blur-xl transition hover:text-primary active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-45 dark:border-white/8 dark:bg-white/[0.04]"
-          aria-label="Abrir notificações"
-        >
-          <Bell className="h-4 w-4" />
-          {(unreadCount ?? 0) > 0 && (
-            <span className="absolute right-[0.42rem] top-[0.42rem] h-2 w-2 rounded-full border border-[#12111a] bg-[#a855f7] shadow-[0_0_10px_rgba(168,85,247,0.9)]" />
-          )}
-        </button>
 
-        <button
-          type="button"
-          onClick={onOpenSidebar}
-          className="flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200/80 bg-white text-muted shadow-card backdrop-blur-xl transition hover:text-primary active:scale-[0.96] dark:border-white/8 dark:bg-white/[0.04]"
-          aria-label="Abrir menu"
-        >
-          <Menu className="h-4.5 w-4.5" />
-        </button>
       </div>
     </div>
   );

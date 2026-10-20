@@ -738,6 +738,12 @@ export default function Chat() {
     <main className="chat-light-theme relative h-[100dvh] overflow-hidden bg-app text-primary">
       <ChatLightThemeStyles />
 
+      {/* A gaveta de conversas deve ficar acima do composer global.
+          Enquanto aberta, ocultamos o BottomNav sem desmontar seu estado. */}
+      {isChatListOpen && (
+        <style>{`[data-bottom-nav] { visibility: hidden !important; pointer-events: none !important; }`}</style>
+      )}
+
       <div className="hidden dark:block">
         <AppBackground />
       </div>
