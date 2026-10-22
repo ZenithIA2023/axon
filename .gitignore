@@ -16,6 +16,15 @@ keystore.properties
 # vazar a do App Store Connect permite publicar na nossa conta.
 *.p8
 
+# Certificado de distribuição da Apple e a chave que o gera. O CSR é criado com
+# openssl aqui no Codespace (não há Mac), então os dois arquivos nascem DENTRO
+# do repositório e seriam commitados sem isto. Com o .p12 e a senha, um terceiro
+# assina builds como se fossem nossos.
+*.key
+*.p12
+*.cer
+*.csr
+
 # Rede de segurança: qualquer .json solto na RAIZ do repo. Nenhum arquivo
 # legítimo do projeto mora aqui — os que importam estão em axonweb/ e backend/.
 # Credenciais baixadas costumam cair na raiz, e é assim que vazam.
