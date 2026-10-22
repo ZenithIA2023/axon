@@ -496,7 +496,7 @@ foi criado (perfil, stats, notificações) e confirme a revogação.
 
 ---
 
-## Fase 2 — Gerar o projeto iOS
+## Fase 2 — Gerar o projeto iOS ✅ FEITA em 22/10/2026
 
 ```bash
 cd axonweb
@@ -504,9 +504,32 @@ npm i @capacitor/ios
 npx cap add ios
 ```
 
-**O `pod install` no fim vai falhar no Codespace** — CocoaPods depende de
-ferramentas da Apple. Isso é esperado e não é problema: os arquivos do projeto são
-gerados e entram no Git; o `pod install` acontece no runner macOS.
+> ### ⚠️ Três coisas que este plano dizia errado, descobertas ao executar
+>
+> **1. NÃO existe CocoaPods.** O Capacitor 8 usa **Swift Package Manager**: gera
+> `ios/App/CapApp-SPM/Package.swift` e nenhum `Podfile`. A versão anterior deste
+> texto dizia que o `pod install` falharia no Codespace — ele simplesmente não
+> existe. **Isso invalidava o teste de fumaça da Fase 3** (ver lá).
+>
+> **2. Faltavam duas descrições de permissão, não uma.** Além do microfone
+> (`/voz`), o `<input type="file">` da foto de perfil (`Profile.tsx:2500`) abre
+> no WKWebView um menu com "Biblioteca de Fotos" e "Tirar Foto". Sem
+> `NSPhotoLibraryUsageDescription` e `NSCameraUsageDescription` **o app encerra**
+> — não dá erro, fecha. O revisor da Apple abre a tela de perfil.
+>
+> **3. O `npm i` ia rebaixar o Tailwind.** O `package.json` declarava
+> `tailwindcss: ^3.4.19` com a 4.3.0 instalada; qualquer install reconciliaria
+> para a 3.x e quebraria o build. Declaração corrigida para `^4.3.0` — o código
+> é v4 inequivocamente (`@import "tailwindcss"`, `@custom-variant`, plugin
+> `@tailwindcss/vite`). Isso encerra a pendência da memória
+> `tailwind-v3-declarado-v4-usado`.
+>
+> O `ios/.gitignore` que o Capacitor gera já cobre `App/App/public`, `App/build`,
+> `DerivedData`, `xcuserdata` e o config gerado — não precisou acrescentar nada.
+>
+> Também foi preciso somar `ios` aos ignores do `eslint.config.js`: sem isso o
+> lint passou a acusar 313 erros dentro do bundle minificado copiado para
+> `ios/App/App/public/`.
 
 ### Ajustes
 
@@ -599,12 +622,57 @@ Leia `scripts/build-release.sh` antes de escrever o workflow; ele é o modelo.
 
 ### Estratégia para não desperdiçar minutos
 
-**Primeira execução: um workflow mínimo de ~2 minutos** que faz só o `pod install`
-e para. Confirma que o projeto gerado no Linux é válido e que os certificados
-foram instalados. Se algo estiver errado, você descobre gastando 2 minutos em vez
-de 15.
+**Primeira execução: um workflow mínimo de ~2 minutos.** Mas **não é `pod install`**
+— não existe CocoaPods aqui (ver Fase 2). O equivalente com SPM é:
+
+```bash
+xcodebuild -resolvePackageDependencies \
+  -project axonweb/ios/App/App.xcodeproj -scheme App
+xcodebuild -list -project axonweb/ios/App/App.xcodeproj
+```
+
+O primeiro comando baixa os pacotes Swift; o segundo prova que o scheme existe.
+Se algo estiver errado você gasta 2 minutos em vez de 15.
 
 **Só depois** rode o build completo.
+
+### ⚠️ O scheme compartilhado não existe — resolver ANTES do primeiro build
+
+`npx cap add ios` **não** gera scheme compartilhado. Hoje só existe
+`project.pbxproj`; não há `ios/App/App.xcodeproj/xcshareddata/xcschemes/App.xcscheme`.
+
+O Xcode cria schemes sozinho quando alguém abre o projeto, mas grava em
+`xcuserdata/`, que é por usuário e está no `.gitignore`. **No runner macOS —
+máquina limpa, sem `xcuserdata` — `xcodebuild -scheme App` falha com "scheme not
+found".**
+
+A correção é criar o arquivo de scheme à mão e **commitar**. O
+`ios/.gitignore` ignora `xcuserdata` mas **não** `xcshareddata`, então ele é
+rastreado normalmente.
+
+### ⚠️ O alvo mínimo de iOS está errado — 15.0 deve virar 16.4
+
+`npx cap add ios` deixou `IPHONEOS_DEPLOYMENT_TARGET = 15.0`. **O app não funciona
+em iOS 15.** Medido no CSS que o `npm run build` gera:
+
+| Recurso | Ocorrências | Exige Safari |
+|---|---|---|
+| `color-mix()` | 736 | 16.2+ |
+| `@property` | 75 | **16.4+** |
+
+O Tailwind v4 tem como base o Safari 16.4, e usa `color-mix()` em **toda cor com
+transparência** — cada `text-white/62`, cada borda `/20`, todo o glassmorphism.
+Em iOS 15 essas declarações são descartadas e o app abre sem cor de texto, sem
+borda e sem fundo de cartão.
+
+Com o alvo em 15.0, a App Store ofereceria o download para iOS 15.0–16.3 e essas
+pessoas instalariam um app quebrado. **Subir para 16.4** faz a própria loja não
+oferecer para aparelho incompatível. Custo: ficam de fora iPhone 7 e SE de 1ª
+geração (2016–2017); iOS 16 roda do iPhone 8 em diante.
+
+> Descoberto em 22/10/2026 ao avaliar se o iPhone SE 1ª geração do Bernardo
+> (iOS 15.8) servia de aparelho de teste. Não serve — e o achado maior foi o
+> alvo errado.
 
 ---
 
@@ -661,20 +729,36 @@ Revisão leva de 1 a 7 dias. Rejeição custa outro ciclo.
 
 ## Ordem de execução
 
-| | Fase | Depende de | Pode começar? |
+| | Fase | Depende de | Estado |
 |---|---|---|---|
-| 1 | **Fase 1 — código: backend, Migration 36, botão web, revogação** | nada | ✅ **hoje** |
-| 2 | Fase 0 — conta Apple | solicitada em 28/09/2026 | Bernardo, em análise |
-| 3 | Fase 0 itens 2–7 + Supabase (1.1) + Migration 36 aplicada | conta aprovada | Bernardo |
-| 4 | Fase 1 — **teste** web e exclusão de conta | item 3 | depois |
-| 5 | Fase 1.4 — parte nativa | conta + aparelho | depois |
-| 6 | Fase 2 — projeto iOS | conta criada | depois |
-| 7 | Fase 3 — CI | certificados | depois |
-| 8 | Fase 4 — push | conta e CI | depois |
-| 9 | Fase 5 — ficha e envio | tudo acima | por último |
+| 1 | Fase 0 — conta Apple e identificadores | — | ✅ 19–20/10/2026 |
+| 2 | Fase 1 — Sign in with Apple (backend + web) | item 1 | ✅ em produção 20/10 |
+| 3 | Fase 1 — testes (login, 2º login, relay, exclusão+revogação) | item 2 | ✅ **22/10/2026** |
+| 4 | Fase 2 — projeto iOS | item 1 | ✅ **22/10/2026** |
+| 5 | **Fase 0 item 5** — chave de API do App Store Connect | — | ⬜ **agora** (a Fase 3 precisa) |
+| 6 | **Certificado de distribuição + provisioning profile** | item 1 | ⬜ **agora** (a Fase 3 precisa) |
+| 7 | **Fase 3 — CI no GitHub Actions** | itens 4, 5, 6 | ⬜ **próxima** |
+| 8 | Fase 1.4 — Sign in with Apple nativo | item 7 + aparelho | ⬜ |
+| 9 | Fase 0 item 6 + Fase 4 — push APNs | item 7 | ⬜ |
+| 10 | Fase 5 — ficha e envio | tudo acima | ⬜ |
 
-**Decisões pendentes do Bernardo:** botão da Apple no app Android (1.3) e
-momento de pedir permissão de notificação no iOS (Fase 4).
+**Decisões tomadas em 22/10/2026:**
+
+- **iPhone-only na primeira submissão** (`TARGETED_DEVICE_FAMILY = "1"`).
+  Qualquer iPad deitado — e o Pro 12,9" até em pé — passa de 1024pt e cai no
+  layout de desktop, que o `AGENTS.md` §12 declara incompleto. "App que parece
+  incompleto" é o primeiro item do que a Apple rejeita. Acrescentar iPad depois
+  é atualização normal.
+- **Botão da Apple no app Android:** resolvido. `AppleAuthButton` devolve `null`
+  em nativo, então ele não aparece no APK.
+
+**Aparelhos de teste:** o iPhone SE 1ª geração (iOS 15.8) **não serve** — ver o
+aviso do alvo mínimo na Fase 3. O caminho é convidar alguém com iPhone 8 ou mais
+novo pelo TestFlight depois do primeiro build; essa pessoa cobre layout com
+entalhe, push, login nativo e os screenshots de 6,5"/6,7".
+
+**Decisão ainda pendente:** momento de pedir permissão de notificação no iOS
+(Fase 4) — no iOS, negada uma vez, o app não pode pedir de novo.
 
 ---
 

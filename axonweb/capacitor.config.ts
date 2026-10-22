@@ -18,6 +18,17 @@ const config: CapacitorConfig = {
   android: {
     allowMixedContent: false,
   },
+  ios: {
+    // "never": o WKWebView NÃO adiciona inset próprio. As safe areas do iPhone
+    // (entalhe, ilha, barra de gestos) são tratadas no CSS via
+    // env(safe-area-inset-*) atrás da classe `is-native`, como já é feito no
+    // Android. Com "always" o iOS somaria o inset dele ao do CSS e o respiro
+    // das bordas sairia dobrado.
+    contentInset: "never",
+    // Pressionar e segurar um link não abre a pré-visualização do Safari: num
+    // app o gesto confunde, e a navegação toda é interna ao React Router.
+    allowsLinkPreview: false,
+  },
   plugins: {
     Keyboard: {
       // O WebView é redimensionado quando o teclado abre, então os campos do
