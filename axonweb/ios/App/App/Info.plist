@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CAPACITOR_DEBUG</key>
+	<string>$(CAPACITOR_DEBUG)</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>pt-BR</string>
+	<key>CFBundleDisplayName</key>
+        <string>Axon</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<!-- Isenção de criptografia de exportação. Sem esta chave, TODO build que
+	     chega ao TestFlight fica retido em "Missing Compliance" e nenhum
+	     testador instala até alguém responder à mão no App Store Connect.
+	     false é a declaração correta: o Axon não implementa criptografia
+	     própria, só usa o HTTPS do sistema, que é isento. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<!-- Descrições de permissão. A Apple REJEITA texto genérico: cada uma diz
+	     o que o app faz com o recurso. E a falta de qualquer uma delas não dá
+	     erro — o app FECHA na hora em que o usuário escolhe a opção. -->
+	<!-- Página /voz e o botão de voz: gravação para o assistente. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>O Axon usa o microfone para você conversar com o assistente por voz.</string>
+	<!-- As duas abaixo existem por causa do <input type="file"> da foto de
+	     perfil (Profile.tsx). No WKWebView o campo abre um menu com
+	     "Biblioteca de Fotos" e "Tirar Foto"; sem estas chaves o app encerra
+	     ao escolher qualquer uma das duas. -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>O Axon acessa suas fotos para você escolher uma imagem de perfil.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>O Axon usa a câmera para você tirar uma foto de perfil na hora.</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+    <false/>
+    <key>UISceneConfigurations</key>
+    <dict>
+      <key>UIWindowSceneSessionRoleApplication</key>
+      <array>
+        <dict>
+            <key>UISceneConfigurationName</key>
+            <string>Default Configuration</string>
+            <key>UISceneDelegateClassName</key>
+            <string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+            <key>UISceneStoryboardFile</key>
+            <string>Main</string>
+        </dict>
+      </array>
+    </dict>
+	</dict>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>armv7</string>
+	</array>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<true/>
+</dict>
+</plist>

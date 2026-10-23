@@ -1,0 +1,304 @@
+# Build iOS e envio ao TestFlight (Fase 3 do docs/PLANO_IOS.md).
+#
+# O Codespace é Linux e o Xcode só roda em macOS, então o .ipa sai daqui.
+# Runner macOS gasta 10× por minuto e a cota dá ~10 a 15 builds por mês: por
+# isso o gatilho é SÓ manual. Nunca troque para `on: push`.
+#
+# Primeira execução: marque `somente_resolver` (teste de fumaça de ~2 min, sem
+# build do frontend, sem assinar nem compilar).
+
+name: iOS — build e TestFlight
+
+on:
+  workflow_dispatch:
+    inputs:
+      somente_resolver:
+        description: "Só resolver os pacotes Swift e listar o scheme (teste de fumaça, sem assinar)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# Dois builds simultâneos competiriam pelo mesmo número no TestFlight e
+# gastariam cota em dobro.
+concurrency:
+  group: ios-build
+  cancel-in-progress: false
+
+env:
+  # Backend de produção. É o mesmo valor que o job `verificar` confere e que o
+  # `npm run build` usa — uma única fonte, para a conferência valer de verdade.
+  VITE_API_URL: https://api.axonapp.tech
+  TEAM_ID: AR8WL2CU44
+  BUNDLE_ID: tech.axonapp.app
+
+jobs:
+  # Roda em Linux (barato) e reprova a build antes de qualquer minuto de macOS.
+  # Mesmas recusas do scripts/build-release.sh do Android.
+  verificar:
+    name: Recusas de segurança
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Conferir configuração
+        env:
+          SOMENTE_RESOLVER: ${{ inputs.somente_resolver }}
+          # Só o booleano "existe ou não": o valor dos secrets nunca entra aqui.
+          TEM_P12: ${{ secrets.APPLE_CERTIFICATE_P12 != '' }}
+          TEM_P12_SENHA: ${{ secrets.APPLE_CERTIFICATE_PASSWORD != '' }}
+          TEM_PERFIL: ${{ secrets.APPLE_PROVISIONING_PROFILE != '' }}
+          TEM_API_ID: ${{ secrets.APPSTORE_API_KEY_ID != '' }}
+          TEM_API_ISSUER: ${{ secrets.APPSTORE_API_ISSUER_ID != '' }}
+          TEM_API_CHAVE: ${{ secrets.APPSTORE_API_PRIVATE_KEY != '' }}
+          # Uma variável de repositório com esse nome indicaria alguém tentando
+          # ligar o live reload na build publicada.
+          CAP_SERVER_URL_REPO: ${{ vars.CAP_SERVER_URL }}
+        run: |
+          set -euo pipefail
+
+          # 1. Nada de live reload no release.
+          if [[ -n "${CAP_SERVER_URL:-}" || -n "${CAP_SERVER_URL_REPO:-}" ]]; then
+            echo "::error::CAP_SERVER_URL está definida. O app publicado apontaria para um servidor de desenvolvimento."
+            exit 1
+          fi
+
+          # 2 e 3. O backend precisa existir e ser o de produção.
+          API="${VITE_API_URL:-}"
+          if [[ -z "$API" ]]; then
+            echo "::error::VITE_API_URL não definida — o app não saberia com qual backend falar."
+            exit 1
+          fi
+          if [[ "$API" == *localhost* || "$API" == *127.0.0.1* || "$API" == *github.dev* ]]; then
+            echo "::error::VITE_API_URL aponta para desenvolvimento: $API"
+            exit 1
+          fi
+          echo "backend de produção: $API"
+
+          # 4. Sem certificado não há build assinada. O teste de fumaça não
+          #    assina, então ele pode rodar antes de os secrets existirem.
+          if [[ "$SOMENTE_RESOLVER" == "true" ]]; then
+            echo "somente_resolver: assinatura não será usada; secrets não conferidos."
+            exit 0
+          fi
+          faltando=0
+          for tem in "$TEM_P12" "$TEM_P12_SENHA" "$TEM_PERFIL" "$TEM_API_ID" "$TEM_API_ISSUER" "$TEM_API_CHAVE"; do
+            [[ "$tem" == "true" ]] || faltando=$((faltando + 1))
+          done
+          if [[ "$faltando" -gt 0 ]]; then
+            echo "::error::Faltam $faltando dos 6 secrets de assinatura/envio. A lista está no docs/PLANO_IOS.md (Fase 3)."
+            exit 1
+          fi
+          echo "secrets de assinatura presentes"
+
+  build:
+    name: Build iOS
+    needs: verificar
+    runs-on: macos-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: axonweb
+    steps:
+      - uses: actions/checkout@v5
+
+      # A imagem do runner traz vários Xcodes, e o selecionado por padrão nem
+      # sempre é o mais novo. Escolhe o mais novo estável: beta e RC ficam de
+      # fora porque a App Store recusa builds feitas com eles.
+      - name: Selecionar e conferir o Xcode
+        env:
+          SOMENTE_RESOLVER: ${{ inputs.somente_resolver }}
+        run: |
+          ls -d /Applications/Xcode*.app
+          XCODE="$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -viE 'beta|_rc|release_candidate' | sort -V | tail -1 || true)"
+          if [[ -n "$XCODE" ]]; then
+            sudo xcode-select -s "$XCODE"
+          fi
+          xcode-select -p
+          xcodebuild -version
+          # Desde abril de 2026 a App Store só aceita builds com o SDK do iOS 26
+          # (Xcode 26+). Falhar aqui economiza o build inteiro que seria recusado
+          # no envio. O teste de fumaça só mostra a versão.
+          # awk lê a saída inteira. Não use `head -1`: ele fecha o cano, e o
+          # xcodebuild estoura NSFileHandleOperationException (Broken pipe).
+          major="$(xcodebuild -version | awk 'NR==1 { split($2, v, "."); print v[1] }')"
+          if [[ "$SOMENTE_RESOLVER" != "true" && "$major" -lt 26 ]]; then
+            echo "::error::Xcode $major no runner; a App Store exige Xcode 26 ou mais novo."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: axonweb/package-lock.json
+
+      # Antes de resolver os pacotes: o Package.swift aponta para
+      # ../../../node_modules/@capacitor/*.
+      - name: Instalar dependências
+        run: npm ci
+
+      # Fora do teste de fumaça: resolver os pacotes só precisa do node_modules,
+      # e minuto de macOS custa 10×.
+      - name: Build do frontend
+        if: ${{ !inputs.somente_resolver }}
+        run: |
+          if [[ -n "${CAP_SERVER_URL:-}" ]]; then
+            echo "::error::CAP_SERVER_URL definida no runner. Abortando."
+            exit 1
+          fi
+          npm run build
+
+      # Prova que o scheme compartilhado existe numa máquina limpa (sem ele,
+      # `-scheme App` falha com "scheme not found").
+      - name: Resolver pacotes Swift e listar o scheme
+        run: |
+          xcodebuild -resolvePackageDependencies -project ios/App/App.xcodeproj -scheme App
+          xcodebuild -list -project ios/App/App.xcodeproj
+
+      - name: Sincronizar com o iOS
+        if: ${{ !inputs.somente_resolver }}
+        run: |
+          npx cap sync ios
+          # Conferência final no artefato que vai ser empacotado.
+          if grep -q '"url"' ios/App/App/capacitor.config.json; then
+            echo "::error::server.url presente no config nativo. Abortando."
+            exit 1
+          fi
+          echo "config nativo limpo (sem server.url)"
+
+      # Keychain temporária, criada só para este job: nunca a keychain padrão
+      # do runner. Removida no último passo, mesmo se algo falhar.
+      - name: Instalar certificado e perfil de provisionamento
+        if: ${{ !inputs.somente_resolver }}
+        env:
+          P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          P12_SENHA: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          PERFIL_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+        run: |
+          set -euo pipefail
+          KC="$RUNNER_TEMP/axon-build.keychain-db"
+          KC_SENHA="$(openssl rand -base64 24)"
+          echo "::add-mask::$KC_SENHA"
+
+          security create-keychain -p "$KC_SENHA" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KC_SENHA" "$KC"
+
+          echo "$P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -P "$P12_SENHA" -A -t cert -f pkcs12 -k "$KC" > /dev/null
+          rm -f "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KC_SENHA" "$KC" > /dev/null
+          # Põe a keychain temporária na lista de busca, sem tirar as do sistema.
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+
+          PERFIL="$RUNNER_TEMP/perfil.mobileprovision"
+          echo "$PERFIL_BASE64" | base64 --decode > "$PERFIL"
+          security cms -D -i "$PERFIL" > "$RUNNER_TEMP/perfil.plist"
+          UUID="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$RUNNER_TEMP/perfil.plist")"
+          rm -f "$RUNNER_TEMP/perfil.plist"
+          # Xcode 16+ lê de UserData; versões anteriores, de MobileDevice.
+          for dir in "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" "$HOME/Library/MobileDevice/Provisioning Profiles"; do
+            mkdir -p "$dir"
+            cp "$PERFIL" "$dir/$UUID.mobileprovision"
+          done
+          rm -f "$PERFIL"
+
+          echo "KEYCHAIN_PATH=$KC" >> "$GITHUB_ENV"
+          echo "PERFIL_UUID=$UUID" >> "$GITHUB_ENV"
+          echo "certificado e perfil instalados"
+
+      # O projeto fica em assinatura Automatic para quem abre no Xcode. Aqui
+      # ela vira manual SÓ no target App: passar o perfil na linha de comando do
+      # xcodebuild valeria também para os pacotes Swift, que recusam perfil
+      # ("does not support provisioning profiles"). A mudança vive só no runner.
+      - name: Assinatura manual no target App
+        if: ${{ !inputs.somente_resolver }}
+        run: |
+          set -euo pipefail
+          PBX=ios/App/App.xcodeproj/project.pbxproj
+          sed -i '' "s/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual; DEVELOPMENT_TEAM = $TEAM_ID; PROVISIONING_PROFILE_SPECIFIER = \"$PERFIL_UUID\"; CODE_SIGN_IDENTITY = \"Apple Distribution\";/" "$PBX"
+          # As duas configurações do target (Debug e Release) têm que ter mudado.
+          n="$(grep -c 'CODE_SIGN_STYLE = Manual;' "$PBX")"
+          if [[ "$n" -ne 2 ]]; then
+            echo "::error::Esperava 2 configurações com assinatura manual, encontrei $n."
+            exit 1
+          fi
+
+      - name: Archive
+        if: ${{ !inputs.somente_resolver }}
+        run: |
+          set -euo pipefail
+          # Número da build = número da execução: o TestFlight recusa um
+          # CFBundleVersion repetido, e o projeto tem 1 fixo.
+          xcodebuild archive \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }}
+
+      - name: Exportar .ipa
+        id: exportar
+        if: ${{ !inputs.somente_resolver }}
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>export</string>
+            <key>teamID</key><string>$TEAM_ID</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>signingCertificate</key><string>Apple Distribution</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>$BUNDLE_ID</key><string>$PERFIL_UUID</string>
+            </dict>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export"
+          IPA="$(ls "$RUNNER_TEMP"/export/*.ipa)"
+          echo "IPA_PATH=$IPA" >> "$GITHUB_ENV"
+          ls -lh "$IPA"
+
+      - name: Enviar ao TestFlight
+        if: ${{ !inputs.somente_resolver }}
+        env:
+          API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          API_CHAVE_BASE64: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          # O altool procura a chave em ~/.appstoreconnect/private_keys pelo ID.
+          DIR="$HOME/.appstoreconnect/private_keys"
+          mkdir -p "$DIR"
+          echo "$API_CHAVE_BASE64" | base64 --decode > "$DIR/AuthKey_$API_KEY_ID.p8"
+          xcrun altool --upload-app --type ios --file "$IPA_PATH" \
+            --apiKey "$API_KEY_ID" --apiIssuer "$API_ISSUER_ID"
+
+      # Mesmo se o envio ao TestFlight falhar, o .ipa fica para baixar.
+      - name: Publicar o .ipa como artifact
+        if: ${{ always() && !inputs.somente_resolver && steps.exportar.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: axon-ios-${{ github.run_number }}
+          path: ${{ env.IPA_PATH }}
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Limpar keychain, perfil e chave
+        if: ${{ always() && !inputs.somente_resolver }}
+        run: |
+          [[ -n "${KEYCHAIN_PATH:-}" ]] && security delete-keychain "$KEYCHAIN_PATH" || true
+          rm -rf "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" \
+                 "$HOME/Library/MobileDevice/Provisioning Profiles" \
+                 "$HOME/.appstoreconnect/private_keys"
