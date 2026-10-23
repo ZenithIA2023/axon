@@ -767,11 +767,10 @@ function AgendaView({
       })
       .catch(() => null)
       .finally(async () => {
-        await loadTasks();
-        await loadSubtasks();
+        await loadTasks(); // já traz as subtarefas junto
         await loadDailyStats();
       });
-  }, [loadTasks, loadSubtasks]);
+  }, [loadTasks]);
 
   // Dados derivados do dia selecionado.
   const selectedIso = toISODate(selectedDate);
@@ -876,13 +875,39 @@ function AgendaView({
       task.status === "done"
         ? { status: "todo" as TaskStatus, progress: 0 }
         : { status: "done" as TaskStatus, progress: 100 };
+    const previousTasks = tasks;
+    const previousSubtasks = subtasksMap;
+    const nextDone = next.status === "done";
+
+    // Otimista, como as funções de subtarefa abaixo: a bolinha marca na hora.
+    // Antes a tela esperava o PATCH e duas recargas completas (~4s em conta
+    // com muitos dados, 23/10/2026). As subtarefas espelham a mãe porque o
+    // backend faz o mesmo (`_mirror_subtasks`), e a % do dia depende delas.
+    setTasks((list) =>
+      list.map((item) => (item.id === task.id ? { ...item, ...next } : item))
+    );
+    setSubtasksMap((map) =>
+      map[task.id]
+        ? {
+            ...map,
+            [task.id]: map[task.id].map((s) => ({ ...s, done: nextDone })),
+          }
+        : map
+    );
+
     try {
       await api.updateTask(task.id, next);
-      await loadTasks();
-      await loadSubtasks();
     } catch {
-      // mantém o estado atual em caso de erro
+      setTasks(previousTasks); // reverte
+      setSubtasksMap(previousSubtasks);
+      showToast("Não foi possível atualizar a tarefa");
+      return;
     }
+
+    // A recarga continua: concluir fora da janela encurta ou move a tarefa no
+    // servidor (ver tasks_service), e a tela precisa dos horários novos. Ela já
+    // traz as subtarefas — chamar loadSubtasks() de novo baixava tudo 2 vezes.
+    await loadTasks();
   }
 
   async function handleToggleSubtask(subtask: Subtask) {
@@ -897,8 +922,7 @@ function AgendaView({
 
     try {
       await api.updateSubtask(subtask.id, { done: nextDone });
-      await loadTasks();
-      await loadSubtasks();
+      await loadTasks(); // já recarrega as subtarefas junto
     } catch {
       await loadSubtasks();
     }
@@ -917,9 +941,9 @@ function AgendaView({
     try {
       await api.deleteSubtask(subtask.id);
       // O backend recalcula status/progresso da tarefa mãe a cada exclusão
-      // (ex.: excluir a única pendente conclui a tarefa) — recarrega ambos.
+      // (ex.: excluir a única pendente conclui a tarefa) — recarrega ambos; o
+      // loadTasks já traz as subtarefas junto.
       await loadTasks();
-      await loadSubtasks();
     } catch {
       setSubtasksMap(previous); // reverte
       showToast("Não foi possível excluir a subtarefa");
@@ -976,8 +1000,7 @@ function AgendaView({
     try {
       await api.deleteTask(taskToDelete.id);
       setTaskToDelete(null);
-      await loadTasks();
-      await loadSubtasks();
+      await loadTasks(); // já traz as subtarefas junto
     } catch {
       // depois podemos colocar um toast/erro visual aqui
     } finally {
@@ -1276,8 +1299,7 @@ function AgendaView({
         onClose={() => setIsCreateModalOpen(false)}
         onCreated={async () => {
           setIsCreateModalOpen(false);
-          await loadTasks();
-          await loadSubtasks();
+          await loadTasks(); // já traz as subtarefas junto
         }}
       />
 
@@ -1286,8 +1308,7 @@ function AgendaView({
         onClose={() => setTaskToEdit(null)}
         onUpdated={async () => {
           setTaskToEdit(null);
-          await loadTasks();
-          await loadSubtasks();
+          await loadTasks(); // já traz as subtarefas junto
         }}
         onDelete={(task) => {
           setTaskToEdit(null);

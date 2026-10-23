@@ -4,6 +4,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Dumbbell, Moon, Plus, Smile, Target, X, Zap } from "lucide-react";
 
 import * as api from "../lib/api";
+import PagePortal from "../components/ui/PagePortal";
+import { useRegisterOpenPanel } from "../lib/openPanels";
 import type { DailyLog, TagItem } from "../lib/api";
 import { PEAK_PERIODS } from "../lib/api";
 import { slugifyTag } from "../lib/tagSlug";
@@ -245,6 +247,12 @@ export default function DayReview({
     notes,
   ]);
 
+  // Painel inferior próprio (não o BottomSheet), com o mesmo problema que ele
+  // tinha: dentro do `relative z-10` da página, o "Salvar registro" ficava atrás
+  // da BottomNav. Vai para o <body> pelo PagePortal e esconde a barra enquanto
+  // está aberto.
+  useRegisterOpenPanel(isOpen);
+
   // ---------------------------------------------------------------------------
   // Validações e dados derivados
   // ---------------------------------------------------------------------------
@@ -413,290 +421,292 @@ export default function DayReview({
   }
 
   return (
-    <AnimatePresence>
-      {/* Sheet mobile-first de revisão diária. */}
-      {isOpen && (
-        <>
-          <motion.button
-            type="button"
-            aria-label="Fechar"
-            onClick={onClose}
-            className="fixed inset-0 z-[100] bg-black/55 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          />
+    <PagePortal>
+      <AnimatePresence>
+        {/* Sheet mobile-first de revisão diária. */}
+        {isOpen && (
+          <>
+            <motion.button
+              type="button"
+              aria-label="Fechar"
+              onClick={onClose}
+              className="fixed inset-0 z-[100] bg-black/55 backdrop-blur-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            />
 
-          <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", stiffness: 260, damping: 30 }}
-            className="fixed inset-x-0 bottom-0 z-[110] max-h-[90vh] overflow-y-auto rounded-t-[2rem] border-t border-soft bg-surface-elevated p-5 pb-10 text-primary shadow-soft backdrop-blur-2xl"
-          >
-            <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-[var(--border-medium)]" />
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", stiffness: 260, damping: 30 }}
+              className="fixed inset-x-0 bottom-0 z-[110] max-h-[90vh] overflow-y-auto rounded-t-[2rem] border-t border-soft bg-surface-elevated p-5 pb-10 text-primary shadow-soft backdrop-blur-2xl"
+            >
+              <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-[var(--border-medium)]" />
 
-            {/* Cabeçalho do registro: data e ação de fechar. */}
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold tracking-tight text-primary">
-                  {targetDate ? "Como foi seu dia de ontem?" : "Como foi o seu dia?"}
-                </h2>
-                <p className="mt-1 text-xs font-medium capitalize text-accent">
-                  {reviewDate}
-                </p>
-                <p className="mt-0.5 text-xs text-muted">
-                  Leva menos de 1 minuto
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex h-9 w-9 items-center justify-center rounded-2xl border border-soft bg-surface-muted text-muted transition active:scale-[0.96]"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {isYesterday && (
-              <div className="mb-4 rounded-2xl border border-amber-300/25 bg-amber-400/10 px-4 py-3">
-                <p className="text-sm font-semibold text-amber-700 dark:text-amber-200">
-                  Você não registrou ontem
-                </p>
-                <p className="mt-0.5 text-xs text-muted">
-                  Ainda dá tempo — preencha como foi seu dia de ontem.
-                </p>
-              </div>
-            )}
-
-            {hasDraft && (
-              <div className="mb-4 flex items-start justify-between gap-3 rounded-2xl border border-accent-soft bg-accent-soft px-4 py-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-accent">
-                    Continuando de onde você parou
+              {/* Cabeçalho do registro: data e ação de fechar. */}
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold tracking-tight text-primary">
+                    {targetDate ? "Como foi seu dia de ontem?" : "Como foi o seu dia?"}
+                  </h2>
+                  <p className="mt-1 text-xs font-medium capitalize text-accent">
+                    {reviewDate}
                   </p>
                   <p className="mt-0.5 text-xs text-muted">
-                    Recuperamos o que você já tinha preenchido.
+                    Leva menos de 1 minuto
                   </p>
                 </div>
                 <button
                   type="button"
-                  onClick={discardDraft}
-                  className="shrink-0 rounded-full border border-soft bg-surface-muted px-3 py-1.5 text-[0.68rem] font-semibold text-muted transition active:scale-[0.96]"
+                  onClick={onClose}
+                  className="flex h-9 w-9 items-center justify-center rounded-2xl border border-soft bg-surface-muted text-muted transition active:scale-[0.96]"
                 >
-                  Recomeçar
+                  <X className="h-5 w-5" />
                 </button>
               </div>
-            )}
+
+              {isYesterday && (
+                <div className="mb-4 rounded-2xl border border-amber-300/25 bg-amber-400/10 px-4 py-3">
+                  <p className="text-sm font-semibold text-amber-700 dark:text-amber-200">
+                    Você não registrou ontem
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted">
+                    Ainda dá tempo — preencha como foi seu dia de ontem.
+                  </p>
+                </div>
+              )}
+
+              {hasDraft && (
+                <div className="mb-4 flex items-start justify-between gap-3 rounded-2xl border border-accent-soft bg-accent-soft px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-accent">
+                      Continuando de onde você parou
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted">
+                      Recuperamos o que você já tinha preenchido.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={discardDraft}
+                    className="shrink-0 rounded-full border border-soft bg-surface-muted px-3 py-1.5 text-[0.68rem] font-semibold text-muted transition active:scale-[0.96]"
+                  >
+                    Recomeçar
+                  </button>
+                </div>
+              )}
 
 
-            {/* Sono: horários, avaliação e até 3 tags. */}
-            <Section icon={Moon} title="Como você dormiu?">
-              <div className="mb-3 grid grid-cols-2 gap-3">
-                <TimeSelect
-                  label="Dormiu às"
-                  value={sleepTime}
-                  onChange={setSleepTime}
+              {/* Sono: horários, avaliação e até 3 tags. */}
+              <Section icon={Moon} title="Como você dormiu?">
+                <div className="mb-3 grid grid-cols-2 gap-3">
+                  <TimeSelect
+                    label="Dormiu às"
+                    value={sleepTime}
+                    onChange={setSleepTime}
+                  />
+                  <TimeSelect
+                    label="Acordou às"
+                    value={wakeTime}
+                    onChange={setWakeTime}
+                  />
+                </div>
+                <RatingDots value={sleepRating} onChange={setSleepRating} />
+                <TagRow
+                  tags={availableSleepTags}
+                  selected={sleepTags}
+                  onToggle={(s) => toggleTag(sleepTags, setSleepTags, s)}
+                  onCreate={(label) => createTag("sleep", label)}
                 />
-                <TimeSelect
-                  label="Acordou às"
-                  value={wakeTime}
-                  onChange={setWakeTime}
+              </Section>
+
+              {/* Humor: percepção geral do dia e fatores associados. */}
+              <Section icon={Smile} title="Como você se sentiu?">
+                <RatingDots value={moodRating} onChange={setMoodRating} />
+                <TagRow
+                  tags={availableMoodTags}
+                  selected={moodTags}
+                  onToggle={(s) => toggleTag(moodTags, setMoodTags, s)}
+                  onCreate={(label) => createTag("mood", label)}
                 />
-              </div>
-              <RatingDots value={sleepRating} onChange={setSleepRating} />
-              <TagRow
-                tags={availableSleepTags}
-                selected={sleepTags}
-                onToggle={(s) => toggleTag(sleepTags, setSleepTags, s)}
-                onCreate={(label) => createTag("sleep", label)}
-              />
-            </Section>
+              </Section>
 
-            {/* Humor: percepção geral do dia e fatores associados. */}
-            <Section icon={Smile} title="Como você se sentiu?">
-              <RatingDots value={moodRating} onChange={setMoodRating} />
-              <TagRow
-                tags={availableMoodTags}
-                selected={moodTags}
-                onToggle={(s) => toggleTag(moodTags, setMoodTags, s)}
-                onCreate={(label) => createTag("mood", label)}
-              />
-            </Section>
+              {/* Produtividade: base para cruzar energia, foco e execução. */}
+              <Section icon={Target} title="Como avalia sua produtividade?">
+                <RatingDots value={prodRating} onChange={setProdRating} />
+                <TagRow
+                  tags={availableProdTags}
+                  selected={prodTags}
+                  onToggle={(s) => toggleTag(prodTags, setProdTags, s)}
+                  onCreate={(label) => createTag("productivity", label)}
+                />
+              </Section>
 
-            {/* Produtividade: base para cruzar energia, foco e execução. */}
-            <Section icon={Target} title="Como avalia sua produtividade?">
-              <RatingDots value={prodRating} onChange={setProdRating} />
-              <TagRow
-                tags={availableProdTags}
-                selected={prodTags}
-                onToggle={(s) => toggleTag(prodTags, setProdTags, s)}
-                onCreate={(label) => createTag("productivity", label)}
-              />
-            </Section>
-
-            {/* Pico produtivo: até 3 janelas ORDENADAS por produtividade. A ordem
-                de clique é o próprio dado — o badge numerado existe para que o
-                usuário perceba que ela conta. */}
-            <Section icon={Zap} title="Quando você foi mais produtivo? (opcional)">
-              <p className="mb-3 text-xs text-soft">
-                {isDayOff
-                  ? "Dia marcado como livre. Toque nele de novo para escolher períodos."
-                  : "Toque em até 3 períodos, começando pelo mais produtivo. Se foi dia de descanso, marque \"Dia livre\"."}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {PEAK_PERIODS.map((p) => {
-                  const rank = peakPeriods.indexOf(p.slug); // -1 = não selecionado
-                  const isSelected = rank >= 0;
-                  // Dia livre desabilita os períodos: as duas respostas se excluem.
-                  const atLimit =
-                    !isSelected && (isDayOff || peakPeriods.length >= 3);
-                  return (
-                    <button
-                      key={p.slug}
-                      type="button"
-                      onClick={() => togglePeakPeriod(p.slug)}
-                      disabled={atLimit}
-                      aria-label={
-                        isSelected
-                          ? `${p.label}, ${p.hours}, ${rank + 1}º período mais produtivo. Toque para remover.`
-                          : isDayOff
-                          ? `${p.label}, ${p.hours}. Indisponível: o dia está marcado como livre.`
-                          : `${p.label}, ${p.hours}. Toque para marcar.`
-                      }
-                      className={`flex flex-col items-start rounded-2xl border px-3.5 py-2.5 text-left transition active:scale-[0.96] ${
-                        isSelected
-                          ? "border-accent-soft bg-accent-soft text-accent"
-                          : atLimit
-                          ? "cursor-not-allowed border-soft bg-surface-muted text-soft opacity-55"
-                          : "border-soft bg-surface-muted text-secondary"
-                      }`}
-                    >
-                      {/* Posição na ordem. O aria-label acima já carrega a mesma
-                          informação, então aqui o número é puramente visual. */}
-                      {isSelected && (
-                        <span
-                          className="mb-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[var(--accent)] text-[0.6rem] font-bold text-white"
-                          aria-hidden="true"
-                        >
-                          {rank + 1}
-                        </span>
-                      )}
-                      <span className="text-xs font-semibold">{p.label}</span>
-                      <span
-                        className={`text-[0.62rem] ${
-                          isSelected ? "text-accent" : "text-soft"
+              {/* Pico produtivo: até 3 janelas ORDENADAS por produtividade. A ordem
+                  de clique é o próprio dado — o badge numerado existe para que o
+                  usuário perceba que ela conta. */}
+              <Section icon={Zap} title="Quando você foi mais produtivo? (opcional)">
+                <p className="mb-3 text-xs text-soft">
+                  {isDayOff
+                    ? "Dia marcado como livre. Toque nele de novo para escolher períodos."
+                    : "Toque em até 3 períodos, começando pelo mais produtivo. Se foi dia de descanso, marque \"Dia livre\"."}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {PEAK_PERIODS.map((p) => {
+                    const rank = peakPeriods.indexOf(p.slug); // -1 = não selecionado
+                    const isSelected = rank >= 0;
+                    // Dia livre desabilita os períodos: as duas respostas se excluem.
+                    const atLimit =
+                      !isSelected && (isDayOff || peakPeriods.length >= 3);
+                    return (
+                      <button
+                        key={p.slug}
+                        type="button"
+                        onClick={() => togglePeakPeriod(p.slug)}
+                        disabled={atLimit}
+                        aria-label={
+                          isSelected
+                            ? `${p.label}, ${p.hours}, ${rank + 1}º período mais produtivo. Toque para remover.`
+                            : isDayOff
+                            ? `${p.label}, ${p.hours}. Indisponível: o dia está marcado como livre.`
+                            : `${p.label}, ${p.hours}. Toque para marcar.`
+                        }
+                        className={`flex flex-col items-start rounded-2xl border px-3.5 py-2.5 text-left transition active:scale-[0.96] ${
+                          isSelected
+                            ? "border-accent-soft bg-accent-soft text-accent"
+                            : atLimit
+                            ? "cursor-not-allowed border-soft bg-surface-muted text-soft opacity-55"
+                            : "border-soft bg-surface-muted text-secondary"
                         }`}
                       >
-                        {p.hours}
-                      </span>
-                    </button>
-                  );
-                })}
+                        {/* Posição na ordem. O aria-label acima já carrega a mesma
+                            informação, então aqui o número é puramente visual. */}
+                        {isSelected && (
+                          <span
+                            className="mb-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[var(--accent)] text-[0.6rem] font-bold text-white"
+                            aria-hidden="true"
+                          >
+                            {rank + 1}
+                          </span>
+                        )}
+                        <span className="text-xs font-semibold">{p.label}</span>
+                        <span
+                          className={`text-[0.62rem] ${
+                            isSelected ? "text-accent" : "text-soft"
+                          }`}
+                        >
+                          {p.hours}
+                        </span>
+                      </button>
+                    );
+                  })}
 
-                {/* Dia livre: último da grade, com as mesmas classes dos
-                    períodos para não destoar. Não é um período — sem faixa de
-                    horário e sem posição no ranking — então não recebe badge
-                    numerado nem entra no limite de 3, e o `atLimit` dos outros
-                    nunca o desabilita. Convive com eles: dá para ter folgado e
-                    ainda assim ter rendido bem de manhã. */}
-                <button
-                  type="button"
-                  onClick={toggleDayOff}
-                  aria-pressed={isDayOff}
-                  aria-label={
-                    isDayOff
-                      ? "Dia livre marcado. Toque para desmarcar."
-                      : "Dia livre ou dia de descanso. Toque para marcar."
-                  }
-                  className={`flex flex-col items-start rounded-2xl border px-3.5 py-2.5 text-left transition active:scale-[0.96] ${
-                    isDayOff
-                      ? "border-accent-soft bg-accent-soft text-accent"
-                      : "border-soft bg-surface-muted text-secondary"
-                  }`}
-                >
-                  <span className="text-xs font-semibold">Dia livre</span>
-                  <span
-                    className={`text-[0.62rem] ${
-                      isDayOff ? "text-accent" : "text-soft"
+                  {/* Dia livre: último da grade, com as mesmas classes dos
+                      períodos para não destoar. Não é um período — sem faixa de
+                      horário e sem posição no ranking — então não recebe badge
+                      numerado nem entra no limite de 3, e o `atLimit` dos outros
+                      nunca o desabilita. Convive com eles: dá para ter folgado e
+                      ainda assim ter rendido bem de manhã. */}
+                  <button
+                    type="button"
+                    onClick={toggleDayOff}
+                    aria-pressed={isDayOff}
+                    aria-label={
+                      isDayOff
+                        ? "Dia livre marcado. Toque para desmarcar."
+                        : "Dia livre ou dia de descanso. Toque para marcar."
+                    }
+                    className={`flex flex-col items-start rounded-2xl border px-3.5 py-2.5 text-left transition active:scale-[0.96] ${
+                      isDayOff
+                        ? "border-accent-soft bg-accent-soft text-accent"
+                        : "border-soft bg-surface-muted text-secondary"
                     }`}
                   >
-                    dia de descanso
-                  </span>
-                </button>
-              </div>
-              {peakPeriods.length >= 3 && (
-                <p className="mt-2 text-xs text-soft">
-                  Máximo de 3 períodos. Toque em um selecionado para remover.
+                    <span className="text-xs font-semibold">Dia livre</span>
+                    <span
+                      className={`text-[0.62rem] ${
+                        isDayOff ? "text-accent" : "text-soft"
+                      }`}
+                    >
+                      dia de descanso
+                    </span>
+                  </button>
+                </div>
+                {peakPeriods.length >= 3 && (
+                  <p className="mt-2 text-xs text-soft">
+                    Máximo de 3 períodos. Toque em um selecionado para remover.
+                  </p>
+                )}
+              </Section>
+
+              {/* Exercício: sinal simples para comparar energia e humor. */}
+              <Section icon={Dumbbell} title="Você se exercitou hoje?">
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setExercised(true)}
+                    className={`flex-1 rounded-2xl border py-3 text-sm font-semibold transition active:scale-[0.98] ${
+                      exercised
+                        ? "border-accent-soft bg-accent-soft text-accent"
+                        : "border-soft bg-surface-muted text-muted"
+                    }`}
+                  >
+                    Sim
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExercised(false)}
+                    className={`flex-1 rounded-2xl border py-3 text-sm font-semibold transition active:scale-[0.98] ${
+                      !exercised
+                        ? "border-accent-soft bg-accent-soft text-accent"
+                        : "border-soft bg-surface-muted text-muted"
+                    }`}
+                  >
+                    Não
+                  </button>
+                </div>
+              </Section>
+
+              {/* Notas livres: contexto qualitativo para o usuário lembrar do dia. */}
+              <Section icon={Zap} title="Algo que queira registrar? (opcional)">
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  maxLength={500}
+                  rows={3}
+                  placeholder="Ex: reunião pesada drenou minha energia..."
+                  className="w-full resize-none rounded-2xl border border-soft bg-surface-muted p-3.5 text-sm text-primary placeholder:text-soft focus:outline-none focus:ring-1 focus:ring-[var(--accent-soft)]"
+                />
+                <p className="mt-1 text-right text-xs text-soft">
+                  {notes.length}/500
                 </p>
+              </Section>
+
+              {error && (
+                <div className="mb-4 rounded-2xl border border-red-300/25 bg-red-500/10 p-3">
+                  <p className="text-sm text-red-600 dark:text-red-300">{error}</p>
+                </div>
               )}
-            </Section>
 
-            {/* Exercício: sinal simples para comparar energia e humor. */}
-            <Section icon={Dumbbell} title="Você se exercitou hoje?">
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setExercised(true)}
-                  className={`flex-1 rounded-2xl border py-3 text-sm font-semibold transition active:scale-[0.98] ${
-                    exercised
-                      ? "border-accent-soft bg-accent-soft text-accent"
-                      : "border-soft bg-surface-muted text-muted"
-                  }`}
-                >
-                  Sim
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setExercised(false)}
-                  className={`flex-1 rounded-2xl border py-3 text-sm font-semibold transition active:scale-[0.98] ${
-                    !exercised
-                      ? "border-accent-soft bg-accent-soft text-accent"
-                      : "border-soft bg-surface-muted text-muted"
-                  }`}
-                >
-                  Não
-                </button>
-              </div>
-            </Section>
-
-            {/* Notas livres: contexto qualitativo para o usuário lembrar do dia. */}
-            <Section icon={Zap} title="Algo que queira registrar? (opcional)">
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                maxLength={500}
-                rows={3}
-                placeholder="Ex: reunião pesada drenou minha energia..."
-                className="w-full resize-none rounded-2xl border border-soft bg-surface-muted p-3.5 text-sm text-primary placeholder:text-soft focus:outline-none focus:ring-1 focus:ring-[var(--accent-soft)]"
-              />
-              <p className="mt-1 text-right text-xs text-soft">
-                {notes.length}/500
-              </p>
-            </Section>
-
-            {error && (
-              <div className="mb-4 rounded-2xl border border-red-300/25 bg-red-500/10 p-3">
-                <p className="text-sm text-red-600 dark:text-red-300">{error}</p>
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={!canSave}
-              className="min-h-12 w-full rounded-2xl bg-[var(--accent-strong)] px-5 text-sm font-semibold text-white shadow-card transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {saving
-                ? "Salvando..."
-                : existing
-                ? "Atualizar registro"
-                : "Salvar registro"}
-            </button>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={!canSave}
+                className="min-h-12 w-full rounded-2xl bg-[var(--accent-strong)] px-5 text-sm font-semibold text-white shadow-card transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {saving
+                  ? "Salvando..."
+                  : existing
+                  ? "Atualizar registro"
+                  : "Salvar registro"}
+              </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </PagePortal>
   );
 }
 

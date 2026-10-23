@@ -40,6 +40,8 @@ import {
 
 import { useLarguraDeCelular } from "../../lib/useLarguraDeCelular";
 
+import { useHasOpenPanel } from "../../lib/openPanels";
+
 import { useTheme } from "../theme/ThemeProvider";
 
 // Versão reduzida (192px) do rosto: a barra aparece em todas as telas do app,
@@ -367,6 +369,18 @@ export default function BottomNav() {
     (route) => pathname === route || pathname.startsWith(`${route}/`),
 
   );
+
+
+
+  // Painel inferior aberto (BottomSheet, DayReview, modais de Objetivos): a
+
+  // barra fica invisível e intocável. Esconder, e não desmontar como o
+
+  // `isHidden` abaixo: o `:has([data-bottom-nav])` do index.css reserva o
+
+  // rodapé das páginas, e desmontar faria a página pular por baixo do painel.
+
+  const isPanelOpen = useHasOpenPanel();
 
 
 
@@ -875,6 +889,12 @@ export default function BottomNav() {
       // respiro acima dos botões do sistema (ver o comentário lá).
 
       data-own-safe-bottom
+
+      inert={isPanelOpen}
+
+      aria-hidden={isPanelOpen || undefined}
+
+      style={isPanelOpen ? { visibility: "hidden", pointerEvents: "none" } : undefined}
 
       initial={{ y: "130%" }}
 

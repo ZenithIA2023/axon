@@ -480,7 +480,17 @@ export default function ChatListDrawer({
 
             style={{ willChange: "transform" }}
 
-            className="fixed !top-0 !bottom-auto left-0 z-[100] flex !h-[100dvh] !max-h-[100dvh] w-[86%] max-w-[21rem] flex-col overflow-hidden bg-white shadow-soft dark:bg-[var(--surface-elevated)] lg:hidden"
+            /* A gaveta vai de borda a borda de propósito (`!top-0`, `!h-[100dvh]`),
+
+               e os `!important` vencem a regra `.is-native aside.fixed` do
+
+               index.css — que existe para EMPURRAR gavetas flutuantes. Por isso o
+
+               inset entra aqui como padding: o fundo continua cobrindo a faixa do
+
+               relógio e o conteúdo começa abaixo dela. Na web `env()` vale zero. */
+
+            className="fixed !top-0 !bottom-auto left-0 z-[100] flex !h-[100dvh] !max-h-[100dvh] w-[86%] max-w-[21rem] flex-col overflow-hidden bg-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] shadow-soft dark:bg-[var(--surface-elevated)] lg:hidden"
 
             role="dialog"
 
