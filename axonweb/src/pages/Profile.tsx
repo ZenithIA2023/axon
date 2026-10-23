@@ -43,11 +43,10 @@ import {
   Loader2,
 
   LogOut,
+  Crown,
+  Sparkles,
 
   Mail,
-
-  Menu,
-
   RefreshCcw,
 
   Settings as SettingsIcon,
@@ -62,10 +61,6 @@ import {
 
 } from "lucide-react";
 
-
-
-import Sidebar from "../components/layout/Sidebar";
-
 import AppBackground from "../components/layout/AppBackground";
 
 import ConfirmDialog from "../components/ui/ConfirmDialog";
@@ -76,103 +71,47 @@ import * as api from "../lib/api";
 
 import type { ProfileData } from "../lib/api";
 
-
-
-
-
-
-
 // ===========================================================================
-
-
 
 // MAPEAMENTOS DO PERFIL
 
-
-
 // ===========================================================================
-
-
-
-
-
-
 
 const CHRONOTYPE_TO_KEY: Record<string, ChronotypeResultKey> = {
 
-
-
   Matutino: "Matutino",
-
-
 
   Vespertino: "Vespertino",
 
-
-
   Noturno: "Noturno",
-
-
 
   Misto: "Misto",
 
-
-
   Bimodal: "Bimodal",
-
-
 
   morning: "Matutino",
 
-
-
   evening: "Vespertino",
-
-
 
   night: "Noturno",
 
-
-
   intermediate: "Misto",
-
-
 
 };
 
-
-
-
-
-
-
 const validKeys: ChronotypeResultKey[] = [
-
-
 
   "Matutino",
 
-
-
   "Vespertino",
-
-
 
   "Noturno",
 
-
-
   "Misto",
-
-
 
   "Bimodal",
 
-
-
 ];
-
-
 
 function ProfileLightThemeStyles() {
 
@@ -195,7 +134,7 @@ function ProfileLightThemeStyles() {
       }
 
       /* O conteúdo não deve manter o branco da página no dark theme. */
-      .dark .profile-light-theme .bg-\[\#f7f8fa\] {
+      .dark .profile-light-theme .bg-\\\\[\\\\#f7f8fa\\\\] {
         background-color: #0d0b15 !important;
       }
 
@@ -235,12 +174,6 @@ function ProfileLightThemeStyles() {
 
 }
 
-
-
-
-
-
-
 type SettingRowProps = {
 
   icon: ElementType;
@@ -257,24 +190,15 @@ type SettingRowProps = {
 
 };
 
-
-
 // ===========================================================================
 
 // PÁGINA DE PERFIL
 
 // ===========================================================================
 
-
-
 export default function Profile() {
 
   const navigate = useNavigate();
-
-
-
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
   const [profile, setProfile] = useState<ProfileData | null>(null);
 
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -285,8 +209,6 @@ export default function Profile() {
 
   const [showDeleteFinalModal, setShowDeleteFinalModal] = useState(false);
 
-
-
   useEffect(() => {
 
     if (!api.isLoggedIn()) {
@@ -296,8 +218,6 @@ export default function Profile() {
       return;
 
     }
-
-
 
     api
 
@@ -313,8 +233,6 @@ export default function Profile() {
 
   }, [navigate]);
 
-
-
   const resultKey = useMemo<ChronotypeResultKey>(() => {
 
     const fromBackend = profile?.chronotype
@@ -323,15 +241,9 @@ export default function Profile() {
 
       : undefined;
 
-
-
     if (fromBackend) return fromBackend;
 
-
-
     const stored = localStorage.getItem("axon_chronotype");
-
-
 
     if (stored && validKeys.includes(stored as ChronotypeResultKey)) {
 
@@ -339,13 +251,9 @@ export default function Profile() {
 
     }
 
-
-
     return "Misto";
 
   }, [profile]);
-
-
 
   const result = results[resultKey];
 
@@ -354,8 +262,6 @@ export default function Profile() {
   const userName = profile?.name || "Usuário";
 
   const userEmail = profile?.email || "";
-
-
 
   function openResult() {
 
@@ -367,13 +273,9 @@ export default function Profile() {
 
     }
 
-
-
     navigate(`/result-report?chronotype=${resultKey}`);
 
   }
-
-
 
   function handleLogout() {
 
@@ -384,8 +286,6 @@ export default function Profile() {
     navigate("/");
 
   }
-
-
 
   async function handleDeleteAccount() {
 
@@ -407,23 +307,17 @@ export default function Profile() {
 
   }
 
-
-
   return (
 
     <main className="profile-light-theme relative min-h-screen overflow-hidden bg-[#f7f8fa] text-primary dark:bg-app">
 
       <ProfileLightThemeStyles />
 
-
-
       <div className="hidden dark:block">
 
         <AppBackground />
 
       </div>
-
-
 
       <section className="relative z-10 hidden min-h-screen w-full px-6 py-6 lg:block">
 
@@ -436,16 +330,7 @@ export default function Profile() {
               <ArrowLeft className="h-5 w-5" />
 
             </button>
-
-            <button type="button" onClick={() => setIsSidebarOpen(true)} className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200/90 bg-white text-slate-600 shadow-sm dark:border-white/10 dark:bg-white/[0.06] dark:text-white/65" aria-label="Abrir menu">
-
-              <Menu className="h-5 w-5" />
-
-            </button>
-
           </header>
-
-
 
           <div className="grid items-start gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
 
@@ -454,10 +339,9 @@ export default function Profile() {
               <ProfileHeader userName={userName} userEmail={userEmail} avatarUrl={profile?.avatar_url} onEditProfile={() => setIsEditOpen(true)} />
 
               <ProductiveProfileCard hasChronotype={hasChronotype} result={result} resultKey={resultKey} onOpenResult={openResult} onQuestionnaire={() => navigate("/questionnaire-intro")} />
+              <MyPlanCard onOpen={() => navigate("/my-plan")} />
 
             </div>
-
-
 
             <div className="grid gap-4">
 
@@ -469,7 +353,7 @@ export default function Profile() {
 
                 <AccountSecuritySection userEmail={userEmail} />
 
-                <CompactProfileRow icon={SettingsIcon} title="Configurações" description="Organização, aparência, voz e notificações." onClick={() => navigate("/settings")} />
+                <CompactProfileRow icon={SettingsIcon} title="Configurações" description="Organização, aparência, voz e integrações." onClick={() => navigate("/settings")} />
 
               </div>
 
@@ -484,8 +368,6 @@ export default function Profile() {
         </div>
 
       </section>
-
-
 
       <div className="relative z-10 mx-auto min-h-screen w-full max-w-[430px] overflow-x-hidden px-4 pb-8 pt-5 lg:hidden">
 
@@ -508,28 +390,7 @@ export default function Profile() {
             <ArrowLeft className="h-5 w-5" />
 
           </button>
-
-
-
-          <button
-
-            type="button"
-
-            onClick={() => setIsSidebarOpen(true)}
-
-            className="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200/90 bg-white text-slate-600 shadow-[0_8px_22px_rgba(15,23,42,0.07)] transition active:scale-[0.96] dark:border-white/10 dark:bg-white/[0.06] dark:text-white/65 dark:shadow-card"
-
-            aria-label="Abrir menu"
-
-          >
-
-            <Menu className="h-5 w-5" />
-
-          </button>
-
         </header>
-
-
 
         <ProfileHeader
 
@@ -542,8 +403,6 @@ export default function Profile() {
           onEditProfile={() => setIsEditOpen(true)}
 
         />
-
-
 
         <div className="mt-4 grid min-w-0 gap-4">
 
@@ -560,8 +419,7 @@ export default function Profile() {
             onQuestionnaire={() => navigate("/questionnaire-intro")}
 
           />
-
-
+              <MyPlanCard onOpen={() => navigate("/my-plan")} />
 
           <div className="grid gap-2 rounded-[1.4rem] border border-slate-200/90 bg-white p-2 shadow-[0_8px_24px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-white/[0.035] dark:shadow-card">
 
@@ -571,17 +429,13 @@ export default function Profile() {
 
           </div>
 
-
-
           <div className="grid gap-2 rounded-[1.4rem] border border-slate-200/90 bg-white p-2 shadow-[0_8px_24px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-white/[0.035] dark:shadow-card">
 
             <AccountSecuritySection userEmail={userEmail} />
 
-            <CompactProfileRow icon={SettingsIcon} title="Configurações" description="Organização, aparência, voz e notificações." onClick={() => navigate("/settings")} />
+            <CompactProfileRow icon={SettingsIcon} title="Configurações" description="Organização, aparência, voz e integrações." onClick={() => navigate("/settings")} />
 
           </div>
-
-
 
           <div className="grid gap-2">
 
@@ -594,27 +448,6 @@ export default function Profile() {
         </div>
 
       </div>
-
-
-
-      <Sidebar
-
-        isOpen={isSidebarOpen}
-
-        onClose={() => setIsSidebarOpen(false)}
-
-        chronotypeLabel={result.label}
-
-        energyPeak={result.energyPeak}
-
-        userName={userName}
-
-        userEmail={userEmail}
-
-      />
-
-
-
       <EditProfileModal
 
         isOpen={isEditOpen}
@@ -637,8 +470,6 @@ export default function Profile() {
 
       />
 
-
-
       <ConfirmDialog
 
         isOpen={showLogoutModal}
@@ -658,8 +489,6 @@ export default function Profile() {
         onClose={() => setShowLogoutModal(false)}
 
       />
-
-
 
       <ConfirmDialog
 
@@ -687,8 +516,6 @@ export default function Profile() {
 
       />
 
-
-
       <ConfirmDialog
 
         isOpen={showDeleteFinalModal}
@@ -708,8 +535,6 @@ export default function Profile() {
               <span className="font-semibold text-primary">60 dias</span>.
 
             </p>
-
-
 
             <div className="mt-5 flex items-center gap-3 rounded-[1.35rem] border border-soft bg-surface-muted p-3 text-left">
 
@@ -739,33 +564,17 @@ export default function Profile() {
 
       />
 
-
-
     </main>
 
   );
 
 }
 
-
-
 // ===========================================================================
-
-
 
 // CARDS PRINCIPAIS DO PERFIL
 
-
-
 // ===========================================================================
-
-
-
-
-
-
-
-
 
 function AccountSecuritySection({ userEmail }: { userEmail: string }) {
 
@@ -788,8 +597,6 @@ function AccountSecuritySection({ userEmail }: { userEmail: string }) {
   );
 
 }
-
-
 
 function DataPrivacySection({
 
@@ -827,8 +634,6 @@ function DataPrivacySection({
 
       </div>
 
-
-
       <div className="hidden lg:block">
 
         <UnifiedSettingsPanel
@@ -852,8 +657,6 @@ function DataPrivacySection({
               </p>
 
             </div>
-
-
 
             <UnifiedSettingRow
 
@@ -880,8 +683,6 @@ function DataPrivacySection({
   );
 
 }
-
-
 
 function UnifiedSettingsPanel({
 
@@ -921,8 +722,6 @@ function UnifiedSettingsPanel({
 
       </div>
 
-
-
       {children}
 
     </section>
@@ -930,8 +729,6 @@ function UnifiedSettingsPanel({
   );
 
 }
-
-
 
 function UnifiedSettingRow({
 
@@ -970,8 +767,6 @@ function UnifiedSettingRow({
         <Icon className="h-4.5 w-4.5" />
 
       </div>
-
-
 
       <div className="min-w-0 flex-1">
 
@@ -1015,8 +810,6 @@ function UnifiedSettingRow({
 
       </div>
 
-
-
       {onClick && (
 
         <ChevronRight
@@ -1035,15 +828,11 @@ function UnifiedSettingRow({
 
   );
 
-
-
   const className = `flex w-full items-center gap-3 px-0 py-3 text-left transition active:scale-[0.99] ${
 
     danger ? "text-red-600" : ""
 
   }`;
-
-
 
   if (onClick) {
 
@@ -1059,13 +848,9 @@ function UnifiedSettingRow({
 
   }
 
-
-
   return <div className={className}>{content}</div>;
 
 }
-
-
 
 function AccountInlineContent({ userEmail }: { userEmail: string }) {
 
@@ -1079,8 +864,6 @@ function AccountInlineContent({ userEmail }: { userEmail: string }) {
 
   const [confirmPassword, setConfirmPassword] = useState("");
 
-
-
   const passwordsMatch =
 
     nextPassword.length === 0 ||
@@ -1088,8 +871,6 @@ function AccountInlineContent({ userEmail }: { userEmail: string }) {
     confirmPassword.length === 0 ||
 
     nextPassword === confirmPassword;
-
-
 
   return (
 
@@ -1113,8 +894,6 @@ function AccountInlineContent({ userEmail }: { userEmail: string }) {
 
       </div>
 
-
-
       <details className="group rounded-xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/[0.035]">
 
         <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 px-3 text-xs font-black text-slate-700 [&::-webkit-details-marker]:hidden dark:text-white/75">
@@ -1129,15 +908,13 @@ function AccountInlineContent({ userEmail }: { userEmail: string }) {
 
         <div className="grid gap-2 border-t border-slate-200 p-3 dark:border-white/10">
 
-          <SettingsInput label="Novo e-mail" value={nextEmail} onChange={setNextEmail} placeholder="seuemail@exemplo.com" type="email" />
+          <SettingsInput label="Novo e-mail" value={nextEmail} onChange={setNextEmail} placeholder="seuemail\\@exemplo.com" type="email" />
 
           <SettingsInput label="Senha atual" value={emailPassword} onChange={setEmailPassword} placeholder="Confirme sua senha" type="password" />
 
         </div>
 
       </details>
-
-
 
       <details className="group rounded-xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/[0.035]">
 
@@ -1173,8 +950,6 @@ function AccountInlineContent({ userEmail }: { userEmail: string }) {
 
       </details>
 
-
-
       <p className="text-[0.68rem] leading-5 text-slate-500 dark:text-white/40">
 
         O salvamento será ativado quando o backend disponibilizar as rotas de alteração de e-mail e senha.
@@ -1186,8 +961,6 @@ function AccountInlineContent({ userEmail }: { userEmail: string }) {
   );
 
 }
-
-
 
 function SettingsInput({
 
@@ -1225,8 +998,6 @@ function SettingsInput({
 
       </span>
 
-
-
       <input
 
         type={type}
@@ -1248,298 +1019,162 @@ function SettingsInput({
 }
 
 
+function MyPlanCard({ onOpen }: { onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="group w-full rounded-[1.6rem] border border-violet-200/80 bg-white p-4 text-left shadow-[0_10px_30px_rgba(15,23,42,0.05)] transition hover:border-violet-400/50 active:scale-[0.99] dark:border-violet-400/20 dark:bg-white/[0.045] sm:p-5"
+    >
+      <span className="flex items-center gap-3">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-[#6d28d9] dark:bg-violet-500/15 dark:text-violet-300">
+          <Crown className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-black text-slate-950 dark:text-white">Meu plano</span>
+          <span className="mt-1 block text-xs text-slate-500 dark:text-white/50">Acesso de teste · Planos em breve</span>
+        </span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400 transition group-hover:translate-x-0.5" />
+      </span>
+      <span className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-violet-50/70 px-3 py-3 dark:bg-violet-500/[0.08]">
+        <span className="text-xs leading-5 text-slate-600 dark:text-white/60">
+          Conheça a área que reunirá os benefícios e a gestão da sua assinatura.
+        </span>
+        <Sparkles className="h-5 w-5 shrink-0 text-[#6d28d9] dark:text-violet-300" />
+      </span>
+    </button>
+  );
+}
 
 function ProfileHeader({
 
-
-
   userName,
-
-
 
   userEmail,
 
-
-
   avatarUrl,
-
-
 
   onEditProfile,
 
-
-
 }: {
 
-
-
   userName: string;
-
-
 
   userEmail: string;
 
-
-
   avatarUrl?: string;
-
-
 
   onEditProfile: () => void;
 
-
-
 }) {
 
-
-
   return (
-
-
 
     <section>
 
-
-
       <div className="relative overflow-hidden rounded-[1.75rem] border border-soft bg-surface-elevated px-4 pb-5 pt-5 text-center shadow-card dark:backdrop-blur-2xl lg:p-7">
-
-
 
         <div className="pointer-events-none absolute inset-0 hidden bg-[radial-gradient(circle_at_center,var(--accent-soft),transparent_58%)] dark:block" />
 
-
-
         <div className="pointer-events-none absolute inset-x-0 top-0 hidden h-28 bg-gradient-to-b from-[var(--accent-muted)] to-transparent dark:block" />
-
-
-
-
-
-
 
         <div className="relative mx-auto flex w-fit items-center justify-center">
 
-
-
           <div className="absolute hidden h-44 w-44 rounded-full bg-[var(--accent)]/28 blur-[48px] dark:block" />
-
-
 
           <AvatarDisplay avatarUrl={avatarUrl} userName={userName} />
 
-
-
         </div>
-
-
-
-
-
-
 
         <div className="relative mx-auto mt-4 max-w-[20rem]">
 
-
-
           <h1 className="truncate text-2xl font-black leading-none tracking-[-0.05em] text-primary">
-
-
 
             {userName}
 
-
-
           </h1>
-
-
-
-
-
-
 
           {userEmail && (
 
-
-
             <div className="mx-auto mt-2 flex min-w-0 max-w-[18rem] items-center justify-center gap-1.5 text-[0.72rem] font-medium text-muted">
-
-
 
               <Mail className="h-3 w-3 shrink-0 text-accent" />
 
-
-
               <span className="truncate">{userEmail}</span>
-
-
 
             </div>
 
-
-
           )}
-
-
-
-
-
-
 
         </div>
 
-
-
-
-
-
-
         <button
-
-
 
           type="button"
 
-
-
           onClick={onEditProfile}
-
-
 
           className="relative mx-auto mt-4 inline-flex min-h-11 w-full max-w-[17rem] items-center justify-center rounded-2xl border border-soft bg-surface-muted px-5 text-sm font-semibold text-secondary transition hover:border-accent-soft hover:text-primary active:scale-[0.98]"
 
-
-
         >
-
-
 
           Editar perfil
 
-
-
           <Edit3 className="ml-2 h-4 w-4" />
-
-
 
         </button>
 
-
-
       </div>
-
-
 
     </section>
 
-
-
   );
 
-
-
 }
-
-
-
-
-
-
 
 function AvatarDisplay({
 
-
-
   avatarUrl,
-
-
 
   userName,
 
-
-
 }: {
-
-
 
   avatarUrl?: string;
 
-
-
   userName: string;
-
-
 
 }) {
 
-
-
   const initial = userName.trim().charAt(0).toUpperCase() || "A";
-
-
-
-
-
-
 
   return (
 
-
-
     <div className="relative z-10 flex h-28 w-28 items-center justify-center overflow-hidden rounded-full bg-accent-soft text-3xl font-black text-accent shadow-[0_12px_35px_rgba(15,23,42,0.10)] ring-4 ring-slate-200/80 dark:shadow-[0_28px_90px_rgba(168,85,247,0.32)] dark:ring-white/6">
-
-
 
       {avatarUrl ? (
 
-
-
         <img
-
-
 
           src={avatarUrl}
 
-
-
           alt={userName}
-
-
 
           className="h-full w-full object-cover"
 
-
-
         />
-
-
 
       ) : (
 
-
-
         <span>{initial}</span>
-
-
 
       )}
 
-
-
     </div>
-
-
 
   );
 
-
-
 }
-
-
-
-
-
-
 
 function CompactProfileRow({
 
@@ -1619,8 +1254,6 @@ function CompactProfileRow({
 
 }
 
-
-
 function ProfileExpandableRow({
 
   icon: Icon,
@@ -1685,8 +1318,6 @@ function ProfileExpandableRow({
 
 }
 
-
-
 function ProductiveProfileCard({
 
   hasChronotype,
@@ -1725,8 +1356,6 @@ function ProductiveProfileCard({
 
         </span>
 
-
-
         <div className="min-w-0 flex-1">
 
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1749,8 +1378,6 @@ function ProductiveProfileCard({
 
           </div>
 
-
-
           <h2 className="mt-1 text-xl font-black tracking-[-0.045em] sm:text-2xl">
 
             {hasChronotype ? result.label : "Cronotipo não definido"}
@@ -1771,8 +1398,6 @@ function ProductiveProfileCard({
 
       </div>
 
-
-
       <div className="mt-4 grid grid-cols-2 gap-2">
 
         <ProductiveMetric label="Pico de energia" value={result.energyPeak} />
@@ -1781,9 +1406,7 @@ function ProductiveProfileCard({
 
       </div>
 
-
-
-      <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+      <div className="mt-3 grid grid-cols-[minmax(0,1fr)\\\_auto] gap-2">
 
         <button
 
@@ -1800,8 +1423,6 @@ function ProductiveProfileCard({
           <ChevronRight className="ml-1.5 h-4 w-4 shrink-0" />
 
         </button>
-
-
 
         <button
 
@@ -1829,75 +1450,37 @@ function ProductiveProfileCard({
 
 }
 
-
-
 function ProductiveMetric({
-
-
 
   label,
 
-
-
   value,
-
-
 
 }: {
 
-
-
   label: string;
-
-
 
   value: string;
 
-
-
 }) {
-
-
 
   return (
 
-
-
     <div className="min-w-0 rounded-2xl border border-slate-200/90 bg-slate-50 px-3 py-3 dark:border-white/10 dark:bg-black/15">
-
-
 
       <p className="truncate text-[0.6rem] font-black uppercase tracking-[0.08em] text-slate-400 dark:text-white/35">
 
-
-
         {label}
-
-
 
       </p>
 
-
-
       <p className="mt-1 truncate text-xs font-black text-slate-700 dark:text-white/75">{value}</p>
-
-
 
     </div>
 
-
-
   );
 
-
-
 }
-
-
-
-
-
-
 
 function AxonMemories() {
 
@@ -1909,15 +1492,11 @@ function AxonMemories() {
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-
-
   useEffect(() => {
 
     api.getMemories().then(setMemories).catch(() => setMemories([])).finally(() => setLoading(false));
 
   }, []);
-
-
 
   async function handleDelete(id: string) {
 
@@ -1938,8 +1517,6 @@ function AxonMemories() {
     }
 
   }
-
-
 
   return (
 
@@ -2035,43 +1612,21 @@ function AxonMemories() {
 
 }
 
-
-
 function formatReportRange(start: string, end: string) {
-
-
 
   const fmt = (iso: string) =>
 
-
-
     new Date(`${iso}T00:00:00`).toLocaleDateString("pt-BR", {
-
-
 
       day: "numeric",
 
-
-
       month: "short",
-
-
 
     });
 
-
-
   return `${fmt(start)} – ${fmt(end)}`;
 
-
-
 }
-
-
-
-
-
-
 
 function ReportsHistory() {
 
@@ -2083,15 +1638,11 @@ function ReportsHistory() {
 
   const [filter, setFilter] = useState<"all" | "weekly" | "monthly">("all");
 
-
-
   useEffect(() => {
 
     api.getReportsHistory().then(setReports).catch(() => setReports([])).finally(() => setLoading(false));
 
   }, []);
-
-
 
   const visible = filter === "all" ? reports : reports.filter((report) => report.period_type === filter);
 
@@ -2104,8 +1655,6 @@ function ReportsHistory() {
     { key: "monthly", label: "Mensais" },
 
   ];
-
-
 
   return (
 
@@ -2134,8 +1683,6 @@ function ReportsHistory() {
         ))}
 
       </div>
-
-
 
       {loading ? (
 
@@ -2183,1422 +1730,632 @@ function ReportsHistory() {
 
 }
 
-
-
 function AvatarUpload({
 
-
-
   avatarUrl,
-
-
 
   onUpdate,
 
-
-
 }: {
 
-
-
   avatarUrl?: string;
-
-
 
   onUpdate: (profile: ProfileData) => void;
 
-
-
 }) {
-
-
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-
-
   const menuRef = useRef<HTMLDivElement>(null);
-
-
-
-
-
-
 
   // Estado local do upload, menu e erro visual.
 
-
-
   const [loading, setLoading] = useState(false);
 
-
-
   const [error, setError] = useState<string | null>(null);
-
-
 
   const [showMenu, setShowMenu] = useState(false);
 
-
-
-
-
-
-
   // Fecha o menu de avatar ao clicar fora dele.
 
-
-
   useEffect(() => {
-
-
 
     if (!showMenu) return;
 
-
-
-
-
-
-
     function handleClick(e: MouseEvent) {
-
-
 
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
 
-
-
         setShowMenu(false);
-
-
 
       }
 
-
-
     }
-
-
-
-
-
-
 
     document.addEventListener("mousedown", handleClick);
 
-
-
-
-
-
-
     return () => {
-
-
 
       document.removeEventListener("mousedown", handleClick);
 
-
-
     };
-
-
 
   }, [showMenu]);
 
-
-
-
-
-
-
   // Envia a nova imagem e atualiza o perfil retornado pelo backend.
-
-
 
   async function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
 
-
-
     const file = e.target.files?.[0];
-
-
-
-
-
-
 
     if (!file) return;
 
-
-
-
-
-
-
     setShowMenu(false);
-
-
 
     setError(null);
 
-
-
     setLoading(true);
 
-
-
-
-
-
-
     try {
-
-
 
       const updated = await api.uploadAvatar(file);
 
-
-
       onUpdate(updated);
 
-
-
     } catch (err: unknown) {
-
-
 
       setError(err instanceof Error ? err.message : "Erro ao enviar imagem.");
 
-
-
     } finally {
 
-
-
       setLoading(false);
-
-
-
-
-
-
 
       // Permite selecionar o mesmo arquivo novamente depois de um envio.
 
-
-
       if (fileInputRef.current) {
-
-
 
         fileInputRef.current.value = "";
 
-
-
       }
-
-
 
     }
 
-
-
   }
-
-
-
-
-
-
 
   // Remove a foto atual e sincroniza o card com o perfil atualizado.
 
-
-
   async function handleDelete() {
-
-
 
     setShowMenu(false);
 
-
-
     setLoading(true);
-
-
 
     setError(null);
 
-
-
-
-
-
-
     try {
-
-
 
       const updated = await api.deleteAvatar();
 
-
-
       onUpdate(updated);
-
-
 
     } catch (err: unknown) {
 
-
-
       setError(err instanceof Error ? err.message : "Erro ao remover imagem.");
 
-
-
     } finally {
-
-
 
       setLoading(false);
 
-
-
     }
-
-
 
   }
 
-
-
-
-
-
-
   return (
-
-
 
     <div className="relative shrink-0 overflow-visible" ref={menuRef}>
 
-
-
       {/* Input fica oculto; o clique acontece pelo avatar. */}
-
-
 
       <input
 
-
-
         ref={fileInputRef}
-
-
 
         type="file"
 
-
-
         accept="image/jpeg,image/png,image/webp"
-
-
 
         className="hidden"
 
-
-
         onChange={handleFileChange}
-
-
 
       />
 
-
-
-
-
-
-
       <button
-
-
 
         type="button"
 
-
-
         onClick={() =>
-
-
 
           avatarUrl ? setShowMenu((value) => !value) : fileInputRef.current?.click()
 
-
-
         }
-
-
 
         disabled={loading}
 
-
-
         className="group relative flex h-28 w-28 shrink-0 items-center justify-center overflow-visible rounded-full text-3xl font-black text-accent transition active:scale-[0.97] disabled:opacity-60"
-
-
 
         aria-label="Foto de perfil"
 
-
-
       >
-
-
 
         <span className="absolute inset-0 overflow-hidden rounded-full bg-accent-soft shadow-[0_24px_80px_rgba(123,44,191,0.34)] ring-4 ring-white/6 dark:shadow-[0_28px_90px_rgba(168,85,247,0.32)]">
 
-
-
           {loading ? (
 
-
-
             <span className="flex h-full w-full items-center justify-center">
-
-
 
               <Loader2 className="h-7 w-7 animate-spin text-accent" />
 
-
-
             </span>
-
-
 
           ) : avatarUrl ? (
 
-
-
             <img
-
-
 
               src={avatarUrl}
 
-
-
               alt="Avatar"
-
-
 
               className="h-full w-full object-cover"
 
-
-
             />
-
-
 
           ) : (
 
-
-
             <span className="flex h-full w-full items-center justify-center">
-
-
 
               <User className="h-10 w-10" />
 
-
-
             </span>
-
-
 
           )}
 
-
-
         </span>
-
-
-
-
-
-
 
         {!loading && (
 
-
-
           <span className="absolute -bottom-1 -right-1 z-20 flex h-8 w-8 items-center justify-center rounded-full border-2 border-[var(--surface-elevated)] bg-[var(--accent-strong)] text-white shadow-card transition group-active:scale-[0.94]">
-
-
 
             <Camera className="h-3.5 w-3.5" />
 
-
-
           </span>
 
-
-
         )}
-
-
 
       </button>
 
-
-
-
-
-
-
       {/* Menu aparece apenas quando já existe uma foto cadastrada. */}
-
-
 
       <AnimatePresence>
 
-
-
         {showMenu && (
 
-
-
           <motion.div
-
-
 
             initial={{ opacity: 0, scale: 0.92, y: -4 }}
 
-
-
             animate={{ opacity: 1, scale: 1, y: 0 }}
-
-
 
             exit={{ opacity: 0, scale: 0.92, y: -4 }}
 
-
-
             transition={{ duration: 0.15, ease: "easeOut" }}
-
-
 
             className="absolute left-1/2 top-[calc(100%+12px)] z-50 min-w-[180px] -translate-x-1/2 overflow-hidden rounded-2xl border border-soft bg-surface-elevated py-1 text-primary shadow-soft backdrop-blur-2xl"
 
-
-
           >
-
-
 
             <button
 
-
-
               type="button"
-
-
 
               onClick={() => {
 
-
-
                 setShowMenu(false);
-
-
 
                 fileInputRef.current?.click();
 
-
-
               }}
-
-
 
               className="flex w-full items-center gap-3 px-4 py-3 text-sm text-secondary transition hover:bg-surface-muted active:bg-surface-muted"
 
-
-
             >
-
-
 
               <Camera className="h-4 w-4 text-accent" />
 
-
-
               Trocar foto
 
-
-
             </button>
-
-
-
-
-
-
 
             <button
 
-
-
               type="button"
-
-
 
               onClick={handleDelete}
 
-
-
               className="flex w-full items-center gap-3 px-4 py-3 text-sm text-red-600 transition hover:bg-red-500/10 active:bg-red-500/10 dark:text-red-400"
-
-
 
             >
 
-
-
               <Trash2 className="h-4 w-4" />
-
-
 
               Remover foto
 
-
-
             </button>
 
-
-
           </motion.div>
-
-
 
         )}
 
-
-
       </AnimatePresence>
-
-
-
-
-
-
 
       {error && (
 
-
-
         <p className="absolute left-1/2 top-[calc(100%+42px)] z-50 w-52 -translate-x-1/2 rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-[0.7rem] leading-5 text-red-600 dark:text-red-400">
-
-
 
           {error}
 
-
-
         </p>
 
-
-
       )}
-
-
 
     </div>
 
-
-
   );
-
-
 
 }
 
-
-
-
-
-
-
 // ===========================================================================
-
-
 
 // MODAL DE EDIÇÃO DE NOME
 
-
-
 // ===========================================================================
-
-
-
-
-
-
 
 function EditProfileModal({
 
-
-
   isOpen,
-
-
 
   currentName,
 
-
-
   avatarUrl,
-
-
 
   onAvatarUpdate,
 
-
-
   onClose,
-
-
 
   onSaveName,
 
-
-
 }: {
-
-
 
   isOpen: boolean;
 
-
-
   currentName: string;
-
-
 
   avatarUrl?: string;
 
-
-
   onAvatarUpdate: (profile: ProfileData) => void;
-
-
 
   onClose: () => void;
 
-
-
   onSaveName: (name: string) => void;
 
-
-
 }) {
-
-
 
   const inputRef = useRef<HTMLInputElement>(null);
 
-
-
-
-
-
-
   const [nameValue, setNameValue] = useState(currentName);
-
-
 
   const [saving, setSaving] = useState(false);
 
-
-
   const [error, setError] = useState<string | null>(null);
-
-
-
-
-
-
 
   useEffect(() => {
 
-
-
     if (isOpen) {
-
-
 
       setNameValue(currentName);
 
-
-
       setError(null);
-
-
 
       setTimeout(() => inputRef.current?.focus(), 120);
 
-
-
     }
-
-
 
   }, [isOpen, currentName]);
 
-
-
-
-
-
-
   async function handleSave() {
-
-
 
     const trimmedName = nameValue.trim();
 
-
-
-
-
-
-
     if (!trimmedName) {
-
-
 
       setError("O nome não pode ser vazio.");
 
-
-
       return;
 
-
-
     }
-
-
-
-
-
-
 
     setSaving(true);
 
-
-
     setError(null);
-
-
-
-
-
-
 
     try {
 
-
-
       await api.updateProfile({ name: trimmedName });
-
-
 
       onSaveName(trimmedName);
 
-
-
     } catch (e: unknown) {
-
-
 
       setError(e instanceof Error ? e.message : "Erro ao salvar.");
 
-
-
     } finally {
-
-
 
       setSaving(false);
 
-
-
     }
-
-
 
   }
 
-
-
-
-
-
-
   return (
-
-
 
     <AnimatePresence>
 
-
-
       {isOpen && (
-
-
 
         <motion.div
 
-
-
           className="fixed inset-0 z-[120] flex items-center justify-center bg-black/55 px-4 py-6 backdrop-blur-sm"
-
-
 
           initial={{ opacity: 0 }}
 
-
-
           animate={{ opacity: 1 }}
-
-
 
           exit={{ opacity: 0 }}
 
-
-
           onClick={(event) => event.target === event.currentTarget && onClose()}
-
-
 
         >
 
-
-
           <motion.div
-
-
 
             initial={{ opacity: 0, y: 24, scale: 0.97 }}
 
-
-
             animate={{ opacity: 1, y: 0, scale: 1 }}
-
-
 
             exit={{ opacity: 0, y: 24, scale: 0.97 }}
 
-
-
             transition={{ duration: 0.22, ease: "easeOut" }}
-
-
 
             className="custom-scrollbar max-h-[86dvh] w-full max-w-[430px] overflow-y-auto rounded-[2rem] border border-soft bg-surface-elevated p-5 text-primary shadow-soft backdrop-blur-2xl"
 
-
-
           >
-
-
 
             <div className="mb-5 flex items-center justify-between">
 
-
-
               <div className="flex items-center gap-3">
-
-
 
                 <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-accent-soft bg-accent-soft text-accent">
 
-
-
                   <Edit3 className="h-4 w-4" />
 
-
-
                 </div>
-
-
-
-
-
-
 
                 <div>
 
-
-
                   <p className="text-sm font-black text-primary">
-
-
 
                     Editar perfil
 
-
-
                   </p>
-
-
 
                   <p className="text-xs text-muted">
 
-
-
                     Foto e nome do perfil
-
-
 
                   </p>
 
-
-
                 </div>
-
-
 
               </div>
 
-
-
-
-
-
-
               <button
-
-
 
                 type="button"
 
-
-
                 onClick={onClose}
-
-
 
                 className="flex h-9 w-9 items-center justify-center rounded-xl border border-soft bg-surface-muted text-muted transition active:scale-[0.96]"
 
-
-
                 aria-label="Fechar"
 
-
-
               >
-
-
 
                 <X className="h-4 w-4" />
 
-
-
               </button>
 
-
-
             </div>
-
-
-
-
-
-
 
             <div className="mb-5 flex flex-col items-center text-center">
 
-
-
               <AvatarUpload avatarUrl={avatarUrl} onUpdate={onAvatarUpdate} />
 
-
-
-
-
-
-
             </div>
-
-
-
-
-
-
 
             <div className="space-y-3">
 
-
-
               <ProfileEditField
-
-
 
                 inputRef={inputRef}
 
-
-
                 icon={User}
-
-
 
                 label="Nome"
 
-
-
                 value={nameValue}
-
-
 
                 onChange={setNameValue}
 
-
-
                 placeholder="Seu nome"
-
-
 
               />
 
-
-
-
-
-
-
             </div>
-
-
-
-
-
-
 
             {error && (
 
-
-
               <p className="mt-3 rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-400">
-
-
 
                 {error}
 
-
-
               </p>
-
-
 
             )}
 
-
-
-
-
-
-
             <div className="mt-5 grid grid-cols-2 gap-3">
-
-
 
               <button
 
-
-
                 type="button"
-
-
 
                 onClick={onClose}
 
-
-
                 disabled={saving}
-
-
 
                 className="min-h-12 rounded-2xl border border-soft bg-surface-muted px-4 text-sm font-semibold text-secondary transition active:scale-[0.98] disabled:opacity-50"
 
-
-
               >
-
-
 
                 Cancelar
 
-
-
               </button>
-
-
-
-
-
-
 
               <button
 
-
-
                 type="button"
-
-
 
                 onClick={handleSave}
 
-
-
                 disabled={saving || !nameValue.trim()}
-
-
 
                 className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[var(--accent-strong)] px-4 text-sm font-semibold text-white shadow-card transition active:scale-[0.98] disabled:opacity-50"
 
-
-
               >
-
-
 
                 {saving ? (
 
-
-
                   <Loader2 className="h-4 w-4 animate-spin" />
-
-
 
                 ) : (
 
-
-
                   <Check className="h-4 w-4" />
-
-
 
                 )}
 
-
-
                 Salvar
-
-
 
               </button>
 
-
-
             </div>
-
-
 
           </motion.div>
 
-
-
         </motion.div>
-
-
 
       )}
 
-
-
     </AnimatePresence>
 
-
-
   );
-
-
 
 }
 
-
-
-
-
-
-
 function ProfileEditField({
-
-
 
   inputRef,
 
-
-
   icon: Icon,
-
-
 
   label,
 
-
-
   value,
-
-
 
   onChange,
 
-
-
   placeholder,
-
-
 
   disabled = false,
 
-
-
   helper,
-
-
 
 }: {
 
-
-
   inputRef?: RefObject<HTMLInputElement | null>;
-
-
 
   icon: ElementType;
 
-
-
   label: string;
-
-
 
   value: string;
 
-
-
   onChange: (value: string) => void;
-
-
 
   placeholder?: string;
 
-
-
   disabled?: boolean;
-
-
 
   helper?: string;
 
-
-
 }) {
-
-
 
   return (
 
-
-
     <label className="block">
-
-
 
       <span className="mb-2 block text-xs font-black uppercase tracking-[0.12em] text-soft">
 
-
-
         {label}
-
-
 
       </span>
 
-
-
-
-
-
-
       <div className="flex min-h-12 items-center gap-3 rounded-2xl border border-soft bg-surface-muted px-4 transition focus-within:border-accent-soft">
-
-
 
         <Icon className="h-4 w-4 shrink-0 text-accent" />
 
-
-
-
-
-
-
         <input
-
-
 
           ref={inputRef}
 
-
-
           type="text"
-
-
 
           value={value}
 
-
-
           onChange={(event) => onChange(event.target.value)}
-
-
 
           disabled={disabled}
 
-
-
           placeholder={placeholder}
-
-
 
           className="w-full bg-transparent text-sm font-medium text-primary outline-none placeholder:text-soft disabled:cursor-not-allowed disabled:text-muted"
 
-
-
         />
-
-
 
       </div>
 
-
-
-
-
-
-
       {helper && <p className="mt-2 px-1 text-xs text-muted">{helper}</p>}
-
-
 
     </label>
 
-
-
   );
-
-
 
 }

@@ -205,11 +205,65 @@ export default function Focus() {
 
   return (
     <main
-      className={`relative min-h-[100dvh] text-slate-900 transition-colors duration-700 dark:text-white ${immersive ? "flex min-h-[100dvh] items-center justify-center bg-[#6d28d9] text-white pb-0" : "bg-[#f7f8fa] dark:bg-[#080711] pb-28 lg:pb-12"}`}
+      className={`relative min-h-[100dvh] text-slate-900 transition-colors duration-700 dark:text-white ${immersive ? "flex min-h-[100dvh] items-center justify-center bg-[#270d35] text-white pb-0" : "bg-[#f7f8fa] dark:bg-[#080711] pb-28 lg:pb-12"}`}
       onPointerDown={revealControls}
       onKeyDown={revealControls}
     >
       {immersive && <style>{`[data-bottom-nav] { visibility: hidden !important; pointer-events: none !important; }`}</style>}
+      {/* Fundo abstrato 100% CSS: não depende de nenhuma imagem externa. */}
+      <style>{`
+        @keyframes axon-focus-aurora-one {
+          0%, 100% { transform: translate3d(-3%, 2%, 0) rotate(-13deg) scale(1.04); }
+          50% { transform: translate3d(5%, -5%, 0) rotate(-6deg) scale(1.13); }
+        }
+        @keyframes axon-focus-aurora-two {
+          0%, 100% { transform: translate3d(4%, -3%, 0) rotate(17deg) scale(1.1); }
+          50% { transform: translate3d(-5%, 4%, 0) rotate(7deg) scale(1.02); }
+        }
+        @keyframes axon-focus-pattern-drift {
+          0%, 100% { transform: translate3d(0, 0, 0) scale(1.05); }
+          50% { transform: translate3d(-1.5%, 1.5%, 0) scale(1.08); }
+        }
+        .axon-focus-aurora-one { animation: axon-focus-aurora-one 35s ease-in-out infinite; }
+        .axon-focus-aurora-two { animation: axon-focus-aurora-two 43s ease-in-out infinite; }
+        .axon-focus-pattern { animation: axon-focus-pattern-drift 50s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) {
+          .axon-focus-aurora-one, .axon-focus-aurora-two, .axon-focus-pattern {
+            animation: none !important;
+          }
+        }
+      `}</style>
+      <div
+        aria-hidden="true"
+        className={`pointer-events-none absolute inset-0 z-0 overflow-hidden transition-opacity duration-[1300ms] ease-in-out ${immersive ? "opacity-100" : "opacity-0"}`}
+        style={{ backgroundColor: "#16091f" }}
+      >
+        {/* Ondas de cor, amplas e desfocadas, em tons de ameixa e violeta. */}
+        <div
+          className="axon-focus-aurora-one absolute -inset-[35%] opacity-90 will-change-transform"
+          style={{
+            background: "radial-gradient(ellipse 47% 34% at 25% 35%, rgba(124,37,147,0.65), transparent 78%), radial-gradient(ellipse 44% 30% at 79% 72%, rgba(103,28,127,0.58), transparent 82%)",
+            filter: "blur(55px)",
+          }}
+        />
+        <div
+          className="axon-focus-aurora-two absolute -inset-[32%] opacity-85 will-change-transform"
+          style={{
+            background: "radial-gradient(ellipse 35% 55% at 69% 23%, rgba(70,19,103,0.65), transparent 80%), radial-gradient(ellipse 43% 40% at 29% 81%, rgba(150,48,139,0.36), transparent 80%)",
+            filter: "blur(62px)",
+          }}
+        />
+        {/* Padrão de linhas curvas concêntricas quase imperceptíveis. */}
+        <div
+          className="axon-focus-pattern absolute -inset-[12%] opacity-40 will-change-transform"
+          style={{
+            backgroundImage: "repeating-radial-gradient(ellipse 65% 80% at 76% 42%, transparent 0px, transparent 47px, rgba(225,158,241,0.12) 49px, transparent 51px)",
+            maskImage: "linear-gradient(110deg, transparent 3%, black 46%, black 85%, transparent 100%)",
+            WebkitMaskImage: "linear-gradient(110deg, transparent 3%, black 46%, black 85%, transparent 100%)",
+          }}
+        />
+        <div className="absolute inset-0 bg-[#0d0416]/25" />
+      </div>
       <div className={`relative mx-auto w-full max-w-5xl px-4 sm:px-7 ${immersive ? "py-8" : "pt-7 lg:pt-10"}`}>
         {!immersive && <header className="mb-7 flex items-center justify-between gap-4">
           <div>
@@ -226,7 +280,7 @@ export default function Focus() {
               <span className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400"><span className={`h-2 w-2 rounded-full ${isRunning ? "animate-pulse bg-emerald-500" : isPaused ? "bg-amber-500" : "bg-[#6d28d9]"}`} />{isRunning ? "Sessão em andamento" : isPaused ? "Sessão pausada" : finished ? "Tempo concluído" : "Pronto para começar"}</span>
               <span className="text-xs font-semibold text-slate-400">{selectedMinutes} min planejados</span>
             </div>}
-            {immersive && <div className="mb-5 text-center"><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#6d28d9] dark:text-violet-300">Em foco agora</p><p className="mt-2 break-words text-lg font-extrabold">{currentTask?.title ?? "Foco livre"}</p></div>}
+            {immersive && <div className="mb-5 text-center"><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-violet-200/70">Em foco agora</p><p className="mt-2 break-words text-lg font-extrabold">{currentTask?.title ?? "Foco livre"}</p></div>}
             <div className="relative mx-auto my-7 flex h-[260px] w-[260px] items-center justify-center sm:my-10 sm:h-[310px] sm:w-[310px]">
               <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 300 300" aria-hidden="true">
                 <circle cx="150" cy="150" r="135" fill="none" stroke="currentColor" strokeWidth="7" className={immersive ? "text-white/25" : "text-slate-100 dark:text-white/10"} />
@@ -238,13 +292,13 @@ export default function Focus() {
               </div>
             </div>
             <div className="mx-auto flex max-w-[360px] items-center gap-2.5">
-              <button type="button" onClick={startPause} disabled={!currentTask && !freeFocus && !isRunning} className={`flex min-h-14 flex-1 items-center justify-center gap-2 rounded-2xl px-5 text-sm font-bold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${immersive ? "bg-white text-[#6d28d9] hover:bg-white/90" : "bg-[#6d28d9] text-white hover:bg-[#5b21b6]"}`}>
+              <button type="button" onClick={startPause} disabled={!currentTask && !freeFocus && !isRunning} className={`flex min-h-14 flex-1 items-center justify-center gap-2 rounded-2xl px-5 text-sm font-bold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${immersive ? "bg-violet-100 text-[#291544] hover:bg-white" : "bg-[#6d28d9] text-white hover:bg-[#5b21b6]"}`}>
                 {isRunning ? <><Pause className="h-5 w-5" /> Pausar</> : isPaused ? <><Play className="h-5 w-5 fill-current" /> Retomar</> : <><Play className="h-5 w-5 fill-current" /> Iniciar foco</>}
               </button>
               {!immersive && <button type="button" onClick={reset} title="Reiniciar cronômetro" aria-label="Reiniciar cronômetro" className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 transition active:scale-95 dark:border-white/10 dark:bg-white/5 dark:text-slate-300"><RotateCcw className="h-5 w-5" /></button>}
             </div>
             {!immersive && !currentTask && !freeFocus && <p className="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">Selecione uma tarefa abaixo para liberar o cronômetro.</p>}
-            {currentTask && <button type="button" onClick={() => setCompleteOpen(true)} className="mx-auto mt-4 flex items-center gap-2 text-xs font-semibold text-[#6d28d9] hover:underline dark:text-violet-300"><CheckCircle2 className="h-4 w-4" /> Concluir: <span className="max-w-[240px] truncate">{currentTask.title}</span></button>}
+            {currentTask && <button type="button" onClick={() => setCompleteOpen(true)} className={`mx-auto mt-4 flex items-center gap-2 text-xs font-semibold hover:underline ${immersive ? "text-violet-200" : "text-[#6d28d9] dark:text-violet-300"}`}><CheckCircle2 className="h-4 w-4" /> Concluir: <span className="max-w-[240px] truncate">{currentTask.title}</span></button>}
           </section>
 
           {!immersive && <aside className="space-y-5">

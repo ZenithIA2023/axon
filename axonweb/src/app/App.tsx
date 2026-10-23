@@ -33,6 +33,8 @@ import Dashboard from "../pages/Dashboard";
 import Chat from "../pages/Chat";
 import VoiceChat from "../pages/VoiceChat";
 import Planning from "../pages/Planning";
+import Plans from "../pages/Plans";
+import MyPlan from "../pages/MyPlan";
 import Insights from "../pages/Insights";
 import { RoutineDetailPage } from "../pages/Routines";
 import Focus from "../pages/Focus";
@@ -116,6 +118,8 @@ export default function App() {
         <Route path="/chat/:chatId" element={<Chat />} />
         <Route path="/voz" element={<VoiceChat />} />
         <Route path="/planning" element={<Planning initialView="agenda" />} />
+        <Route path="/plans" element={<Plans />} />
+        <Route path="/my-plan" element={<MyPlan />} />
         <Route path="/insights" element={<Insights />} />
         <Route path="/rotinas" element={<Planning initialView="rotinas" />} />
         <Route path="/rotinas/:id" element={<RoutineDetailPage />} />

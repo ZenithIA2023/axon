@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   AlertCircle,
-  ArrowRight,
+  Check,
   Eye,
   EyeOff,
   Lock,
@@ -168,24 +168,23 @@ export default function Signup() {
   }
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#2d0850] px-4 py-8 text-white">
+    <main className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[#2d0850] px-4 py-8 text-white">
       <AuthGlow />
 
       <div className="relative z-10 w-full max-w-[340px]">
-        <SignupLogo />
 
         <motion.section
           initial={{ opacity: 0, y: 22, scale: 0.985 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.48, ease: "easeOut" }}
-          className="overflow-hidden rounded-[1.65rem] border border-white/90 bg-white dark:border-white/10 dark:bg-[#11101a]/94 px-5 pb-7 pt-6 text-[#4c1d95] dark:text-white shadow-[0_28px_90px_rgba(0,0,0,0.26)] dark:text-white dark:shadow-[0_28px_90px_rgba(0,0,0,0.48)]"
+          className="overflow-hidden rounded-[1.65rem] border border-white/90 bg-white px-5 pb-7 pt-6 text-[#30124b] shadow-[0_28px_90px_rgba(0,0,0,0.26)] dark:border-white/10 dark:bg-[#16111f] dark:text-white dark:shadow-[0_28px_90px_rgba(0,0,0,0.48)]"
         >
           <div className="mb-6 text-center">
             <h1 className="mx-auto max-w-[15rem] text-[1.55rem] font-black leading-[0.95] tracking-[-0.045em] text-[#4c1d95] dark:text-white">
               Crie seu assistente pessoal Inteligente
             </h1>
 
-            <p className="mx-auto mt-3 max-w-[16.5rem] text-[0.68rem] font-medium leading-5 text-[#6d28d9] dark:text-[#d8b4fe]/62 dark:text-white/62">
+            <p className="mx-auto mt-3 max-w-[16.5rem] text-[0.68rem] font-medium leading-5 text-[#6d28d9] dark:text-white/62">
               Seja bem-vindo ao AXON
             </p>
           </div>
@@ -237,15 +236,17 @@ export default function Signup() {
                 className="peer sr-only"
               />
 
-              <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-[0.35rem] border border-[#7b2cbf]/30 bg-white dark:border-white/16 dark:bg-[#191722] transition peer-checked:border-[#7b2cbf] peer-checked:bg-[#7b2cbf]" />
+              <span aria-hidden="true" className="mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border border-[#7b2cbf]/40 bg-white text-white transition peer-checked:border-[#7b2cbf] peer-checked:bg-[#7b2cbf] peer-focus-visible:ring-2 peer-focus-visible:ring-[#a855f7] peer-focus-visible:ring-offset-2 dark:border-white/25 dark:bg-[#211a2b] dark:peer-checked:border-[#a855f7] dark:peer-checked:bg-[#9333ea] dark:peer-focus-visible:ring-offset-[#16111f]">
+                {acceptedTerms && <Check className="h-3.5 w-3.5 stroke-[3]" />}
+              </span>
 
-              <span className="text-[0.62rem] leading-4 text-[#6d28d9] dark:text-[#d8b4fe]/68 dark:text-white/62">
+              <span className="text-[0.62rem] leading-4 text-[#6d28d9] dark:text-white/62">
                 Li e concordo com os{" "}
                 <a
                   href={`${LEGAL_BASE}/legal/termos.html`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-black text-[#6d28d9] dark:text-[#d8b4fe] hover:text-[#7b2cbf] dark:text-[#d8b4fe]"
+                  className="font-black text-[#6d28d9] dark:text-[#d8b4fe] hover:text-[#7b2cbf]"
                 >
                   Termos de Uso
                 </a>{" "}
@@ -254,7 +255,7 @@ export default function Signup() {
                   href={`${LEGAL_BASE}/legal/privacidade.html`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-black text-[#6d28d9] dark:text-[#d8b4fe] hover:text-[#7b2cbf] dark:text-[#d8b4fe]"
+                  className="font-black text-[#6d28d9] dark:text-[#d8b4fe] hover:text-[#7b2cbf]"
                 >
                   Política de Privacidade
                 </a>
@@ -275,13 +276,12 @@ export default function Signup() {
               className="mt-2 inline-flex min-h-10 w-full items-center justify-center rounded-2xl bg-[#7b2cbf] px-6 text-sm font-medium text-white shadow-[0_18px_42px_rgba(123,44,191,0.22)] transition hover:bg-[#8d31dd] dark:bg-[#a855f7] dark:hover:bg-[#b968ff] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? "Criando conta..." : "Criar conta"}
-              {!loading && <ArrowRight className="ml-2 h-4 w-4" />}
             </button>
 
             <div className="py-3">
               <div className="flex items-center gap-3">
                 <div className="h-px flex-1 bg-[#7b2cbf]/28 dark:bg-white/18" />
-                <span className="text-[0.68rem] font-medium text-[#6d28d9] dark:text-[#d8b4fe]/62 dark:text-white/62">
+                <span className="text-[0.68rem] font-medium text-[#6d28d9] dark:text-white/62">
                   ou
                 </span>
                 <div className="h-px flex-1 bg-[#7b2cbf]/28 dark:bg-white/18" />
@@ -294,11 +294,11 @@ export default function Signup() {
             </div>
           </form>
 
-          <p className="mt-6 text-center text-[0.68rem] text-[#6d28d9] dark:text-[#d8b4fe]/62 dark:text-white/62">
+          <p className="mt-6 text-center text-[0.68rem] text-[#6d28d9] dark:text-white/62">
             Já tem uma conta?{" "}
             <Link
               to="/login"
-              className="font-black text-[#6d28d9] dark:text-[#d8b4fe] transition hover:text-[#7b2cbf] dark:text-[#d8b4fe]"
+              className="font-black text-[#6d28d9] dark:text-[#d8b4fe] transition hover:text-[#7b2cbf]"
             >
               Entrar
             </Link>
@@ -309,24 +309,3 @@ export default function Signup() {
   );
 }
 
-// ===========================================================================
-// ELEMENTOS VISUAIS
-// ===========================================================================
-
-function SignupLogo() {
-  return (
-    <div className="mb-6 flex justify-center">
-      <Link
-        to="/"
-        aria-label="Voltar para a landing page"
-        className="flex h-12 w-12 rotate-45 items-center justify-center rounded-2xl border border-white/18 bg-white/10 shadow-[0_20px_60px_rgba(168,85,247,0.35)] backdrop-blur-2xl transition active:scale-[0.96]"
-      >
-        <img
-          src="/axon-logo.svg"
-          alt="Axon"
-          className="h-12 w-12 -rotate-45 object-contain"
-        />
-      </Link>
-    </div>
-  );
-}

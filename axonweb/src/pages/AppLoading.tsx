@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 const loadingMessages = [
   "Carregando seu ambiente",
@@ -9,9 +9,11 @@ const loadingMessages = [
 ];
 
 const TOTAL_DURATION = 2600;
+const NAVIGATION_DELAY = 220;
 
 export default function AppLoading() {
   const navigate = useNavigate();
+  const reduceMotion = useReducedMotion();
 
   const [progress, setProgress] = useState(0);
 
@@ -23,60 +25,88 @@ export default function AppLoading() {
   const currentMessage = loadingMessages[activeMessageIndex];
 
   useEffect(() => {
-    const startedAt = Date.now();
+    const startedAt = performance.now();
 
-    const progressTimer = window.setInterval(() => {
-      const elapsed = Date.now() - startedAt;
+    let progressTimer: number | undefined;
+    let navigationTimer: number | undefined;
+    let completed = false;
+
+    progressTimer = window.setInterval(() => {
+      const elapsed = performance.now() - startedAt;
       const nextProgress = Math.min((elapsed / TOTAL_DURATION) * 100, 100);
 
       setProgress(nextProgress);
 
-      if (nextProgress >= 100) {
+      if (nextProgress >= 100 && !completed) {
+        completed = true;
         window.clearInterval(progressTimer);
 
-        window.setTimeout(() => {
-          navigate("/dashboard");
-        }, 220);
+        navigationTimer = window.setTimeout(() => {
+          navigate("/dashboard", { replace: true });
+        }, NAVIGATION_DELAY);
       }
-    }, 80);
+    }, 40);
 
     return () => {
       window.clearInterval(progressTimer);
+      window.clearTimeout(navigationTimer);
     };
   }, [navigate]);
 
   return (
-    <main className="relative flex h-[100dvh] w-full items-center justify-center overflow-hidden bg-[#2d0850] px-4 text-white">
+    <main className="relative flex h-[100dvh] w-full items-center justify-center overflow-hidden bg-[#2d0850] px-5 text-white">
       <AppLoadingBackground />
 
-      <section className="relative z-10 flex w-full max-w-[340px] flex-col items-center text-center">
-        <LogoVignette />
+      <section
+        role="status"
+        aria-label="Carregando o AXON"
+        className="relative z-10 flex w-full max-w-[340px] flex-col items-center text-center"
+      >
+        <LogoVignette reduceMotion={!!reduceMotion} />
 
-        <div className="mt-8 min-h-[58px]">
-          <AnimatePresence mode="wait">
+        <div className="mt-8 min-h-[76px] w-full">
+          <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={currentMessage}
-              initial={{ opacity: 0, y: 8, filter: "blur(4px)" }}
+              initial={
+                reduceMotion
+                  ? false
+                  : { opacity: 0, y: 8, filter: "blur(4px)" }
+              }
               animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-              exit={{ opacity: 0, y: -8, filter: "blur(4px)" }}
-              transition={{ duration: 0.28, ease: "easeOut" }}
+              exit={
+                reduceMotion
+                  ? { opacity: 0 }
+                  : { opacity: 0, y: -8, filter: "blur(4px)" }
+              }
+              transition={{
+                duration: reduceMotion ? 0.12 : 0.24,
+                ease: "easeOut",
+              }}
             >
-              <h1 className="text-[1.35rem] font-black leading-none tracking-[-0.045em] text-white">
+              <h1 className="text-[1.55rem] font-black leading-[1.02] tracking-[-0.05em] text-white">
                 {currentMessage}
               </h1>
 
-              <p className="mx-auto mt-3 max-w-[17rem] text-[0.72rem] font-medium leading-5 text-white/58">
-                O Axon está preparando sua experiência.
+              <p className="mx-auto mt-3 max-w-[17rem] text-[0.76rem] font-medium leading-5 text-white/58">
+                O AXON está preparando sua experiência.
               </p>
             </motion.div>
           </AnimatePresence>
         </div>
 
-        <div className="mt-8 w-full max-w-[16rem]">
-          <div className="h-1.5 overflow-hidden rounded-full bg-white/12">
+        <div className="mt-8 w-full max-w-[18rem]">
+          <div
+            className="relative h-[7px] overflow-hidden rounded-full bg-white/14"
+            role="progressbar"
+            aria-label="Progresso do carregamento"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(progress)}
+          >
             <motion.div
-              className="h-full rounded-full bg-[#a855f7] shadow-[0_0_18px_rgba(168,85,247,0.34)]"
-              animate={{ width: `${Math.round(progress)}%` }}
+              className="relative h-full rounded-full bg-gradient-to-r from-[#a855f7] via-[#c084fc] to-[#f5d0fe] shadow-[0_0_18px_rgba(192,132,252,0.38)]"
+              animate={{ width: `${progress}%` }}
               transition={{ duration: 0.18, ease: "easeOut" }}
             />
           </div>
@@ -86,74 +116,49 @@ export default function AppLoading() {
   );
 }
 
-function LogoVignette() {
+function LogoVignette({ reduceMotion }: { reduceMotion: boolean }) {
   return (
-    <div className="relative flex h-[220px] w-[220px] items-center justify-center">
-      <motion.div
-        animate={{
-          scale: [1, 1.1, 1],
-          opacity: [0.26, 0.52, 0.26],
-        }}
-        transition={{
-          duration: 3.1,
-          repeat: Infinity,
-          ease: "easeInOut",
-        }}
-        className="absolute h-[180px] w-[180px] rounded-full bg-[#7b2cbf]/44 blur-3xl"
-      />
+    <motion.div
+      animate={
+        reduceMotion
+          ? undefined
+          : {
+              scale: [1, 1.02, 1],
+              y: [0, -2, 0],
+            }
+      }
+      transition={{
+        duration: 3.2,
+        repeat: Infinity,
+        ease: "easeInOut",
+      }}
+      className="relative flex h-[180px] w-[180px] items-center justify-center"
+    >
+      <div className="absolute h-[150px] w-[150px] rounded-full bg-[#a855f7]/14 blur-[42px]" />
 
-      <motion.div
-        animate={{ rotate: 360 }}
-        transition={{
-          duration: 18,
-          repeat: Infinity,
-          ease: "linear",
-        }}
-        className="absolute h-[176px] w-[176px] rounded-full border border-white/10"
-      />
+      <div className="relative flex h-[116px] w-[116px] rotate-45 items-center justify-center rounded-[2rem] border border-white/14 bg-white/[0.10] shadow-[0_24px_60px_rgba(0,0,0,0.22)] backdrop-blur-2xl">
+        <div className="absolute inset-[12px] rounded-[1.45rem] bg-gradient-to-br from-[#a855f7] to-[#7b2cbf] shadow-[0_16px_36px_rgba(123,44,191,0.28)]" />
 
-      <motion.div
-        animate={{ rotate: -360 }}
-        transition={{
-          duration: 26,
-          repeat: Infinity,
-          ease: "linear",
-        }}
-        className="absolute h-[132px] w-[132px] rounded-full border border-white/8"
-      />
+        <div className="pointer-events-none absolute inset-[12px] rounded-[1.45rem] bg-[linear-gradient(135deg,rgba(255,255,255,0.22),transparent_55%)]" />
 
-      <motion.div
-        animate={{
-          scale: [1, 1.035, 1],
-        }}
-        transition={{
-          duration: 3.2,
-          repeat: Infinity,
-          ease: "easeInOut",
-        }}
-        className="relative flex h-24 w-24 items-center justify-center"
-      >
-        <div className="relative flex h-24 w-24 rotate-45 items-center justify-center rounded-[1.7rem] border border-white/16 bg-white/10 shadow-[0_28px_90px_rgba(0,0,0,0.34)] backdrop-blur-2xl">
-          <div className="absolute inset-0 rounded-[1.7rem] bg-[linear-gradient(135deg,rgba(255,255,255,0.24),transparent_54%)] opacity-70" />
-
-          <img
-            src="/axon-logo.svg"
-            alt="Axon"
-            className="relative h-24 w-24 -rotate-45 object-contain"
-          />
-        </div>
-      </motion.div>
-    </div>
+        <img
+          src="/axon-logo.svg"
+          alt="Axon"
+          className="relative z-10 h-[76px] w-[76px] -rotate-45 object-contain"
+          draggable={false}
+        />
+      </div>
+    </motion.div>
   );
 }
 
 function AppLoadingBackground() {
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div className="absolute left-1/2 top-[-14rem] h-[30rem] w-[30rem] -translate-x-1/2 rounded-full bg-[#7b2cbf]/60 blur-[120px]" />
-      <div className="absolute bottom-[-18rem] left-[-12rem] h-[30rem] w-[30rem] rounded-full bg-[#7b2cbf]/32 blur-[120px]" />
-      <div className="absolute bottom-[-16rem] right-[-12rem] h-[30rem] w-[30rem] rounded-full bg-[#7b2cbf]/22 blur-[120px]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:22px_22px] opacity-[0.1]" />
+      <div className="absolute left-1/2 top-[-16rem] h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-[#7b2cbf]/38 blur-[120px]" />
+      <div className="absolute bottom-[-15rem] left-[-8rem] h-[22rem] w-[22rem] rounded-full bg-[#a855f7]/14 blur-[110px]" />
+      <div className="absolute bottom-[-14rem] right-[-8rem] h-[22rem] w-[22rem] rounded-full bg-[#6d28d9]/14 blur-[110px]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.02),transparent_62%)]" />
     </div>
   );
 }
