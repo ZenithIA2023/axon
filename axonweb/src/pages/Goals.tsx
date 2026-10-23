@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 
 import Sidebar from "../components/layout/Sidebar";
+import PagePortal from "../components/ui/PagePortal";
+import { useRegisterOpenPanel } from "../lib/openPanels";
 import * as api from "../lib/api";
 import type { Objective } from "../lib/api";
 import { results, type ChronotypeResultKey } from "../data/results";
@@ -227,22 +229,12 @@ export default function Goals({
   // Conteúdo compartilhado entre a página própria e o modo embedded no Planning.
   const inner = (
     <>
-      {embedded && (
-        <button
-          type="button"
-          onClick={() => setIsCreateOpen(true)}
-          className="absolute left-3 top-5 z-20 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#6d28d9] text-white shadow-[0_8px_22px_rgba(109,40,217,0.24)] transition active:scale-[0.96] dark:bg-[var(--accent-strong)] dark:shadow-card"
-          aria-label="Criar objetivo"
-          title="Criar objetivo"
-        >
-          <Plus className="h-5 w-5" />
-        </button>
-      )}
-
       <div className={`lg:hidden ${embedded ? "px-3" : ""}`}>
+        {/* Mesmo arranjo do cabeçalho de Rotinas: o botão de criar no fluxo,
+            ao lado do título, e não `absolute` sobre a barra de abas do hub. */}
         {embedded && (
-          <div className="mb-4">
-            <div>
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="min-w-0">
               <h1 className="text-[1.7rem] font-semibold leading-tight tracking-[-0.04em] text-slate-950 dark:text-white">
                 Meus Objetivos
               </h1>
@@ -250,6 +242,16 @@ export default function Goals({
                 Metas que o Axon ajuda a alcançar.
               </p>
             </div>
+
+            <button
+              type="button"
+              onClick={() => setIsCreateOpen(true)}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#6d28d9] text-white shadow-[0_8px_22px_rgba(109,40,217,0.24)] transition active:scale-[0.96] dark:bg-[var(--accent-strong)] dark:shadow-card"
+              aria-label="Criar objetivo"
+              title="Criar objetivo"
+            >
+              <Plus className="h-5 w-5" />
+            </button>
           </div>
         )}
 
@@ -326,9 +328,19 @@ export default function Goals({
     </>
   );
 
-  // Modais ficam fora do conteúdo para preservar o empilhamento visual.
+  // Modais ficam fora do conteúdo e vão para o <body> pelo PagePortal: dentro
+  // do `relative z-10` da página, o `z-[120]` deles valia 10 e o botão final
+  // (criar/salvar) ficava atrás da BottomNav. Enquanto um deles está aberto, a
+  // barra some.
+  useRegisterOpenPanel(
+    isCreateOpen ||
+      editingObjective !== null ||
+      addingProgressTo !== null ||
+      editingStep !== null
+  );
+
   const modals = (
-    <>
+    <PagePortal>
       {isCreateOpen && (
         <CreateObjectiveModal
           onClose={() => setIsCreateOpen(false)}
@@ -377,7 +389,7 @@ export default function Goals({
           }}
         />
       )}
-    </>
+    </PagePortal>
   );
 
   if (embedded) {

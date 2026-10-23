@@ -159,21 +159,12 @@ export default function Routines({
   // Conteúdo compartilhado entre a rota própria e a aba embedded do Planning.
   const inner = (
     <>
-      {embedded && (
-        <button
-          type="button"
-          onClick={goCreate}
-          className="absolute left-3 top-5 z-20 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#6d28d9] text-white shadow-[0_8px_22px_rgba(109,40,217,0.24)] transition active:scale-[0.96] dark:bg-[var(--accent-strong)] dark:shadow-card"
-          aria-label="Criar rotina"
-          title="Criar rotina"
-        >
-          <Plus className="h-5 w-5" />
-        </button>
-      )}
-
       <div className={`lg:hidden ${embedded ? "px-3" : ""}`}>
-        <section className="mb-5">
-          <div>
+        {/* O botão de criar fica no fluxo, ao lado do título. Ele já foi
+            `absolute` no canto do hub e caía em cima da barra de abas do
+            Planning, cortando "Rotinas" (iOS e Android, 23/10/2026). */}
+        <section className="mb-5 flex items-start justify-between gap-3">
+          <div className="min-w-0">
             <h1 className="text-[1.7rem] font-semibold leading-tight tracking-[-0.04em] text-slate-950 dark:text-white">
               Minhas Rotinas
             </h1>
@@ -183,6 +174,17 @@ export default function Routines({
             </p>
           </div>
 
+          {embedded && (
+            <button
+              type="button"
+              onClick={goCreate}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#6d28d9] text-white shadow-[0_8px_22px_rgba(109,40,217,0.24)] transition active:scale-[0.96] dark:bg-[var(--accent-strong)] dark:shadow-card"
+              aria-label="Criar rotina"
+              title="Criar rotina"
+            >
+              <Plus className="h-5 w-5" />
+            </button>
+          )}
         </section>
 
         {error && (

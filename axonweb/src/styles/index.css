@@ -282,6 +282,67 @@ body {
 }
 
 /* ==========================================================================
+   CONTROLES NATIVOS DE FORMULÁRIO — SÓ iOS
+   --------------------------------------------------------------------------
+   No iOS o WebKit desenha `input[type=date|time]` e `<select>` como controle
+   nativo, com largura intrínseca e estilo próprios, e ignora boa parte das
+   classes do projeto (23/10/2026, iPhone 15):
+   · dentro de `grid grid-cols-2`, Início/Fim estouravam as colunas e se
+     sobrepunham — o item de grid tem `min-width: auto` e não encolhe abaixo da
+     largura intrínseca do controle;
+   · em largura total, o campo de data perdia borda e fundo e virava texto solto;
+   · o `<select>` ficava mais baixo que o `min-h` pedido, com a seta dupla do iOS.
+
+   `@supports (-webkit-touch-callout: none)` só é verdadeiro no WebKit do iOS:
+   nem o Chrome (web e Android) nem o Safari do Mac o satisfazem. Web e Android
+   estão corretos hoje e, assim, nada aqui chega até eles. Não use `.is-native`
+   como condição: ela vale também na web (ver main.tsx).
+   ========================================================================== */
+@supports (-webkit-touch-callout: none) {
+  /* Em @layer base para que as utilities da própria tela (`min-h-[52px]`,
+     `px-4`...) continuem valendo por cima destes padrões. */
+  @layer base {
+    input[type="date"],
+    input[type="time"] {
+      -webkit-appearance: none;
+      appearance: none;
+      min-width: 0;
+    }
+
+    /* Sem a aparência nativa, o iOS centraliza o valor e, com o campo vazio,
+       a linha interna colapsa e o campo achata — os campos com só `py-*` (sem
+       `min-h`) dependem dessa linha para ter altura. */
+    input[type="date"]::-webkit-date-and-time-value,
+    input[type="time"]::-webkit-date-and-time-value {
+      min-height: 1.25rem;
+      text-align: left;
+    }
+
+    /* A célula de grid/flex também precisa poder encolher: só o controle com
+       `min-width: 0` não basta se o item que o contém mantém `min-width: auto`. */
+    :is(.grid, .flex) > :has(input[type="date"], input[type="time"], select) {
+      min-width: 0;
+    }
+  }
+
+  /* O `<select>` perde a seta nativa junto com a aparência, então ela é
+     redesenhada aqui (chevron do lucide, cinza neutro que lê nos dois temas).
+     Esta parte fica FORA do @layer de propósito: o recuo à direita precisa
+     vencer o `px-*` das telas, senão o texto corre por baixo da seta. Quem já
+     tirou a aparência por conta própria (`appearance-none`, ex.: DayReview, sem
+     seta de propósito) fica de fora. */
+  select:not(.appearance-none) {
+    -webkit-appearance: none;
+    appearance: none;
+    padding-inline-end: 2.5rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.875rem center;
+    background-size: 1rem 1rem;
+  }
+}
+
+/* ==========================================================================
    SELEÇÃO DE TEXTO
    ========================================================================== */
 
