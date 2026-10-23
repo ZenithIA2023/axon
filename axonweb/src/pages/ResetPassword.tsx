@@ -1,9 +1,11 @@
+
 import { useEffect, useState } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { motion, useReducedMotion } from "framer-motion";
 import {
   AlertCircle,
   ArrowLeft,
-  ArrowRight,
   CheckCircle2,
   Eye,
   EyeOff,
@@ -14,13 +16,9 @@ import AuthGlow from "../components/auth/AuthGlow";
 import * as api from "../lib/api";
 
 // ===========================================================================
-// PÁGINA — REDEFINIR SENHA
+// RECUPERAÇÃO DE SENHA
 // ===========================================================================
 
-// O link do e-mail do Supabase abre /reset-password#access_token=...&type=recovery.
-// Link vencido ou já usado abre #error=access_denied&error_code=otp_expired.
-// O link sempre aponta para a WEB (BrowserRouter), onde o fragmento é só do
-// Supabase; no app o HashRouter usa o "#" para a rota e os dois colidiriam.
 type RecoveryLink =
   | { status: "ok"; token: string }
   | { status: "expired" }
@@ -28,18 +26,23 @@ type RecoveryLink =
 
 function readRecoveryLink(): RecoveryLink {
   const params = new URLSearchParams(window.location.hash.slice(1));
+
   if (params.get("error") || params.get("error_code")) {
     return { status: "expired" };
   }
+
   const token = params.get("access_token");
+
   if (token && params.get("type") === "recovery") {
     return { status: "ok", token };
   }
+
   return { status: "missing" };
 }
 
 export default function ResetPassword() {
   const navigate = useNavigate();
+  const reducedMotion = useReducedMotion();
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -51,16 +54,21 @@ export default function ResetPassword() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
 
-  // Lido no estado inicial, e não no efeito abaixo: em dev o StrictMode roda o
-  // efeito duas vezes, e a segunda já encontraria a URL limpa. O token fica só
-  // em memória — nunca em localStorage.
+  // Captura o token somente uma vez.
+  // Não armazenamos o token em localStorage.
   const [recoveryLink] = useState<RecoveryLink>(readRecoveryLink);
 
-  // Tira o token da barra de endereço e do histórico assim que a tela monta.
-  // Só mexe no hash quando ele é do Supabase: no app o "#" é a própria rota.
+  // Remove o token da URL após capturá-lo em memória.
+  // Não altera hashes normais utilizados pelo HashRouter.
   useEffect(() => {
     const hash = window.location.hash;
-    if (hash.includes("access_token") || hash.includes("error")) {
+    const params = new URLSearchParams(hash.slice(1));
+
+    if (
+      params.has("access_token") ||
+      params.has("error") ||
+      params.has("error_code")
+    ) {
       window.history.replaceState(
         null,
         "",
@@ -69,11 +77,11 @@ export default function ResetPassword() {
     }
   }, []);
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
 
-    if (recoveryLink.status !== "ok") return;
+    if (recoveryLink.status !== "ok" || loading) return;
 
     if (!password.trim() || !confirmPassword.trim()) {
       setError("Preencha os dois campos para continuar.");
@@ -85,7 +93,6 @@ export default function ResetPassword() {
       return;
     }
 
-    // Limite do bcrypt: acima disso o Supabase trunca a senha em silêncio.
     if (password.length > 72) {
       setError("A nova senha pode ter no máximo 72 caracteres.");
       return;
@@ -101,12 +108,10 @@ export default function ResetPassword() {
     try {
       await api.resetPassword(recoveryLink.token, password);
       setSuccess(true);
-    } catch (e) {
-      // O backend devolve mensagem pronta (link vencido, já usado); nunca
-      // detalhe interno.
+    } catch (err: unknown) {
       setError(
-        e instanceof Error
-          ? e.message
+        err instanceof Error
+          ? err.message
           : "Não foi possível alterar sua senha. Tente novamente."
       );
     } finally {
@@ -115,17 +120,28 @@ export default function ResetPassword() {
   }
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#2d0850] px-4 py-8 text-white">
+    <main className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[#2d0850] px-4 py-8 text-white">
       <AuthGlow />
 
       <div className="relative z-10 w-full max-w-[340px]">
-        <AuthLogoMark />
-
-        <section className="overflow-hidden rounded-[1.65rem] border border-white/90 bg-white dark:border-white/10 dark:bg-[#11101a]/94 px-5 pb-7 pt-6 text-[#4c1d95] dark:text-white shadow-[0_28px_90px_rgba(0,0,0,0.26)] dark:text-white dark:shadow-[0_28px_90px_rgba(0,0,0,0.48)]">
+        <motion.section
+          initial={
+            reducedMotion
+              ? false
+              : { opacity: 0, y: 22, scale: 0.985 }
+          }
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.48, ease: "easeOut" }}
+          className="overflow-hidden rounded-[1.65rem] border border-white/90 bg-white px-5 pb-7 pt-7 text-[#4c1d95] shadow-[0_28px_90px_rgba(0,0,0,0.26)] dark:border-white/10 dark:bg-[#11101a] dark:text-white dark:shadow-[0_28px_90px_rgba(0,0,0,0.48)]"
+        >
           {success ? (
-            <ResetPasswordSuccess onGoToLogin={() => navigate("/login")} />
+            <ResetPasswordSuccess
+              onGoToLogin={() => navigate("/login")}
+            />
           ) : recoveryLink.status !== "ok" ? (
-            <InvalidLinkState expired={recoveryLink.status === "expired"} />
+            <InvalidLinkState
+              expired={recoveryLink.status === "expired"}
+            />
           ) : (
             <ResetPasswordForm
               password={password}
@@ -137,21 +153,37 @@ export default function ResetPassword() {
               onSubmit={handleSubmit}
               onPasswordChange={setPassword}
               onConfirmPasswordChange={setConfirmPassword}
-              onTogglePassword={() => setShowPassword((prev) => !prev)}
+              onTogglePassword={() =>
+                setShowPassword((prev) => !prev)
+              }
               onToggleConfirmPassword={() =>
                 setShowConfirmPassword((prev) => !prev)
               }
             />
           )}
-        </section>
+        </motion.section>
       </div>
     </main>
   );
 }
 
 // ===========================================================================
-// ESTADOS VISUAIS
+// FORMULÁRIO
 // ===========================================================================
+
+type ResetPasswordFormProps = {
+  password: string;
+  confirmPassword: string;
+  showPassword: boolean;
+  showConfirmPassword: boolean;
+  loading: boolean;
+  error: string;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onPasswordChange: (value: string) => void;
+  onConfirmPasswordChange: (value: string) => void;
+  onTogglePassword: () => void;
+  onToggleConfirmPassword: () => void;
+};
 
 function ResetPasswordForm({
   password,
@@ -165,28 +197,16 @@ function ResetPasswordForm({
   onConfirmPasswordChange,
   onTogglePassword,
   onToggleConfirmPassword,
-}: {
-  password: string;
-  confirmPassword: string;
-  showPassword: boolean;
-  showConfirmPassword: boolean;
-  loading: boolean;
-  error: string;
-  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
-  onPasswordChange: (value: string) => void;
-  onConfirmPasswordChange: (value: string) => void;
-  onTogglePassword: () => void;
-  onToggleConfirmPassword: () => void;
-}) {
+}: ResetPasswordFormProps) {
   return (
     <>
       <div className="mb-7 text-center">
-        <h1 className="mx-auto max-w-[15rem] text-[1.6rem] font-black leading-[0.96] tracking-[-0.045em] text-[#4c1d95] dark:text-white">
+        <h1 className="text-[1.65rem] font-black leading-tight tracking-[-0.045em] text-[#4c1d95] dark:text-white">
           Crie uma nova senha
         </h1>
 
-        <p className="mx-auto mt-4 max-w-[17.5rem] text-[0.7rem] font-medium leading-5 text-[#6d28d9] dark:text-[#d8b4fe]/62 dark:text-white/62">
-          Escolha uma senha segura para recuperar seu acesso ao Axon.
+        <p className="mx-auto mt-4 max-w-[17.5rem] text-[0.7rem] font-medium leading-5 text-[#6d28d9] dark:text-white/60">
+          Escolha uma senha segura para recuperar seu acesso ao AXON.
         </p>
       </div>
 
@@ -197,7 +217,9 @@ function ResetPasswordForm({
           value={password}
           showPassword={showPassword}
           onToggleVisibility={onTogglePassword}
-          onChange={(event) => onPasswordChange(event.target.value)}
+          onChange={(event) =>
+            onPasswordChange(event.target.value)
+          }
         />
 
         <PasswordField
@@ -206,7 +228,9 @@ function ResetPasswordForm({
           value={confirmPassword}
           showPassword={showConfirmPassword}
           onToggleVisibility={onToggleConfirmPassword}
-          onChange={(event) => onConfirmPasswordChange(event.target.value)}
+          onChange={(event) =>
+            onConfirmPasswordChange(event.target.value)
+          }
         />
 
         {error && <ErrorMessage message={error} />}
@@ -214,61 +238,55 @@ function ResetPasswordForm({
         <button
           type="submit"
           disabled={loading}
-          className="mt-2 inline-flex min-h-10 w-full items-center justify-center rounded-2xl bg-[#7b2cbf] px-6 text-sm font-medium text-white shadow-[0_18px_42px_rgba(123,44,191,0.22)] transition hover:bg-[#8d31dd] dark:bg-[#a855f7] dark:hover:bg-[#b968ff] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+          className="mt-2 flex min-h-10 w-full items-center justify-center rounded-2xl bg-[#7b2cbf] px-6 text-sm font-medium text-white shadow-[0_18px_42px_rgba(123,44,191,0.22)] transition hover:bg-[#8d31dd] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 dark:bg-[#a855f7] dark:hover:bg-[#b968ff]"
         >
           {loading ? "Salvando..." : "Salvar nova senha"}
-          {!loading && <ArrowRight className="ml-2 h-4 w-4" />}
         </button>
       </form>
 
-      <Link
-        to="/login"
-        className="mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-2xl border border-[#7b2cbf]/20 bg-[#fbf8ff] px-6 dark:border-white/10 dark:bg-[#191722] text-[0.74rem] font-medium text-[#6d28d9] dark:text-[#d8b4fe] transition hover:bg-white active:scale-[0.98] dark:hover:bg-[#211c2d]"
-      >
-        <ArrowLeft className="mr-2 h-4 w-4" />
-        Voltar para login
-      </Link>
+      <BackToLogin />
     </>
   );
 }
+
+// ===========================================================================
+// LINK INVÁLIDO OU EXPIRADO
+// ===========================================================================
 
 function InvalidLinkState({ expired }: { expired: boolean }) {
   return (
     <>
       <div className="mb-7 text-center">
-        <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-red-400/20 bg-red-500/10 text-red-600 dark:border-red-300/20 dark:text-red-200">
+        <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-red-400/20 bg-red-500/10 text-red-600 dark:border-red-300/20 dark:text-red-300">
           <AlertCircle className="h-6 w-6" />
         </div>
 
-        <h1 className="mx-auto max-w-[15rem] text-[1.6rem] font-black leading-[0.96] tracking-[-0.045em] text-[#4c1d95] dark:text-white">
+        <h1 className="text-[1.65rem] font-black leading-tight tracking-[-0.045em] text-[#4c1d95] dark:text-white">
           {expired ? "Este link expirou" : "Link inválido"}
         </h1>
 
-        <p className="mx-auto mt-4 max-w-[17.5rem] text-[0.7rem] font-medium leading-5 text-[#6d28d9] dark:text-[#d8b4fe]/62 dark:text-white/62">
+        <p className="mx-auto mt-4 max-w-[17.5rem] text-[0.7rem] font-medium leading-5 text-[#6d28d9] dark:text-white/60">
           {expired
-            ? "O link de recuperação expirou ou já foi usado. Peça um novo para redefinir sua senha."
-            : "Para redefinir a senha, abra o link que enviamos por e-mail. Se não tiver mais o e-mail, peça um novo."}
+            ? "O link expirou ou já foi utilizado. Solicite outro para redefinir sua senha."
+            : "Abra o link de recuperação enviado ao seu e-mail ou solicite um novo."}
         </p>
       </div>
 
       <Link
         to="/forgot-password"
-        className="inline-flex min-h-10 w-full items-center justify-center rounded-2xl bg-[#7b2cbf] px-6 text-sm font-medium text-white shadow-[0_18px_42px_rgba(123,44,191,0.22)] transition hover:bg-[#8d31dd] dark:bg-[#a855f7] dark:hover:bg-[#b968ff] active:scale-[0.98]"
+        className="flex min-h-10 w-full items-center justify-center rounded-2xl bg-[#7b2cbf] px-6 text-sm font-medium text-white shadow-[0_18px_42px_rgba(123,44,191,0.22)] transition hover:bg-[#8d31dd] active:scale-[0.98] dark:bg-[#a855f7] dark:hover:bg-[#b968ff]"
       >
         Pedir um novo link
-        <ArrowRight className="ml-2 h-4 w-4" />
       </Link>
 
-      <Link
-        to="/login"
-        className="mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-2xl border border-[#7b2cbf]/20 bg-[#fbf8ff] px-6 dark:border-white/10 dark:bg-[#191722] text-[0.74rem] font-medium text-[#6d28d9] dark:text-[#d8b4fe] transition hover:bg-white active:scale-[0.98] dark:hover:bg-[#211c2d]"
-      >
-        <ArrowLeft className="mr-2 h-4 w-4" />
-        Voltar para login
-      </Link>
+      <BackToLogin />
     </>
   );
 }
+
+// ===========================================================================
+// SUCESSO
+// ===========================================================================
 
 function ResetPasswordSuccess({
   onGoToLogin,
@@ -278,34 +296,33 @@ function ResetPasswordSuccess({
   return (
     <>
       <div className="mb-7 text-center">
-        <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-[#7b2cbf]/20 bg-[#7b2cbf]/10 text-[#7b2cbf] dark:text-[#d8b4fe]">
+        <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-[#7b2cbf]/20 bg-[#7b2cbf]/10 text-[#7b2cbf] dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-300">
           <CheckCircle2 className="h-6 w-6" />
         </div>
 
-        <h1 className="mx-auto max-w-[15rem] text-[1.6rem] font-black leading-[0.96] tracking-[-0.045em] text-[#4c1d95] dark:text-white">
-          Seu acesso foi recuperado
+        <h1 className="text-[1.65rem] font-black leading-tight tracking-[-0.045em] text-[#4c1d95] dark:text-white">
+          Senha redefinida!
         </h1>
 
-        <p className="mx-auto mt-4 max-w-[17.5rem] text-[0.7rem] font-medium leading-5 text-[#6d28d9] dark:text-[#d8b4fe]/62 dark:text-white/62">
-          Sua senha foi redefinida com sucesso. Por segurança, encerramos o
-          acesso em todos os aparelhos: entre de novo com a senha nova.
+        <p className="mx-auto mt-4 max-w-[17.5rem] text-[0.7rem] font-medium leading-5 text-[#6d28d9] dark:text-white/60">
+          Sua senha foi alterada com sucesso. Entre novamente
+          utilizando sua nova senha.
         </p>
       </div>
 
       <button
         type="button"
         onClick={onGoToLogin}
-        className="inline-flex min-h-10 w-full items-center justify-center rounded-2xl bg-[#7b2cbf] px-6 text-sm font-medium text-white shadow-[0_18px_42px_rgba(123,44,191,0.22)] transition hover:bg-[#8d31dd] dark:bg-[#a855f7] dark:hover:bg-[#b968ff] active:scale-[0.98]"
+        className="flex min-h-10 w-full items-center justify-center rounded-2xl bg-[#7b2cbf] px-6 text-sm font-medium text-white shadow-[0_18px_42px_rgba(123,44,191,0.22)] transition hover:bg-[#8d31dd] active:scale-[0.98] dark:bg-[#a855f7] dark:hover:bg-[#b968ff]"
       >
         Ir para login
-        <ArrowRight className="ml-2 h-4 w-4" />
       </button>
     </>
   );
 }
 
 // ===========================================================================
-// COMPONENTES INTERNOS
+// COMPONENTES COMPARTILHADOS INTERNAMENTE
 // ===========================================================================
 
 type PasswordFieldProps = {
@@ -314,7 +331,7 @@ type PasswordFieldProps = {
   value: string;
   showPassword: boolean;
   onToggleVisibility: () => void;
-  onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
 };
 
 function PasswordField({
@@ -327,11 +344,11 @@ function PasswordField({
 }: PasswordFieldProps) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-[0.62rem] font-black text-[#5b21b6] dark:text-white/78">
+      <span className="mb-1.5 block text-[0.62rem] font-black text-[#5b21b6] dark:text-white/80">
         {label}
       </span>
 
-      <div className="flex min-h-10 items-center gap-3 rounded-2xl border border-[#7b2cbf]/20 bg-[#fbf8ff] px-3.5 dark:border-white/10 dark:bg-[#191722] text-[#5b21b6] dark:text-white/78 transition focus-within:border-[#7b2cbf]/45 focus-within:bg-white dark:focus-within:border-[#a855f7]/45 dark:focus-within:bg-[#211c2d]">
+      <div className="flex min-h-10 items-center gap-3 rounded-2xl border border-[#7b2cbf]/20 bg-[#fbf8ff] px-3.5 text-[#5b21b6] transition focus-within:border-[#7b2cbf]/45 focus-within:bg-white dark:border-white/10 dark:bg-[#191722] dark:text-white/80 dark:focus-within:border-[#a855f7]/45 dark:focus-within:bg-[#211c2d]">
         <Lock className="h-4 w-4 shrink-0 text-[#7b2cbf] dark:text-[#d8b4fe]/85" />
 
         <input
@@ -340,14 +357,18 @@ function PasswordField({
           value={value}
           onChange={onChange}
           required
-          className="auth-input w-full bg-transparent text-[0.72rem] font-medium text-[#4c1d95] outline-none placeholder:text-[#7b2cbf]/42 dark:text-white/82 dark:placeholder:text-white/38"
+          minLength={6}
+          maxLength={72}
+          autoComplete="new-password"
+          className="auth-input w-full min-w-0 bg-transparent text-[0.72rem] font-medium text-[#4c1d95] outline-none placeholder:text-[#7b2cbf]/45 dark:text-white/85 dark:placeholder:text-white/40"
         />
 
         <button
           type="button"
           onClick={onToggleVisibility}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-[#7b2cbf] dark:text-[#d8b4fe]/70 transition hover:bg-[#7b2cbf]/10 hover:text-[#6d28d9] dark:text-[#d8b4fe] active:scale-[0.96]"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-[#7b2cbf] transition hover:bg-[#7b2cbf]/10 active:scale-[0.96] dark:text-[#d8b4fe]"
           aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+          aria-pressed={showPassword}
         >
           {showPassword ? (
             <EyeOff className="h-4 w-4" />
@@ -362,27 +383,27 @@ function PasswordField({
 
 function ErrorMessage({ message }: { message: string }) {
   return (
-    <div className="flex items-center gap-2 rounded-2xl border border-red-400/20 dark:border-red-300/20 bg-red-500/10 dark:bg-red-500/14 px-4 py-3">
-      <AlertCircle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-200" />
-      <p className="text-xs leading-5 text-red-600 dark:text-red-200">{message}</p>
+    <div
+      role="alert"
+      className="flex items-start gap-2 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 dark:border-red-300/20"
+    >
+      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-300" />
+
+      <p className="text-xs leading-5 text-red-600 dark:text-red-300">
+        {message}
+      </p>
     </div>
   );
 }
 
-function AuthLogoMark() {
+function BackToLogin() {
   return (
-    <div className="mb-6 flex justify-center">
-      <Link
-        to="/"
-        aria-label="Voltar para a landing page"
-        className="flex h-12 w-12 rotate-45 items-center justify-center rounded-2xl border border-white/18 bg-white/10 shadow-[0_20px_60px_rgba(168,85,247,0.35)] backdrop-blur-2xl transition active:scale-[0.96]"
-      >
-        <img
-          src="/axon-logo.svg"
-          alt="Axon"
-          className="h-12 w-12 -rotate-45 object-contain"
-        />
-      </Link>
-    </div>
+    <Link
+      to="/login"
+      className="mt-3 flex min-h-10 w-full items-center justify-center gap-2 rounded-2xl border border-[#7b2cbf]/20 bg-[#fbf8ff] px-5 text-[0.74rem] font-medium text-[#6d28d9] transition hover:bg-white active:scale-[0.98] dark:border-white/10 dark:bg-[#191722] dark:text-[#d8b4fe] dark:hover:bg-[#211c2d]"
+    >
+      <ArrowLeft className="h-4 w-4" />
+      Voltar para login
+    </Link>
   );
 }

@@ -2,13 +2,12 @@ import { useEffect, useMemo, useState, type ElementType, type ReactNode } from "
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
-  Bell,
   CalendarClock,
   CalendarDays,
   Check,
   ChevronDown,
   Link2,
-  Menu,
+
   Moon,
   Palette,
   Plus,
@@ -18,19 +17,15 @@ import {
   Trash2,
   Volume2,
 } from "lucide-react";
-
-import Sidebar from "../components/layout/Sidebar";
 import TagEditorSheet from "../components/settings/TagEditorSheet";
 import TaskTagsSheet from "../components/settings/TaskTagsSheet";
 import { ThemeToggle } from "../components/theme/ThemeToggle";
 import VoiceLab from "../components/settings/VoiceLab";
 import { results, type ChronotypeResultKey } from "../data/results";
 import * as api from "../lib/api";
-import * as push from "../lib/push";
 import { openAuthUrl } from "../lib/nativeAuth";
 import type { ProfileData } from "../lib/api";
-
-type SettingsSectionKey = "organization" | "notifications" | "appearance" | "voice" | "integrations";
+type SettingsSectionKey = "organization" | "appearance" | "voice" | "integrations";
 type ScheduleType = "flexible" | "fixed";
 type CalendarKind = "task" | "event" | "routine";
 type CalendarColor = "purple" | "lilac" | "mint" | "cyan" | "amber" | "rose" | "blue";
@@ -43,10 +38,8 @@ type FixedRoutineEntry = {
   startTime: string;
   endTime: string;
 };
-
 const CALENDAR_STORAGE_KEY = "axon:planning:desktop-calendar-colors";
 const CALENDAR_UPDATED_EVENT = "axon:planning-desktop-calendar-colors-updated";
-
 const SETTINGS_SECTIONS: Array<{
   key: SettingsSectionKey;
   title: string;
@@ -56,10 +49,8 @@ const SETTINGS_SECTIONS: Array<{
   { key: "organization", title: "Organização", description: "Rotina, categorias e tags", icon: CalendarClock },
   { key: "appearance", title: "Aparência", description: "Tema e cores do calendário", icon: Palette },
   { key: "voice", title: "Voz", description: "Experiência falada do Axon", icon: Volume2 },
-  { key: "notifications", title: "Notificações", description: "Alertas e lembretes inteligentes", icon: Bell },
   { key: "integrations", title: "Integrações", description: "Serviços conectados ao Axon", icon: Link2 },
 ];
-
 const COLOR_OPTIONS: Array<{ key: CalendarColor; label: string; color: string }> = [
   { key: "purple", label: "Roxo AXON", color: "#a855f7" },
   { key: "lilac", label: "Lilás", color: "#c084fc" },
@@ -69,13 +60,11 @@ const COLOR_OPTIONS: Array<{ key: CalendarColor; label: string; color: string }>
   { key: "rose", label: "Rosa", color: "#e11d48" },
   { key: "blue", label: "Azul", color: "#2563eb" },
 ];
-
 const DEFAULT_CALENDAR_COLORS: CalendarColors = {
   task: "purple",
   event: "blue",
   routine: "mint",
 };
-
 const WEEK_DAYS: Array<{ key: WeekDayKey; label: string; fullLabel: string }> = [
   { key: "seg", label: "S", fullLabel: "Segunda" },
   { key: "ter", label: "T", fullLabel: "Terça" },
@@ -85,7 +74,6 @@ const WEEK_DAYS: Array<{ key: WeekDayKey; label: string; fullLabel: string }> = 
   { key: "sab", label: "S", fullLabel: "Sábado" },
   { key: "dom", label: "D", fullLabel: "Domingo" },
 ];
-
 function createFixedRoutineEntry(): FixedRoutineEntry {
   return {
     id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -95,7 +83,6 @@ function createFixedRoutineEntry(): FixedRoutineEntry {
     endTime: "",
   };
 }
-
 const CHRONOTYPE_TO_KEY: Record<string, ChronotypeResultKey> = {
   Matutino: "Matutino",
   Vespertino: "Vespertino",
@@ -107,7 +94,6 @@ const CHRONOTYPE_TO_KEY: Record<string, ChronotypeResultKey> = {
   night: "Noturno",
   intermediate: "Misto",
 };
-
 function loadCalendarColors(): CalendarColors {
   try {
     const raw = localStorage.getItem(CALENDAR_STORAGE_KEY);
@@ -118,33 +104,21 @@ function loadCalendarColors(): CalendarColors {
     return DEFAULT_CALENDAR_COLORS;
   }
 }
-
 export default function Settings() {
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState<SettingsSectionKey>("organization");
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [calendarColors, setCalendarColors] = useState<CalendarColors>(loadCalendarColors);
-  const [pushSupported, setPushSupported] = useState(false);
-  const [pushEnabled, setPushEnabled] = useState(false);
-  const [pushBlocked, setPushBlocked] = useState(false);
-  const [pushBusy, setPushBusy] = useState(false);
-  const [silentMode, setSilentMode] = useState(true);
-  const [dailyPlanning, setDailyPlanning] = useState(true);
-  const [dailyReview, setDailyReview] = useState(true);
-  const [weeklyReview, setWeeklyReview] = useState(true);
-  const [axonSuggestions, setAxonSuggestions] = useState(true);
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
   const [googleBusy, setGoogleBusy] = useState(false);
   const [googleError, setGoogleError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-
   useEffect(() => {
     if (!api.isLoggedIn()) {
       navigate("/login");
       return;
     }
-
     api
       .getProfile()
       .then((data) => {
@@ -152,30 +126,20 @@ export default function Settings() {
         setGoogleConnected(data.google_connected);
       })
       .catch(() => setProfile(null));
-
-    void push.getStatus().then((status) => {
-      setPushSupported(status.supported);
-      setPushEnabled(status.registered);
-      setPushBlocked(status.permission === "denied");
-    });
   }, [navigate]);
-
   useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(null), 2600);
     return () => window.clearTimeout(timer);
   }, [toast]);
-
   const resultKey = useMemo<ChronotypeResultKey>(() => {
     if (profile?.chronotype && CHRONOTYPE_TO_KEY[profile.chronotype]) {
       return CHRONOTYPE_TO_KEY[profile.chronotype];
     }
     return "Misto";
   }, [profile?.chronotype]);
-
   const result = results[resultKey];
   const scheduleType: ScheduleType = profile?.schedule_type === "fixed" ? "fixed" : "flexible";
-
   async function updateSchedule(next: ScheduleType) {
     setProfile((current) =>
       current ? ({ ...current, schedule_type: next } as ProfileData) : current
@@ -195,7 +159,6 @@ export default function Settings() {
       setToast("A alteração será sincronizada quando possível");
     }
   }
-
   function updateCalendarColor(kind: CalendarKind, color: CalendarColor) {
     const next = { ...calendarColors, [kind]: color };
     setCalendarColors(next);
@@ -203,25 +166,6 @@ export default function Settings() {
     window.dispatchEvent(new Event(CALENDAR_UPDATED_EVENT));
     setToast("Cores do calendário atualizadas");
   }
-
-  async function togglePush() {
-    if (pushBusy) return;
-    setPushBusy(true);
-    try {
-      if (pushEnabled) {
-        await push.disable();
-        setPushEnabled(false);
-      } else {
-        const registered = await push.requestPermissionAndRegister();
-        setPushEnabled(registered);
-        const status = await push.getStatus();
-        setPushBlocked(status.permission === "denied");
-      }
-    } finally {
-      setPushBusy(false);
-    }
-  }
-
   async function connectGoogle() {
     if (googleBusy) return;
     setGoogleBusy(true);
@@ -235,7 +179,6 @@ export default function Settings() {
       setGoogleBusy(false);
     }
   }
-
   async function disconnectGoogle() {
     if (googleBusy) return;
     setGoogleBusy(true);
@@ -250,31 +193,11 @@ export default function Settings() {
       setGoogleBusy(false);
     }
   }
-
   const sections: Record<SettingsSectionKey, ReactNode> = {
     organization: (
       <OrganizationSection
         scheduleType={scheduleType}
         onScheduleChange={updateSchedule}
-      />
-    ),
-    notifications: (
-      <NotificationsSection
-        pushSupported={pushSupported}
-        pushEnabled={pushEnabled}
-        pushBlocked={pushBlocked}
-        pushBusy={pushBusy}
-        silentMode={silentMode}
-        dailyPlanning={dailyPlanning}
-        dailyReview={dailyReview}
-        weeklyReview={weeklyReview}
-        axonSuggestions={axonSuggestions}
-        onTogglePush={togglePush}
-        onToggleSilent={() => setSilentMode((value) => !value)}
-        onToggleDailyPlanning={() => setDailyPlanning((value) => !value)}
-        onToggleDailyReview={() => setDailyReview((value) => !value)}
-        onToggleWeeklyReview={() => setWeeklyReview((value) => !value)}
-        onToggleAxonSuggestions={() => setAxonSuggestions((value) => !value)}
       />
     ),
     appearance: (
@@ -294,7 +217,6 @@ export default function Settings() {
       />
     ),
   };
-
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#f7f8fa] text-slate-950 dark:bg-[#11111a] dark:text-white">
       <style>{`
@@ -316,22 +238,19 @@ export default function Settings() {
         }
       `}</style>
       <div className="relative z-10 mx-auto min-h-screen w-full max-w-[430px] px-4 pb-8 pt-5 lg:hidden">
-        <TopBar onBack={() => navigate("/profile")} onMenu={() => setIsSidebarOpen(true)} />
-
+        <TopBar onBack={() => navigate("/profile")} />
         <div className="mb-5 px-1">
           <h1 className="text-[1.75rem] font-black tracking-[-0.05em]">Configurações</h1>
           <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-white/45">
-            Ajuste a organização, os alertas e a experiência do Axon.
+            Ajuste a organização e a experiência do Axon.
           </p>
         </div>
-
         <div className="grid gap-4">
           {SETTINGS_SECTIONS.map((section) => (
             <div key={section.key}>{sections[section.key]}</div>
           ))}
         </div>
       </div>
-
       <div className="relative z-10 hidden min-h-screen p-3 lg:block">
         <div className="mx-auto grid h-[calc(100vh-1.5rem)] max-w-[1500px] grid-cols-[286px_minmax(0,1fr)] gap-3">
           <aside className="flex min-h-0 flex-col rounded-[1.5rem] border border-slate-200/90 bg-white p-3 shadow-[0_18px_60px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-white/[0.04] dark:shadow-card">
@@ -339,7 +258,6 @@ export default function Settings() {
               <ArrowLeft className="h-4 w-4" />
               Voltar ao perfil
             </button>
-
             <nav className="space-y-2">
               {SETTINGS_SECTIONS.map((section) => {
                 const Icon = section.icon;
@@ -358,16 +276,13 @@ export default function Settings() {
               })}
             </nav>
           </aside>
-
           <section className="flex min-w-0 flex-col overflow-hidden rounded-[1.5rem] border border-slate-200/90 bg-white shadow-[0_18px_60px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-white/[0.04] dark:shadow-card">
             <header className="flex items-center justify-between border-b border-slate-200/90 px-5 py-4 dark:border-white/10">
               <div>
                 <h1 className="text-2xl font-black tracking-[-0.05em]">{SETTINGS_SECTIONS.find((item) => item.key === activeSection)?.title}</h1>
                 <p className="mt-1 text-xs text-slate-500 dark:text-white/40">{SETTINGS_SECTIONS.find((item) => item.key === activeSection)?.description}</p>
               </div>
-              <button type="button" onClick={() => setIsSidebarOpen(true)} className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200/90 bg-white text-slate-600 shadow-sm dark:border-white/10 dark:bg-white/[0.06] dark:text-white/60" aria-label="Abrir menu">
-                <Menu className="h-5 w-5" />
-              </button>
+              
             </header>
             <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-5">
               <div className="mx-auto max-w-[900px]">{sections[activeSection]}</div>
@@ -375,8 +290,7 @@ export default function Settings() {
           </section>
         </div>
       </div>
-
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} chronotypeLabel={result.label} energyPeak={result.energyPeak} userName={profile?.name || "Usuário"} userEmail={profile?.email || ""} />
+      
       {toast && (
         <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[130] flex justify-center px-4">
           <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-lg dark:border-white/10 dark:bg-[#1a1924] dark:text-white/75">
@@ -388,16 +302,14 @@ export default function Settings() {
     </main>
   );
 }
-
-function TopBar({ onBack, onMenu }: { onBack: () => void; onMenu: () => void }) {
+function TopBar({ onBack }: { onBack: () => void }) {
   return (
     <header className="mb-5 flex items-center justify-between">
       <IconButton label="Voltar ao perfil" onClick={onBack}><ArrowLeft className="h-5 w-5" /></IconButton>
-      <IconButton label="Abrir menu" onClick={onMenu}><Menu className="h-5 w-5" /></IconButton>
+      
     </header>
   );
 }
-
 function IconButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
   return (
     <button type="button" onClick={onClick} className="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200/90 bg-white text-slate-600 shadow-[0_8px_22px_rgba(15,23,42,0.07)] transition active:scale-[0.96] dark:border-white/10 dark:bg-white/[0.06] dark:text-white/65 dark:shadow-card" aria-label={label} title={label}>
@@ -405,7 +317,6 @@ function IconButton({ label, onClick, children }: { label: string; onClick: () =
     </button>
   );
 }
-
 function SettingsCard({ title, description, children }: { title: string; description: string; children: ReactNode }) {
   return (
     <section className="rounded-[1.5rem] border border-slate-200/90 bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-white/[0.04] dark:shadow-card lg:p-5">
@@ -415,7 +326,6 @@ function SettingsCard({ title, description, children }: { title: string; descrip
     </section>
   );
 }
-
 function OrganizationSection({
   scheduleType,
   onScheduleChange,
@@ -426,7 +336,6 @@ function OrganizationSection({
   const [fixedRoutines, setFixedRoutines] = useState<FixedRoutineEntry[]>([
     createFixedRoutineEntry(),
   ]);
-
   function updateFixedRoutine(
     id: string,
     field: "activity" | "startTime" | "endTime",
@@ -438,7 +347,6 @@ function OrganizationSection({
       ),
     );
   }
-
   function toggleRoutineDay(id: string, day: WeekDayKey) {
     setFixedRoutines((current) =>
       current.map((routine) =>
@@ -453,7 +361,6 @@ function OrganizationSection({
       ),
     );
   }
-
   const routineControl = (
     <div>
       <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1.5 dark:bg-black/20">
@@ -472,7 +379,6 @@ function OrganizationSection({
           </button>
         ))}
       </div>
-
       {scheduleType === "fixed" && (
         <div className="mt-4 grid gap-3">
           <p className="text-xs leading-5 text-slate-500 dark:text-white/45">
@@ -512,7 +418,6 @@ function OrganizationSection({
       )}
     </div>
   );
-
   return (
     <>
       <div className="grid gap-2 rounded-[1.4rem] border border-slate-200/90 bg-white p-2 shadow-[0_8px_24px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-white/[0.035] lg:hidden">
@@ -530,7 +435,6 @@ function OrganizationSection({
           <TaskTagsSheet inline isOpen onClose={() => undefined} />
         </MobileExpandableRow>
       </div>
-
       <div className="hidden lg:block">
         <SettingsCard
           title="Organização"
@@ -555,7 +459,6 @@ function OrganizationSection({
     </>
   );
 }
-
 function FixedRoutineEditor({
   routine,
   index,
@@ -588,14 +491,12 @@ function FixedRoutineEditor({
           </button>
         )}
       </div>
-
       <ScheduleInput
         label="Tipo de compromisso"
         placeholder="Ex.: trabalho, faculdade, estágio"
         value={routine.activity}
         onChange={(value) => onChange("activity", value)}
       />
-
       <div className="mt-3">
         <p className="mb-2 text-xs font-semibold text-slate-500 dark:text-white/45">
           Dias da semana
@@ -621,7 +522,6 @@ function FixedRoutineEditor({
           })}
         </div>
       </div>
-
       <div className="mt-3 grid grid-cols-2 gap-2">
         <ScheduleInput
           label="Início"
@@ -639,7 +539,6 @@ function FixedRoutineEditor({
     </div>
   );
 }
-
 function ScheduleInput({
   label,
   value,
@@ -668,22 +567,6 @@ function ScheduleInput({
     </label>
   );
 }
-
-function NotificationsSection(props: { pushSupported: boolean; pushEnabled: boolean; pushBlocked: boolean; pushBusy: boolean; silentMode: boolean; dailyPlanning: boolean; dailyReview: boolean; weeklyReview: boolean; axonSuggestions: boolean; onTogglePush: () => void; onToggleSilent: () => void; onToggleDailyPlanning: () => void; onToggleDailyReview: () => void; onToggleWeeklyReview: () => void; onToggleAxonSuggestions: () => void }) {
-  return (
-    <SettingsCard title="Notificações" description="Escolha como e quando o Axon pode chamar sua atenção.">
-      <div className="divide-y divide-slate-200 dark:divide-white/10">
-        <ToggleRow icon={Bell} title="Notificações push" description={props.pushBlocked ? "Permissão bloqueada no dispositivo." : props.pushSupported ? "Alertas mesmo quando o app estiver fechado." : "Não disponível neste dispositivo."} enabled={props.pushEnabled} disabled={!props.pushSupported || props.pushBusy || props.pushBlocked} onToggle={props.onTogglePush} />
-        <ToggleRow icon={Moon} title="Modo silencioso" description="Reduz alertas não essenciais." enabled={props.silentMode} onToggle={props.onToggleSilent} />
-        <ToggleRow icon={CalendarClock} title="Planejamento diário" description="Lembrete para organizar o dia." enabled={props.dailyPlanning} onToggle={props.onToggleDailyPlanning} />
-        <ToggleRow icon={Moon} title="Revisão do dia" description="Lembrete para registrar como foi seu dia." enabled={props.dailyReview} onToggle={props.onToggleDailyReview} />
-        <ToggleRow icon={SettingsIcon} title="Revisão semanal" description="Resumo de progresso e padrões." enabled={props.weeklyReview} onToggle={props.onToggleWeeklyReview} />
-        <ToggleRow icon={Sparkles} title="Sugestões do Axon" description="Avisos sobre ajustes úteis identificados pela IA." enabled={props.axonSuggestions} onToggle={props.onToggleAxonSuggestions} />
-      </div>
-    </SettingsCard>
-  );
-}
-
 function AppearanceSection({
   calendarColors,
   onCalendarColorChange,
@@ -722,7 +605,6 @@ function AppearanceSection({
       )}
     </div>
   );
-
   return (
     <>
       <div className="grid gap-2 rounded-[1.4rem] border border-slate-200/90 bg-white p-2 shadow-[0_8px_24px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-white/[0.035] lg:hidden">
@@ -735,7 +617,6 @@ function AppearanceSection({
           {calendarColorControl}
         </MobileExpandableRow>
       </div>
-
       <div className="hidden gap-4 lg:grid">
         <SettingsCard title="Tema do aplicativo" description="Escolha o tema visual usado pelo Axon.">
           <ThemeToggle showHeader={false} />
@@ -747,7 +628,6 @@ function AppearanceSection({
     </>
   );
 }
-
 function VoiceSection() {
   return (
     <>
@@ -758,7 +638,6 @@ function VoiceSection() {
           </div>
         </MobileExpandableRow>
       </div>
-
       <div className="hidden lg:block">
         <SettingsCard title="Voz do Axon" description="Configure a experiência falada e os recursos de leitura.">
           <VoiceLab />
@@ -767,7 +646,6 @@ function VoiceSection() {
     </>
   );
 }
-
 function IntegrationsSection({ connected, busy, error, onConnect, onDisconnect }: { connected: boolean | null; busy: boolean; error: string | null; onConnect: () => void; onDisconnect: () => void }) {
   return (
     <SettingsCard title="Integrações" description="Conecte serviços externos ao planejamento do Axon.">
@@ -785,11 +663,9 @@ function IntegrationsSection({ connected, busy, error, onConnect, onDisconnect }
     </SettingsCard>
   );
 }
-
 function SettingTitle({ icon: Icon, title }: { icon: ElementType; title: string }) {
   return <div className="flex items-center gap-2"><Icon className="h-4 w-4 text-[#6d28d9]" /><p className="text-sm font-black">{title}</p></div>;
 }
-
 function MobileExpandableRow({ icon: Icon, title, description, children }: { icon: ElementType; title: string; description: string; children: ReactNode }) {
   return (
     <details className="group overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/[0.04]">
@@ -805,15 +681,5 @@ function MobileExpandableRow({ icon: Icon, title, description, children }: { ico
         {children}
       </div>
     </details>
-  );
-}
-
-function ToggleRow({ icon: Icon, title, description, enabled, disabled = false, onToggle }: { icon: ElementType; title: string; description: string; enabled: boolean; disabled?: boolean; onToggle: () => void }) {
-  return (
-    <button type="button" disabled={disabled} onClick={onToggle} className="flex w-full items-center gap-3 py-3 text-left disabled:opacity-45">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 dark:bg-white/[0.06] dark:text-white/55"><Icon className="h-4 w-4" /></span>
-      <span className="min-w-0 flex-1"><span className="block text-sm font-black">{title}</span><span className="mt-0.5 block text-xs leading-5 text-slate-500 dark:text-white/42">{description}</span></span>
-      <span className={`relative h-7 w-12 shrink-0 rounded-full transition ${enabled ? "bg-[#6d28d9]" : "bg-slate-200 dark:bg-white/10"}`}><span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition ${enabled ? "left-6" : "left-1"}`} /></span>
-    </button>
   );
 }

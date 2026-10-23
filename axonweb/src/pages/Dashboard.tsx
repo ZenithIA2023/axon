@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ElementType, PointerEvent as ReactPointerEvent, ReactNode } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   CalendarDays,
   CheckCircle2,
@@ -16,7 +16,6 @@ import {
   Star,
   Target,
   Zap,
-  Bell,
   X,
 } from "lucide-react";
 
@@ -29,9 +28,6 @@ import { shortenedMinutes } from "../lib/api";
 import { AppBackground } from "../components/layout/AppBackground";
 import axonHeadHappy from "../assets/axon/axon-head-happy.png";
 import EmptyState from "../components/ui/EmptyState";
-import { ScrollArea } from "../components/ui/ScrollArea";
-
-const NOTIFICATIONS_PAGE_SIZE = 10;
 
 // Gesto de arrastar nas linhas de "Hoje" -----------------------------------
 // Folga (px) antes de assumir o toque como horizontal: abaixo disso o gesto
@@ -146,9 +142,6 @@ export default function Dashboard() {
   // em que a ofensiva está em jogo.
   const [streakWarnOpen, setStreakWarnOpen] = useState(false);
   const [streakModalOpen, setStreakModalOpen] = useState(false);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState<number | null>(null);
-  const [searchParams, setSearchParams] = useSearchParams();
   // Linhas de "Hoje" já resolvidas por gesto (concluir/adiar) e escondidas na
   // hora, antes de o dashboard recarregar. A lista do servidor é a verdade: um
   // id só sai daqui quando some da resposta (ver efeito abaixo) ou quando a
@@ -162,46 +155,6 @@ export default function Dashboard() {
   const swipeToastTimer = useRef<number | null>(null);
   // Minuto atual do dia (0–1439), base do marcador lateral das tarefas.
   const [nowMinutes, setNowMinutes] = useState(() => minutesSinceMidnight());
-
-  // --------------------------------------------------------------------------
-  // Notificações
-  // Mantém o contador do sino sincronizado com o toast global e o modal.
-  // --------------------------------------------------------------------------
-  const refreshUnreadCount = useCallback(() => {
-    api
-      .getNotifications(NOTIFICATIONS_PAGE_SIZE + 1, 0)
-      .then((notifications) => {
-        const visibleNotifications = notifications.slice(
-          0,
-          NOTIFICATIONS_PAGE_SIZE
-        );
-
-        const nextUnreadCount = visibleNotifications.filter(
-          (notification) => notification.status === "unread"
-        ).length;
-
-        setUnreadCount(nextUnreadCount);
-      })
-      .catch(() => setUnreadCount(0));
-  }, []);
-
-  useEffect(() => {
-    const handleNotificationsUpdated = () => {
-      refreshUnreadCount();
-    };
-
-    window.addEventListener(
-      "axon:notifications-updated",
-      handleNotificationsUpdated
-    );
-
-    return () => {
-      window.removeEventListener(
-        "axon:notifications-updated",
-        handleNotificationsUpdated
-      );
-    };
-  }, [refreshUnreadCount]);
 
   // --------------------------------------------------------------------------
   // Subtarefas do plano enxuto
@@ -400,29 +353,15 @@ export default function Dashboard() {
         .catch(() => setReports(null));
     };
 
-    const analyzeNotificationsAndRefresh = () => {
-      api
-        .analyzeNotifications()
-        .catch(() => null)
-        .finally(() => {
-          refreshUnreadCount();
-        });
-    };
-
     loadDashboard(0); // só a carga inicial retenta (backend pode estar subindo)
     loadDailyLog();
     loadReports();
     loadSubtasks();
-    refreshUnreadCount();
-    analyzeNotificationsAndRefresh();
 
     const interval = window.setInterval(() => {
       loadDashboard();
       loadSubtasks();
     }, 30 * 60 * 1000);
-
-    // Captura notificações geradas pelo scheduler enquanto o app permanece aberto.
-    const notifInterval = window.setInterval(refreshUnreadCount, 2 * 60 * 1000);
 
     const handleVisibility = () => {
       if (document.hidden) return;
@@ -432,18 +371,15 @@ export default function Dashboard() {
       setNowMinutes(minutesSinceMidnight());
       loadDashboard();
       loadSubtasks();
-      refreshUnreadCount();
-      analyzeNotificationsAndRefresh();
     };
 
     document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
       window.clearInterval(interval);
-      window.clearInterval(notifInterval);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [navigate, refreshUnreadCount, loadSubtasks, loadDashboard]);
+  }, [navigate, loadSubtasks, loadDashboard]);
 
   // Relógio da página: só o minuto importa, então um tique de 30s já garante
   // que a tarefa vire "agora" (e depois "atrasada") sem recarregar nada.
@@ -537,20 +473,6 @@ export default function Dashboard() {
       }
     });
   }, []);
-
-  // --------------------------------------------------------------------------
-  // Abertura automática das notificações
-  // O toast global usa /dashboard?notifications=open para abrir o modal do sino.
-  // --------------------------------------------------------------------------
-  useEffect(() => {
-    if (searchParams.get("notifications") !== "open") return;
-
-    setIsNotificationsOpen(true);
-
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.delete("notifications");
-    setSearchParams(nextParams, { replace: true });
-  }, [searchParams, setSearchParams]);
 
   // --------------------------------------------------------------------------
   // Dados derivados do dashboard
@@ -1214,11 +1136,6 @@ export default function Dashboard() {
         }}
       />
 
-      <NotificationsSheet
-        isOpen={isNotificationsOpen}
-        onClose={() => setIsNotificationsOpen(false)}
-        onUnreadCountChange={(count) => setUnreadCount(Number(count) || 0)}
-      />
 
       {/* Retorno das ações por gesto. Fica acima da barra inferior e some em
           6s — o "Desfazer" só existe enquanto o toast estiver na tela. */}
@@ -1876,522 +1793,3 @@ function formatPeriodRange(start: string, end: string) {
   return `${formatShortDate(start)} – ${formatShortDate(end)}`;
 }
 
-// ============================================================================
-// Central de notificações
-// Modal aberto pelo sino do header e pelo toast global via query param.
-// ============================================================================
-
-type NotificationAction = {
-  task_id?: string;
-  new_date?: string | null;
-  new_start_time?: string | null;
-  new_end_time?: string | null;
-  reason?: string | null;
-};
-
-type NotificationWithAction = api.NotificationData & {
-  action?: NotificationAction | null;
-};
-
-// Item individual do modal: leitura simples, alteração aplicada ou sugestão acionável.
-function NotificationItem({
-  notification,
-  onRead,
-  onAccept,
-  onReject,
-}: {
-  notification: api.NotificationData;
-  onRead: (id: string) => void;
-  onAccept: (id: string) => void;
-  onReject: (id: string) => void;
-}) {
-  const typedNotification = notification as NotificationWithAction;
-
-  const isUnread = notification.status === "unread";
-  const isImprovement = notification.type === "improvement";
-  const isChange = notification.type === "change";
-  const isAccepted = notification.status === "accepted";
-  const isRejected = notification.status === "rejected";
-  const isHandled = isAccepted || isRejected;
-
-  const canAct = isImprovement && !isHandled;
-  const action = typedNotification.action;
-
-  function handleCardClick() {
-    if (isUnread) {
-      onRead(notification.id);
-    }
-  }
-
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={handleCardClick}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          handleCardClick();
-        }
-      }}
-      className={`rounded-[1.55rem] border p-4 text-left transition active:scale-[0.99] ${
-        isImprovement
-          ? isHandled
-            ? "border-soft bg-surface-muted"
-            : "border-accent-soft bg-surface-elevated shadow-card"
-          : isUnread
-          ? "border-accent-soft bg-surface-elevated shadow-card"
-          : "border-soft bg-surface-muted"
-      }`}
-    >
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
-          <div
-            className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border ${
-              isImprovement || isChange || isUnread
-                ? "border-accent-soft bg-accent-soft text-accent"
-                : "border-soft bg-surface-muted text-secondary"
-            }`}
-          >
-            {isImprovement ? (
-              <Sparkles className="h-4 w-4" />
-            ) : (
-              <Bell className="h-4 w-4" />
-            )}
-          </div>
-
-          <div className="min-w-0">
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              <span
-                className={`rounded-full border px-2.5 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.12em] ${
-                  isImprovement || isChange || isUnread
-                    ? "border-accent-soft bg-accent-soft text-accent"
-                    : "border-soft bg-surface-muted text-secondary"
-                }`}
-              >
-                {isImprovement
-                  ? "Sugestão"
-                  : isChange
-                  ? "Alteração"
-                  : "Aviso"}
-              </span>
-
-              {isUnread && (
-                <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
-              )}
-            </div>
-
-            <p className="text-sm font-semibold leading-5 text-primary">
-              {notification.title}
-            </p>
-
-            <p className="mt-1 text-xs leading-5 text-muted">
-              {notification.body}
-            </p>
-          </div>
-        </div>
-
-        <span
-          className={`shrink-0 text-[0.65rem] font-medium ${
-            isUnread ? "text-accent" : "text-soft"
-          }`}
-        >
-          {formatNotificationTime(notification.created_at)}
-        </span>
-      </div>
-
-      {isImprovement && action && !isHandled && (
-        <div className="mb-3 rounded-[1.15rem] border border-soft bg-surface-muted p-3">
-          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-soft">
-            Ajuste sugerido
-          </p>
-
-          {(action.new_date || action.new_start_time || action.new_end_time) && (
-            <p className="mt-2 text-xs font-semibold text-secondary">
-              {action.new_date && <>Data: {action.new_date}</>}
-              {action.new_start_time && (
-                <>
-                  {action.new_date ? " · " : ""}
-                  {action.new_start_time}
-                  {action.new_end_time ? ` – ${action.new_end_time}` : ""}
-                </>
-              )}
-            </p>
-          )}
-
-          {action.reason && (
-            <p className="mt-1 text-xs leading-5 text-muted">
-              {action.reason}
-            </p>
-          )}
-        </div>
-      )}
-
-      {canAct && (
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onAccept(notification.id);
-            }}
-            className="inline-flex min-h-10 items-center justify-center rounded-2xl bg-[var(--accent)] px-4 text-xs font-semibold text-white shadow-[0_10px_24px_rgba(109,40,217,0.18)] active:scale-[0.98]"
-          >
-            Aceitar
-          </button>
-
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onReject(notification.id);
-            }}
-            className="inline-flex min-h-10 items-center justify-center rounded-2xl border border-soft bg-surface-muted px-4 text-xs font-semibold text-muted active:scale-[0.98]"
-          >
-            Recusar
-          </button>
-        </div>
-      )}
-
-      {!isImprovement && isUnread && (
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onRead(notification.id);
-          }}
-          className="mt-3 inline-flex min-h-8 items-center justify-center rounded-xl border border-accent-soft bg-accent-soft px-3 text-[0.68rem] font-semibold text-accent transition active:scale-[0.98]"
-        >
-          Marcar como lida
-        </button>
-      )}
-
-      {isAccepted && (
-        <p className="mt-3 text-[0.68rem] font-semibold text-accent">
-          Sugestão aceita
-        </p>
-      )}
-
-      {isRejected && (
-        <p className="mt-3 text-[0.68rem] font-semibold text-soft">
-          Sugestão recusada
-        </p>
-      )}
-    </div>
-  );
-}
-
-// Formata datas recentes em linguagem curta para caber no card mobile.
-function formatNotificationTime(createdAt: string) {
-  const date = new Date(createdAt);
-  const now = new Date();
-
-  const diffMin = Math.floor((now.getTime() - date.getTime()) / 60000);
-
-  if (diffMin < 1) return "Agora";
-  if (diffMin < 60) return `Há ${diffMin} min`;
-
-  const diffH = Math.floor(diffMin / 60);
-
-  if (diffH < 24) return `Há ${diffH}h`;
-
-  const diffDays = Math.floor(diffH / 24);
-
-  if (diffDays === 1) return "Ontem";
-
-  return date.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-  });
-}
-
-function NotificationsSheet({
-  isOpen,
-  onClose,
-  onUnreadCountChange,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  onUnreadCountChange: (count: number) => void;
-}) {
-  // Estados do modal: lista local, aba ativa, paginação e carregamento.
-  const [notifications, setNotifications] = useState<api.NotificationData[]>([]);
-  const [notificationView, setNotificationView] = useState<"unread" | "read">(
-    "unread"
-  );
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(false);
-  // Listas derivadas para separar rapidamente o que está pendente do que já foi tratado.
-  const unreadNotifications = notifications.filter(
-    (notification) => notification.status === "unread"
-  );
-
-  const readNotifications = notifications.filter(
-    (notification) => notification.status !== "unread"
-  );
-
-  const filteredNotifications =
-    notificationView === "unread" ? unreadNotifications : readNotifications;
-  const shouldShowLoadMore =
-    hasMore && filteredNotifications.length >= NOTIFICATIONS_PAGE_SIZE;
-
-  const unreadCount = unreadNotifications.length;
-  const readCount = readNotifications.length;
-
-  // Carrega uma página extra para descobrir se ainda existe “Ver mais”.
-  function loadNotifications({ showLoading = true } = {}) {
-    if (showLoading) {
-      setLoading(true);
-    }
-
-    api
-      .getNotifications(NOTIFICATIONS_PAGE_SIZE + 1, 0)
-      .then((data) => {
-        const visibleNotifications = data.slice(0, NOTIFICATIONS_PAGE_SIZE);
-
-        setNotifications(visibleNotifications);
-        setHasMore(data.length > NOTIFICATIONS_PAGE_SIZE);
-
-        const nextUnreadCount = visibleNotifications.filter(
-          (notification) => notification.status === "unread"
-        ).length;
-
-        onUnreadCountChange(nextUnreadCount);
-      })
-      .catch(() => null)
-      .finally(() => {
-        if (showLoading) {
-          setLoading(false);
-        }
-      });
-  }
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    loadNotifications({ showLoading: true });
-
-    const handleNotificationsUpdated = () => {
-      loadNotifications({ showLoading: false });
-    };
-
-    window.addEventListener(
-      "axon:notifications-updated",
-      handleNotificationsUpdated
-    );
-
-    return () => {
-      window.removeEventListener(
-        "axon:notifications-updated",
-        handleNotificationsUpdated
-      );
-    };
-  }, [isOpen]);
-
-  async function loadMore() {
-    try {
-      const more = await api.getNotifications(
-        NOTIFICATIONS_PAGE_SIZE + 1,
-        notifications.length
-      );
-
-      const visibleMore = more.slice(0, NOTIFICATIONS_PAGE_SIZE);
-
-      setNotifications((prev) => {
-        const next = [...prev, ...visibleMore];
-
-        return next;
-      });
-
-      setHasMore(more.length > NOTIFICATIONS_PAGE_SIZE);
-    } catch {
-      // Falha silenciosa para não travar a central de notificações.
-    }
-  }
-
-  function syncUnreadCount(nextNotifications: api.NotificationData[]) {
-    const nextUnreadCount = nextNotifications.filter(
-      (notification) => notification.status === "unread"
-    ).length;
-
-    onUnreadCountChange(nextUnreadCount);
-  }
-
-  // Marca como lida de forma otimista, sem recarregar a central inteira.
-  async function handleRead(id: string) {
-    const currentNotification = notifications.find(
-      (notification) => notification.id === id
-    );
-
-    if (!currentNotification || currentNotification.status !== "unread") {
-      return;
-    }
-
-    const nextNotifications = notifications.map((notification) =>
-      notification.id === id
-        ? { ...notification, status: "read" as const }
-        : notification
-    );
-
-    setNotifications(nextNotifications);
-    syncUnreadCount(nextNotifications);
-
-    await api.markNotificationRead(id).catch(() => {
-      loadNotifications({ showLoading: false });
-    });
-  }
-
-  // Aceita sugestões de melhoria e move o item para a aba de lidas/tratadas.
-  async function handleAccept(id: string) {
-    const nextNotifications = notifications.map((notification) =>
-      notification.id === id
-        ? { ...notification, status: "accepted" as const }
-        : notification
-    );
-
-    setNotifications(nextNotifications);
-    syncUnreadCount(nextNotifications);
-    setNotificationView("read");
-
-    await api.acceptNotification(id).catch(() => {
-      loadNotifications({ showLoading: false });
-    });
-  }
-
-  // Recusa sugestões mantendo o histórico visível na aba de lidas/tratadas.
-  async function handleReject(id: string) {
-    const nextNotifications = notifications.map((notification) =>
-      notification.id === id
-        ? { ...notification, status: "rejected" as const }
-        : notification
-    );
-
-    setNotifications(nextNotifications);
-    syncUnreadCount(nextNotifications);
-    setNotificationView("read");
-
-    await api.rejectNotification(id).catch(() => {
-      loadNotifications({ showLoading: false });
-    });
-  }
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/45 px-4 backdrop-blur-sm">
-      <div className="relative flex h-[82dvh] max-h-[720px] w-full max-w-[430px] flex-col overflow-hidden rounded-[2rem] border border-soft bg-surface-elevated shadow-soft backdrop-blur-2xl">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(168,85,247,0.22),transparent_48%)]" />
-
-        <div className="relative border-b border-soft px-5 pb-4 pt-5">
-          <div className="mb-4 flex items-start justify-between gap-4">
-            <div>
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-accent-soft bg-accent-soft px-3 py-1.5 text-xs font-medium text-accent">
-                <Bell className="h-3.5 w-3.5" />
-                Central do Axon
-              </div>
-
-              <h2 className="text-[1.65rem] font-semibold leading-[1.05] tracking-[-0.055em] text-primary">
-                Notificações
-              </h2>
-
-              <p className="mt-2 text-xs leading-5 text-muted">
-                Avisos importantes, lembretes inteligentes e sugestões para
-                melhorar seu planejamento.
-              </p>
-            </div>
-
-            <button
-              onClick={onClose}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-soft bg-surface-muted text-muted active:scale-[0.96]"
-              aria-label="Fechar notificações"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-
-          <div className="flex rounded-2xl border border-soft bg-surface-muted p-1">
-            <button
-              type="button"
-              onClick={() => setNotificationView("unread")}
-              className={`min-h-10 flex-1 rounded-xl text-xs font-semibold transition active:scale-[0.98] ${
-                notificationView === "unread"
-                  ? "bg-[var(--accent)] text-white shadow-[0_10px_24px_rgba(109,40,217,0.18)]"
-                  : "text-muted"
-              }`}
-            >
-              Não lidas
-              {unreadCount > 0 && (
-                <span className="ml-1 text-[0.65rem] opacity-75">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setNotificationView("read")}
-              className={`min-h-10 flex-1 rounded-xl text-xs font-semibold transition active:scale-[0.98] ${
-                notificationView === "read"
-                  ? "bg-[var(--accent)] text-white shadow-[0_10px_24px_rgba(109,40,217,0.18)]"
-                  : "text-muted"
-              }`}
-            >
-              Lidas
-              {readCount > 0 && (
-                <span className="ml-1 text-[0.65rem] opacity-75">
-                  {readCount}
-                </span>
-              )}
-            </button>
-          </div>
-        </div>
-
-        <ScrollArea
-          className="min-h-0 flex-1 overflow-hidden"
-          contentClassName="relative px-5 py-4"
-        >
-          {loading && notifications.length === 0 ? (
-            <div className="py-8 text-center text-sm text-muted">
-              Carregando...
-            </div>
-          ) : filteredNotifications.length === 0 ? (
-            <EmptyState
-              icon={Bell}
-              title={
-                notificationView === "unread"
-                  ? "Nenhuma notificação não lida"
-                  : "Nenhuma notificação lida"
-              }
-              description={
-                notificationView === "unread"
-                  ? "Quando houver novos avisos ou sugestões, eles aparecerão aqui."
-                  : "Notificações já lidas, aceitas ou recusadas aparecerão nesta aba."
-              }
-            />
-          ) : (
-            <div className="space-y-3">
-              {filteredNotifications.map((notification) => (
-                <NotificationItem
-                  key={notification.id}
-                  notification={notification}
-                  onRead={handleRead}
-                  onAccept={handleAccept}
-                  onReject={handleReject}
-                />
-              ))}
-
-              {shouldShowLoadMore && (
-                <button
-                  type="button"
-                  onClick={loadMore}
-                  className="mt-1 inline-flex min-h-10 w-full items-center justify-center rounded-2xl border border-soft bg-surface-muted px-4 text-xs font-semibold text-muted active:scale-[0.98]"
-                >
-                  Ver mais
-                </button>
-              )}
-            </div>
-          )}
-        </ScrollArea>
-      </div>
-    </div>
-  );
-}
