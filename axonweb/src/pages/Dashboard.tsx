@@ -23,6 +23,7 @@ import DayReview from "./DayReview";
 import StreakModal from "../components/dashboard/StreakModal";
 import Sidebar from "../components/layout/Sidebar";
 import * as api from "../lib/api";
+import { useRedirectToQuestionnaireIfMissing } from "../lib/onboarding";
 import type { BlockTask, DashboardData, FocusBlock, Subtask } from "../lib/api";
 import { shortenedMinutes } from "../lib/api";
 import { AppBackground } from "../components/layout/AppBackground";
@@ -112,6 +113,10 @@ function getTaskTiming(task: BlockTask, nowMinutes: number): TaskTiming {
 export default function Dashboard() {
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Conta sem cronotipo volta ao questionário em vez de ver um "Perfil
+  // Intermediário" que nunca respondeu (o fallback de `chronotypeLabel`).
+  useRedirectToQuestionnaireIfMissing();
 
   // --------------------------------------------------------------------------
   // Estados da página

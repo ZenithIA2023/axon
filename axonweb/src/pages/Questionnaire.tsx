@@ -1,6 +1,11 @@
 import { useEffect, useState, type ElementType } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import * as api from "../lib/api";
+import { useNativeBackHandler } from "../lib/nativeBack";
+import {
+  QUESTIONNAIRE_PROGRESS_KEY,
+  useLeaveQuestionnaireIfAnswered,
+} from "../lib/onboarding";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Briefcase,
@@ -324,7 +329,8 @@ const questions: Question[] = [
   },
 ];
 
-const QUESTIONNAIRE_PROGRESS_KEY = "axon_questionnaire_progress_v1";
+// QUESTIONNAIRE_PROGRESS_KEY vem de lib/onboarding: a abertura do app lê a
+// mesma chave para levar quem parou no meio direto à pergunta onde estava.
 
 type QuestionnaireProgress = {
   currentIndex: number;
@@ -402,6 +408,8 @@ function ProgressBar({ progress }: { progress: number }) {
 
 export default function Questionnaire() {
   const navigate = useNavigate();
+  // Chegou aqui redirecionado, mas já respondeu em outro aparelho: volta.
+  useLeaveQuestionnaireIfAnswered();
 
   const savedProgress = loadQuestionnaireProgress();
 
@@ -490,11 +498,24 @@ export default function Questionnaire() {
     setCurrentIndex((prev) => prev - 1);
   }
 
+  // Botão voltar do Android: uma pergunta para trás, como a seta da tela. Só
+  // na primeira pergunta ele sai da tela, como antes.
+  useNativeBackHandler(() => {
+    if (submitted || currentIndex === 0) return false;
+    goBack();
+    return true;
+  });
+
   return (
-    <main className="relative min-h-screen overflow-x-hidden bg-[#2d0850] px-4 py-5 text-white">
+    /* O conteúdo PREENCHE o <main> (flex-1) em vez de medir
+       `100vh - 40px`: os 40px eram o `py-5`, mas no app o `.is-native main`
+       do index.css troca esse padding pelos insets do sistema. Com insets
+       acima de 40px, a tela passava da altura e rolava — 53px no iPhone 15,
+       32px num Android de gestos (23/10/2026). */
+    <main className="relative flex min-h-screen flex-col overflow-x-hidden bg-[#2d0850] px-4 py-5 text-white">
       <QuestionnaireBackground />
 
-      <div className="relative z-10 mx-auto flex min-h-[calc(100vh-40px)] w-full max-w-[430px] flex-col">
+      <div className="relative z-10 mx-auto flex w-full max-w-[430px] flex-1 flex-col">
         <Header />
 
         <section className="flex flex-1 flex-col justify-center py-6">
