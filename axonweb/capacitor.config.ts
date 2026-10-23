@@ -13,6 +13,13 @@ const config: CapacitorConfig = {
   webDir: "dist",
   server: {
     androidScheme: "https",
+    // O WebView do iOS usa a MESMA origem do Android (https://localhost). Com o
+    // esquema padrão (capacitor://localhost) seria uma segunda origem para
+    // manter no CORS do backend — e a falta dela já derrubou o login da
+    // primeira build do TestFlight (23/10/2026).
+    // Não troque depois do lançamento: o localStorage é por origem, então mudar
+    // o esquema apaga a sessão e desloga todos os usuários do iOS.
+    iosScheme: "https",
     ...(devServerUrl ? { url: devServerUrl, cleartext: true } : {}),
   },
   android: {

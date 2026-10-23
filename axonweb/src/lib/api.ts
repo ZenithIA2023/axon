@@ -134,8 +134,13 @@ async function request<T>(
       },
     });
   } catch {
+    // A dica de desenvolvedor fica SÓ em dev: a mensagem vai direto para a
+    // tela, e em produção (web e lojas) o usuário via "VS Code" e "uvicorn" —
+    // o que a App Store lê como app inacabado. Não remova a condição.
     throw new Error(
-      "⚠️ DEV: Backend inacessível. Abra a porta 8000 como Pública no painel de Portas do VS Code e certifique-se de que o servidor está rodando (uvicorn main:app --reload)."
+      import.meta.env.DEV
+        ? "⚠️ DEV: Backend inacessível. Abra a porta 8000 como Pública no painel de Portas do VS Code e certifique-se de que o servidor está rodando (uvicorn main:app --reload)."
+        : "Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente."
     );
   }
 
