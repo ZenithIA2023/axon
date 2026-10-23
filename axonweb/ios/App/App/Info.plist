@@ -24,6 +24,13 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- Isenção de criptografia de exportação. Sem esta chave, TODO build que
+	     chega ao TestFlight fica retido em "Missing Compliance" e nenhum
+	     testador instala até alguém responder à mão no App Store Connect.
+	     false é a declaração correta: o Axon não implementa criptografia
+	     própria, só usa o HTTPS do sistema, que é isento. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<!-- Descrições de permissão. A Apple REJEITA texto genérico: cada uma diz
 	     o que o app faz com o recurso. E a falta de qualquer uma delas não dá
 	     erro — o app FECHA na hora em que o usuário escolhe a opção. -->
