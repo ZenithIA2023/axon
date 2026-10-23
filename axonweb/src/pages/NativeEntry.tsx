@@ -1,6 +1,7 @@
 import { Navigate } from "react-router-dom";
 
 import * as api from "../lib/api";
+import { homeRoute } from "../lib/onboarding";
 
 /**
  * Rota raiz DENTRO do app.
@@ -20,7 +21,14 @@ import * as api from "../lib/api";
  * sessão no celular nunca expirava — quem passasse um mês sem abrir entrava
  * direto. A contagem é por dispositivo, então usar o site não renova o prazo
  * deste aparelho.
+ *
+ * Logado mas sem cronotipo (fechou o app no meio do questionário) vai de volta
+ * ao questionário — decisão também local, por um sinal que o servidor mantém
+ * (ver `homeRoute` em lib/onboarding).
  */
 export default function NativeEntry() {
-  return <Navigate to={api.hasFreshSession() ? "/dashboard" : "/login"} replace />;
+  if (!api.hasFreshSession()) return <Navigate to="/login" replace />;
+
+  const { to, state } = homeRoute();
+  return <Navigate to={to} state={state} replace />;
 }

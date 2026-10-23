@@ -138,7 +138,11 @@ export default function Login() {
 
             <button type="submit" disabled={loading} className="mt-2 inline-flex min-h-10 w-full items-center justify-center rounded-2xl bg-[#7b2cbf] px-6 text-sm font-medium text-white shadow-[0_18px_42px_rgba(123,44,191,0.22)] transition hover:bg-[#8d31dd] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 dark:bg-[#9142d4] dark:hover:bg-[#a855f7]">
               {loading ? "Entrando..." : "Login"}
-              {!loading && Capacitor.isNativePlatform() && (
+              {/* Carimbo do build (ver lib/buildInfo) SÓ em dev: no app publicado o
+                  hash ao lado do "Login" lê como app inacabado (23/10/2026). Não
+                  remova a condição; o lugar dele em produção ainda vai ser
+                  decidido. */}
+              {!loading && import.meta.env.DEV && Capacitor.isNativePlatform() && (
                 <span className="ml-2 font-mono text-[0.6rem] font-normal text-white/55">{BUILD_COMMIT}</span>
               )}
             </button>

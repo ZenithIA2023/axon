@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, Moon, Sun } from "lucide-react";
 
 import { useTheme } from "../components/theme/ThemeProvider";
+import { useLeaveQuestionnaireIfAnswered } from "../lib/onboarding";
 import axonHappyWave from "../assets/axon/axon-happy-wave.webp";
 
 // ===========================================================================
@@ -52,6 +53,8 @@ const slides = [
 
 export default function QuestionnaireIntro() {
   const navigate = useNavigate();
+  // Chegou aqui redirecionado, mas já respondeu em outro aparelho: volta.
+  useLeaveQuestionnaireIfAnswered();
 
   const [currentSlide, setCurrentSlide] = useState(0);
 

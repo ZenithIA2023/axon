@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Star } from "lucide-react";
 
 import { hasFreshSession, logout, refreshSession, saveSession } from "../lib/api";
+import { homeRoute } from "../lib/onboarding";
 import LandingPurpleBackground from "../components/landing/LandingPurpleBackground";
 import LandingProductivityProblem from "../components/landing/LandingProductivityProblem";
 import LandingAxonCapabilities from "../components/landing/LandingAxonCapabilities";
@@ -40,7 +41,10 @@ const heroMetrics = [
 export default function LandingPage() {
   const navigate = useNavigate();
 
-  // Usuários logados não ficam presos na landing: vão direto para o dashboard.
+  // Usuários logados não ficam presos na landing: vão direto para o dashboard,
+  // ou de volta ao questionário se ainda não têm cronotipo (homeRoute). A
+  // renovação abaixo passa por saveSession, que regrava esse sinal com o valor
+  // do servidor — aqui a decisão já sai atualizada.
   // A janela de inatividade mora em `hasFreshSession` (lib/api), a mesma que o
   // NativeEntry usa — antes a regra dos 7 dias existia só aqui, duplicada, e o
   // app instalado nunca expirava a sessão. `hasFreshSession` também limpa a
@@ -54,7 +58,8 @@ export default function LandingPage() {
     refreshSession(refreshToken)
       .then((res) => {
         saveSession(res);
-        navigate("/dashboard", { replace: true });
+        const { to, state } = homeRoute();
+        navigate(to, { replace: true, state });
       })
       .catch(() => {
         // Refresh recusado pelo servidor (token revogado/expirado): a sessão

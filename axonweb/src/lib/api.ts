@@ -16,7 +16,11 @@ const SESSION_KEYS = ["axon_token", "axon_refresh_token", "axon_user", "axon_las
 // "manter-me conectado", onde estas chaves não devem ser movidas.
 // `axon_calendar_setup_choice` não é mais gravada (a escolha vive no perfil);
 // continua aqui para limpar o que sobrou de versões antigas.
-const ACCOUNT_CACHE_KEYS = ["axon_chronotype", "axon_calendar_setup_choice"] as const;
+const ACCOUNT_CACHE_KEYS = [
+  "axon_chronotype",
+  "axon_calendar_setup_choice",
+  "axon_needs_questionnaire",
+] as const;
 
 // "Manter-me conectado" decide o storage: localStorage sobrevive ao fechar o
 // navegador, sessionStorage é apagado junto com a aba/janela.
@@ -277,6 +281,40 @@ export function saveSession(res: AuthResponse, remember: boolean = true) {
   target.setItem("axon_last_active", String(Date.now()));
 
   for (const key of SESSION_KEYS) other.removeItem(key);
+
+  // Login, cadastro, Google, Apple e a renovação do token passam todos por
+  // aqui, e todos trazem o `has_chronotype` do servidor.
+  recordChronotypeStatus(res.has_chronotype);
+}
+
+/**
+ * Sinal local "esta conta ainda não respondeu o questionário".
+ *
+ * Quem fechava o app no meio do questionário nunca mais voltava a ele: a
+ * abertura (NativeEntry, landing) via sessão válida e mandava ao dashboard,
+ * que mostrava um "Perfil Intermediário" nunca respondido (23/10/2026). A
+ * abertura precisa decidir na hora, sem rede, então lê este sinal; quem o
+ * mantém em dia é o servidor — toda resposta de sessão (saveSession) e a
+ * busca de perfil (syncChronotypeFromProfile) o regravam, e concluir o
+ * questionário (classifyAndSave) o apaga.
+ *
+ * Só existe com evidência POSITIVA do servidor de que falta o cronotipo. Na
+ * ausência dele (instalação antiga, perfil ainda não buscado) a abertura segue
+ * para o dashboard, como antes — nunca prende no questionário quem já
+ * respondeu. Fica no localStorage em qualquer modo de sessão e sai junto com
+ * ela (ACCOUNT_CACHE_KEYS).
+ */
+const NEEDS_QUESTIONNAIRE_KEY = "axon_needs_questionnaire";
+
+// `unknown`: vem de JSON; um campo ausente não pode virar "falta cronotipo".
+function recordChronotypeStatus(hasChronotype: unknown) {
+  if (typeof hasChronotype !== "boolean") return;
+  if (hasChronotype) localStorage.removeItem(NEEDS_QUESTIONNAIRE_KEY);
+  else localStorage.setItem(NEEDS_QUESTIONNAIRE_KEY, "1");
+}
+
+export function needsQuestionnaire(): boolean {
+  return localStorage.getItem(NEEDS_QUESTIONNAIRE_KEY) === "1";
 }
 
 export function isLoggedIn(): boolean {
@@ -292,6 +330,10 @@ export function isLoggedIn(): boolean {
  * para sempre. O backend é a fonte da verdade; o storage é só cache.
  */
 let chronotypeSyncing: Promise<void> | null = null;
+// A última sincronização desta carga da página, em andamento ou concluída.
+// Diferente de `chronotypeSyncing`, não é zerada ao terminar: é o que permite
+// a quem só quer o resultado (chronotypeSynced) não buscar o perfil de novo.
+let lastChronotypeSync: Promise<void> | null = null;
 
 export async function syncChronotypeFromProfile(): Promise<void> {
   // NUNCA chamar isto de dentro de saveSession: o request() chama saveSession
@@ -310,6 +352,9 @@ export async function syncChronotypeFromProfile(): Promise<void> {
       if (profile.chronotype) {
         localStorage.setItem("axon_chronotype", profile.chronotype);
       }
+      // Corrige o sinal da abertura quando ele envelheceu — ex.: o usuário
+      // respondeu o questionário em outro aparelho.
+      recordChronotypeStatus(profile.has_chronotype);
     } catch {
       // Sem rede ou sessão expirada: o fallback local continua valendo. O
       // request() já cuida do 401; aqui só não propagamos o erro.
@@ -318,7 +363,17 @@ export async function syncChronotypeFromProfile(): Promise<void> {
     }
   })();
 
+  lastChronotypeSync = chronotypeSyncing;
   return chronotypeSyncing;
+}
+
+/**
+ * Espera o perfil desta carga da página ser conferido, sem buscá-lo de novo
+ * se isso já aconteceu (o App sincroniza ao montar; login e cadastro, ao
+ * entrar). Só dispara uma busca se nenhuma rodou ainda.
+ */
+export function chronotypeSynced(): Promise<void> {
+  return lastChronotypeSync ?? syncChronotypeFromProfile();
 }
 
 // Exposto para o módulo de push, que precisa do token em chamadas feitas fora
@@ -492,15 +547,19 @@ export function classify(
 }
 
 // Usado no fluxo final do questionário para classificar e salvar em uma chamada.
-export function classifyAndSave(
+export async function classifyAndSave(
   respostas: Record<string, string>,
   qualidade_sono: string,
   schedule_type?: string
 ) {
-  return request<ClassifyResponse>("/classify/save", {
+  const result = await request<ClassifyResponse>("/classify/save", {
     method: "POST",
     body: JSON.stringify({ respostas, qualidade_sono, schedule_type }),
   });
+  // O cronotipo acabou de ser salvo: sem isto, quem conclui o questionário
+  // seria mandado de volta a ele na próxima abertura.
+  recordChronotypeStatus(true);
+  return result;
 }
 
 /* ============================================================================

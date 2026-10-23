@@ -623,7 +623,10 @@ body {
    serve tanto ao APK quanto à pré-visualização mobile na web (onde também
    desliga o "puxar para recarregar", como no app). */
 @media (max-width: 1023.98px) {
-  .is-native html,
+  /* `html.is-native`, e não `.is-native html`: a classe fica NO <html>
+     (main.tsx), então o descendente nunca casava e só o <body> recebia a
+     regra — o questionário ainda se arrastava (23/10/2026). */
+  html.is-native,
   .is-native body {
     overscroll-behavior: none;
   }
