@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState, type ElementType, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+import { App as CapacitorApp } from "@capacitor/app";
+import { Capacitor } from "@capacitor/core";
 import {
   ArrowLeft,
   CalendarClock,
   CalendarDays,
   Check,
   ChevronDown,
+  Info,
   Link2,
 
   Moon,
@@ -23,9 +26,10 @@ import { ThemeToggle } from "../components/theme/ThemeToggle";
 import VoiceLab from "../components/settings/VoiceLab";
 import { results, type ChronotypeResultKey } from "../data/results";
 import * as api from "../lib/api";
+import { BUILD_COMMIT } from "../lib/buildInfo";
 import { openAuthUrl } from "../lib/nativeAuth";
 import type { ProfileData } from "../lib/api";
-type SettingsSectionKey = "organization" | "appearance" | "voice" | "integrations";
+type SettingsSectionKey = "organization" | "appearance" | "voice" | "integrations" | "about";
 type ScheduleType = "flexible" | "fixed";
 type CalendarKind = "task" | "event" | "routine";
 type CalendarColor = "purple" | "lilac" | "mint" | "cyan" | "amber" | "rose" | "blue";
@@ -50,6 +54,7 @@ const SETTINGS_SECTIONS: Array<{
   { key: "appearance", title: "Aparência", description: "Tema e cores do calendário", icon: Palette },
   { key: "voice", title: "Voz", description: "Experiência falada do Axon", icon: Volume2 },
   { key: "integrations", title: "Integrações", description: "Serviços conectados ao Axon", icon: Link2 },
+  { key: "about", title: "Sobre", description: "Versão instalada do Axon", icon: Info },
 ];
 const COLOR_OPTIONS: Array<{ key: CalendarColor; label: string; color: string }> = [
   { key: "purple", label: "Roxo AXON", color: "#a855f7" },
@@ -216,6 +221,7 @@ export default function Settings() {
         onDisconnect={disconnectGoogle}
       />
     ),
+    about: <AboutSection />,
   };
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#f7f8fa] text-slate-950 dark:bg-[#11111a] dark:text-white">
@@ -661,6 +667,93 @@ function IntegrationsSection({ connected, busy, error, onConnect, onDisconnect }
       </div>
       {error && <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600 dark:border-red-400/20 dark:bg-red-500/10 dark:text-red-300">{error}</p>}
     </SettingsCard>
+  );
+}
+// ===========================================================================
+// SOBRE — VERSÃO E BUILD
+// ===========================================================================
+// Responde "o que eu tenho instalado é a versão nova ou a antiga?", que o APK
+// sozinho não responde (ver lib/buildInfo). O commit morava ao lado do botão
+// "Login", onde lia como app inacabado; o Bernardo decidiu em 23/10/2026 que o
+// lugar dele em produção é aqui, junto da versão da loja.
+//
+// A versão vem do PRÓPRIO pacote instalado (`App.getInfo()`): versionName/
+// versionCode no Android, MARKETING_VERSION/CURRENT_PROJECT_VERSION no iOS.
+// Nunca escreva a versão à mão nem leia do package.json (0.0.0, sem relação
+// com a loja): dois lugares com o mesmo número viram, na primeira
+// atualização, uma tela mentindo sobre o que está instalado.
+type AppVersion = { version: string; build: string } | "indisponivel" | null;
+
+function useAppVersion(): AppVersion {
+  const [info, setInfo] = useState<AppVersion>(null);
+
+  useEffect(() => {
+    // `getInfo()` é plugin nativo: na web a chamada falha. Lá a seção mostra
+    // só o commit.
+    if (!Capacitor.isNativePlatform()) return;
+
+    let active = true;
+    CapacitorApp.getInfo()
+      .then(({ version, build }) => {
+        if (active) setInfo({ version, build });
+      })
+      .catch(() => {
+        if (active) setInfo("indisponivel");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return info;
+}
+
+function AboutSection() {
+  const info = useAppVersion();
+  const isNative = Capacitor.isNativePlatform();
+
+  // Texto secundário de propósito: é diagnóstico, não funcionalidade.
+  const details = (
+    <dl className="space-y-3 text-xs text-slate-500 dark:text-white/45">
+      {isNative && (
+        <div className="flex items-baseline justify-between gap-3">
+          <dt>Versão do app</dt>
+          <dd className="font-semibold text-slate-700 dark:text-white/70">
+            {info === null
+              ? "Carregando…"
+              : info === "indisponivel"
+              ? "Indisponível"
+              : `${info.version} (build ${info.build})`}
+          </dd>
+        </div>
+      )}
+      <div>
+        <div className="flex items-baseline justify-between gap-3">
+          <dt>Identificação do build</dt>
+          <dd className="font-mono text-slate-700 dark:text-white/70">{BUILD_COMMIT}</dd>
+        </div>
+        {/* Sem isto o hash parece um código que o usuário precisa usar. */}
+        <p className="mt-1 text-[0.68rem] leading-4 text-slate-400 dark:text-white/30">
+          Só para o suporte saber qual versão você tem. Você não precisa dele para nada.
+        </p>
+      </div>
+    </dl>
+  );
+
+  return (
+    <>
+      <div className="grid gap-2 rounded-[1.4rem] border border-slate-200/90 bg-white p-2 shadow-[0_8px_24px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-white/[0.035] lg:hidden">
+        <MobileExpandableRow icon={Info} title="Sobre o app" description="Versão instalada do Axon.">
+          {details}
+        </MobileExpandableRow>
+      </div>
+      <div className="hidden gap-4 lg:grid">
+        <SettingsCard title="Sobre o app" description="Versão instalada do Axon.">
+          {details}
+        </SettingsCard>
+      </div>
+    </>
   );
 }
 function SettingTitle({ icon: Icon, title }: { icon: ElementType; title: string }) {

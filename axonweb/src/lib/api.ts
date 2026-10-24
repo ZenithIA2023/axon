@@ -114,6 +114,75 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+/* ----------------------------------------------------------------------------
+ * LEITURA DE ERRO
+ * O backend responde erro em três formatos, e a tela só entendia um:
+ * - `{detail: "texto"}` — HTTPException nossa; o texto é para o usuário.
+ * - `{detail: [...]}` — 422 do Pydantic. `new Error(lista)` virava
+ *   "[object Object]" na tela, e o conteúdo (caminho do campo, mensagem da lib)
+ *   é detalhe interno que não pode chegar ao usuário (AGENTS.md §10).
+ * - `{error: "Rate limit exceeded: ..."}` — 429 do slowapi, em inglês e sem
+ *   `detail`; caía em "Erro na requisição".
+ * ------------------------------------------------------------------------- */
+const MENSAGEM_DADOS_INVALIDOS =
+  "Alguma informação enviada não é válida. Confira e tente de novo.";
+const MENSAGEM_MUITAS_TENTATIVAS =
+  "Muitas tentativas em pouco tempo. Espere um minuto e tente de novo.";
+
+// A tela que sabe qual campo pode estar errado diz isso melhor que o genérico.
+type MensagensDeErro = {
+  dadosInvalidos?: string;
+  muitasTentativas?: string;
+};
+
+function lerDetail(corpo: unknown): unknown {
+  return corpo !== null && typeof corpo === "object" && "detail" in corpo
+    ? corpo.detail
+    : undefined;
+}
+
+// `padraoSemCorpo`: o request() sempre disse "Erro desconhecido" quando a
+// resposta nem é JSON (ex.: página de erro do Nginx); upload e streaming
+// usavam o próprio texto padrão. Cada um mantém o seu.
+async function mensagemDeErro(
+  res: Response,
+  padrao: string,
+  mensagens: MensagensDeErro = {},
+  padraoSemCorpo: string = padrao
+): Promise<string> {
+  const corpo: unknown = await res.json().catch(() => null);
+  const detail = lerDetail(corpo);
+
+  // Texto em `detail` é sempre nosso (HTTPException) e já vem em português —
+  // inclusive o 429 da cota mensal de voz, que explica qual limite foi atingido.
+  if (typeof detail === "string" && detail) return detail;
+
+  // O texto do slowapi nunca é mostrado, venha o corpo no formato que vier.
+  if (res.status === 429) {
+    return mensagens.muitasTentativas ?? MENSAGEM_MUITAS_TENTATIVAS;
+  }
+
+  if (res.status === 422 || Array.isArray(detail)) {
+    return mensagens.dadosInvalidos ?? MENSAGEM_DADOS_INVALIDOS;
+  }
+
+  return corpo === null ? padraoSemCorpo : padrao;
+}
+
+// O que uma chamada pode pedir de diferente ao request().
+type OpcoesRequest = {
+  // Uso interno: a chamada já é a repetição depois de renovar o token.
+  ehRetentativa?: boolean;
+  // O 401 desta chamada é RESPOSTA, não sessão vencida. Só o login usa: ele é
+  // o único endpoint público que responde 401 como resultado legítimo ("senha
+  // errada"). Sem isto, o bloco de 401 abaixo engolia a mensagem do backend,
+  // mostrava "Sessão expirada", apagava a sessão e recarregava a tela de quem
+  // nem estava logado. Não use em endpoint autenticado: lá o 401 é o que leva
+  // o usuário de volta ao login quando o token morre.
+  erro401EhResposta?: boolean;
+  mensagens?: MensagensDeErro;
+};
+
 /**
  * Helper principal das chamadas autenticadas.
  * Antes de desconectar por 401, tenta renovar a sessão com o refresh token
@@ -123,7 +192,7 @@ function authHeaders(): Record<string, string> {
 async function request<T>(
   path: string,
   options: RequestInit = {},
-  isRetry = false
+  opcoes: OpcoesRequest = {}
 ): Promise<T> {
   let res: Response;
 
@@ -149,15 +218,15 @@ async function request<T>(
   }
 
   if (!res.ok) {
-    if (res.status === 401) {
+    if (res.status === 401 && !opcoes.erro401EhResposta) {
       const refreshToken = getRefreshToken();
 
       // path check evita recursão infinita se o próprio /auth/refresh cair em 401
-      if (!isRetry && path !== "/auth/refresh" && refreshToken) {
+      if (!opcoes.ehRetentativa && path !== "/auth/refresh" && refreshToken) {
         try {
           const renewed = await refreshSession(refreshToken);
           saveSession(renewed, isRemembered());
-          return request<T>(path, options, true);
+          return request<T>(path, options, { ...opcoes, ehRetentativa: true });
         } catch {
           // Refresh token também expirado/revogado: cai no logout abaixo.
         }
@@ -171,8 +240,14 @@ async function request<T>(
       throw new Error("Sessão expirada");
     }
 
-    const error = await res.json().catch(() => ({ detail: "Erro desconhecido" }));
-    throw new Error(error.detail ?? "Erro na requisição");
+    throw new Error(
+      await mensagemDeErro(
+        res,
+        "Erro na requisição",
+        opcoes.mensagens,
+        "Erro desconhecido"
+      )
+    );
   }
 
   if (getToken()) {
@@ -197,18 +272,40 @@ export interface AuthResponse {
   has_chronotype: boolean;
 }
 
+// Em login e cadastro o único campo que o backend pode recusar com 422 é o
+// e-mail (`EmailStr`): o `type="email"` do navegador aceita `teste@gmail`, o
+// Pydantic não.
+const EMAIL_INVALIDO = "Digite um e-mail válido.";
+
 export function register(name: string, email: string, password: string) {
-  return request<AuthResponse>("/auth/register", {
-    method: "POST",
-    body: JSON.stringify({ name, email, password }),
-  });
+  return request<AuthResponse>(
+    "/auth/register",
+    {
+      method: "POST",
+      body: JSON.stringify({ name, email, password }),
+    },
+    { mensagens: { dadosInvalidos: EMAIL_INVALIDO } }
+  );
 }
 
+// O texto do 401 ("E-mail ou senha incorretos...") vem do backend e é o mesmo
+// para toda falha, de propósito: ver routers/auth.py.
 export function login(email: string, password: string) {
-  return request<AuthResponse>("/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  });
+  return request<AuthResponse>(
+    "/auth/login",
+    {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    },
+    {
+      erro401EhResposta: true,
+      mensagens: {
+        dadosInvalidos: EMAIL_INVALIDO,
+        muitasTentativas:
+          "Muitas tentativas de login. Espere um minuto e tente de novo.",
+      },
+    }
+  );
 }
 
 export interface MessageResponse {
@@ -491,8 +588,7 @@ export async function uploadAvatar(file: File): Promise<ProfileData> {
   });
 
   if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: "Erro ao enviar imagem" }));
-    throw new Error(error.detail ?? "Erro ao enviar imagem");
+    throw new Error(await mensagemDeErro(res, "Erro ao enviar imagem"));
   }
 
   return res.json();
@@ -1254,8 +1350,7 @@ function streamSSE(
           throw new Error("Sessão expirada");
         }
 
-        const error = await res.json().catch(() => ({ detail: "Erro na requisição" }));
-        throw new Error(error.detail ?? "Erro na requisição");
+        throw new Error(await mensagemDeErro(res, "Erro na requisição"));
       }
 
       const reader = res.body!.getReader();
