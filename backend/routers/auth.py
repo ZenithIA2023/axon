@@ -54,16 +54,30 @@ def register(request: Request, body: RegisterRequest):
     )
 
 
+# A MESMA resposta para toda falha de login (senha errada, e-mail sem conta,
+# conta criada com Google/Apple), de propósito: distinguir os casos faria da
+# tela de login um verificador de quem tem conta no AXON — a mesma razão do
+# forgot-password responder igual exista ou não a conta. A menção a
+# Google/Apple é segura por aparecer sempre: não revela nada sobre o e-mail
+# digitado, e dá um caminho a quem criou a conta pelo botão social e tentou
+# entrar pelo formulário ("Esqueci minha senha" define uma senha para ela).
+_LOGIN_INVALID = (
+    "E-mail ou senha incorretos. Se você criou sua conta com Google ou Apple, "
+    "entre por aquele botão — ou use \"Esqueci minha senha\" para definir uma "
+    "senha."
+)
+
+
 @router.post("/login", response_model=AuthResponse)
 @limiter.limit("10/minute")
 def login(request: Request, body: LoginRequest):
     try:
         res = supabase_auth.auth.sign_in_with_password({"email": body.email, "password": body.password})
     except Exception:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="E-mail ou senha incorretos")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_LOGIN_INVALID)
 
     if res.user is None or res.session is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="E-mail ou senha incorretos")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_LOGIN_INVALID)
 
     user_id = res.user.id
 

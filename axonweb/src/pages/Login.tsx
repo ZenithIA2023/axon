@@ -2,14 +2,12 @@ import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { AlertCircle, Check, Eye, EyeOff, Lock, Mail } from "lucide-react";
-import { Capacitor } from "@capacitor/core";
 
 import AppleAuthButton from "../components/auth/AppleAuthButton";
 import GoogleAuthButton from "../components/auth/GoogleAuthButton";
 import AuthGlow from "../components/auth/AuthGlow";
 import InputField from "../components/auth/InputField";
 import * as api from "../lib/api";
-import { BUILD_COMMIT } from "../lib/buildInfo";
 
 type PasswordFieldProps = {
   label: string;
@@ -130,21 +128,17 @@ export default function Login() {
             </div>
 
             {error && (
-              <div role="alert" className="flex items-center gap-2 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 dark:border-red-300/20">
-                <AlertCircle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-200" />
-                <p className="text-xs text-red-600 dark:text-red-200">{error}</p>
+              /* Ícone no topo: a mensagem de credencial inválida ocupa 4 linhas
+                 no celular (explica o caso de quem criou a conta com Google ou
+                 Apple), e centralizado o ícone ficava solto no meio do texto. */
+              <div role="alert" className="flex items-start gap-2 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 dark:border-red-300/20">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-200" />
+                <p className="text-xs leading-5 text-red-600 dark:text-red-200">{error}</p>
               </div>
             )}
 
             <button type="submit" disabled={loading} className="mt-2 inline-flex min-h-10 w-full items-center justify-center rounded-2xl bg-[#7b2cbf] px-6 text-sm font-medium text-white shadow-[0_18px_42px_rgba(123,44,191,0.22)] transition hover:bg-[#8d31dd] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 dark:bg-[#9142d4] dark:hover:bg-[#a855f7]">
               {loading ? "Entrando..." : "Login"}
-              {/* Carimbo do build (ver lib/buildInfo) SÓ em dev: no app publicado o
-                  hash ao lado do "Login" lê como app inacabado (23/10/2026). Não
-                  remova a condição; o lugar dele em produção ainda vai ser
-                  decidido. */}
-              {!loading && import.meta.env.DEV && Capacitor.isNativePlatform() && (
-                <span className="ml-2 font-mono text-[0.6rem] font-normal text-white/55">{BUILD_COMMIT}</span>
-              )}
             </button>
 
             <div className="py-3.5">
