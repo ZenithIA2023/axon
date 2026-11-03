@@ -454,6 +454,10 @@ TABELA_PONTOS: dict[str, dict[str, dict[str, int]]] = {
         "C": {"Matutino": 0, "Vespertino": 2, "Noturno": 2, "Misto": 0, "Bimodal": 0},
         "D": {"Matutino": 0, "Vespertino": 0, "Noturno": 3, "Misto": 0, "Bimodal": 0},
         "E": {"Matutino": 0, "Vespertino": 0, "Noturno": 0, "Misto": 0, "Bimodal": 3},
+        # "Muda de um dia para o outro" — só existe no onboarding novo (nov/2026).
+        # Herda o papel da P18-G, que saiu do questionário: é o gatilho do Misto
+        # irregular (ver `candidato_misto` em classificar_cronotipo).
+        "F": {"Matutino": 0, "Vespertino": 0, "Noturno": 0, "Misto": 3, "Bimodal": 0},
     },
     "P18": {
         "A": {"Matutino": 3, "Vespertino": 0, "Noturno": 0, "Misto": 0, "Bimodal": 1},
@@ -482,7 +486,9 @@ def classificar_cronotipo(respostas: dict) -> tuple[str, dict[str, int]]:
     if respostas.get("P17") == "E":
         return "Bimodal", pontos
 
-    candidato_misto = respostas.get("P18") == "G"
+    # P18-G vem do questionário antigo (o APK instalado ainda o envia); P17-F é
+    # a mesma resposta no questionário novo, que não tem mais a P18.
+    candidato_misto = respostas.get("P18") == "G" or respostas.get("P17") == "F"
 
     for pergunta, alternativa in respostas.items():
         if pergunta == "P9" or pergunta not in TABELA_PONTOS:

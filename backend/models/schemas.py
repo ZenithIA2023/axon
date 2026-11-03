@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr, field_validator, model_validator, Field
-from typing import Optional, Literal
+from typing import Annotated, Optional, Literal
+import uuid
 from datetime import date, time
 # Alias: o campo `date` de DailyLogCreate sombreia o nome dentro do corpo da
 # classe — usar _date nos validators evita qualquer ambiguidade.
@@ -48,15 +49,94 @@ class AuthResponse(BaseModel):
 
 # --- Classify ---
 
+# --- Onboarding (nov/2026) ---
+# Os ids das opções são o contrato com o frontend (config das telas). Literal
+# em vez de str livre: o que chega aqui vai para o perfil e para o contexto do
+# chat, e texto livre nesses campos seria dado pessoal sem limite.
+
+HoraHHMM = Annotated[str, Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")]
+IdCurto = Annotated[str, Field(pattern=r"^[a-z0-9_]{1,40}$")]
+# Chaves e alternativas do questionário ("P1": "A") — maiúsculas, curtas.
+IdResposta = Annotated[str, Field(pattern=r"^[A-Za-z0-9_]{1,10}$")]
+
+
+class HorariosSono(BaseModel):
+    """Telas 12 e 13: dormir/acordar em dia útil e em dia livre."""
+    workday_sleep: HoraHHMM
+    workday_wake: HoraHHMM
+    freeday_sleep: HoraHHMM
+    freeday_wake: HoraHHMM
+
+
+class OnboardingProfile(BaseModel):
+    """Respostas que só personalizam texto. Vão para profiles.onboarding_profile."""
+    goals: list[Literal["work", "study", "business", "energy", "balance", "projects"]] = Field(
+        default_factory=list, max_length=2
+    )
+    main_pain: Optional[Literal[
+        "procrastination", "energy_dip", "where_to_start",
+        "no_structure", "busy_no_progress", "sleep",
+    ]] = None
+    occupation: Optional[Literal["student", "fixed_job", "entrepreneur", "freelancer", "other"]] = None
+    tried_before: list[Literal["calendar", "todo_list", "pomodoro", "habit_apps", "nothing"]] = Field(
+        default_factory=list, max_length=5
+    )
+    age_range: Optional[Literal["under_18", "18_24", "25_34", "35_49", "50_plus"]] = None
+    current_focus_time: Optional[Literal["morning", "afternoon", "night", "leftover", "varies"]] = None
+    acquisition_source: Optional[Literal[
+        "instagram", "tiktok", "youtube", "google", "friend", "store", "other",
+    ]] = None
+    flow_version: Optional[IdCurto] = None
+
+
 class ClassifyRequest(BaseModel):
-    respostas: dict[str, str]
-    qualidade_sono: str
+    # Até 30 perguntas: o questionário tem 19 (antigo) ou 12 (novo); o teto só
+    # impede um corpo gigante nesta rota pública.
+    respostas: dict[IdResposta, IdResposta] = Field(max_length=30)
+    qualidade_sono: str = Field(max_length=4)
     schedule_type: Optional[str] = None  # 'flexible' | 'fixed'
+    # Campos do onboarding novo. Todos opcionais: o APK já instalado manda só
+    # os três de cima e precisa continuar funcionando.
+    horarios: Optional[HorariosSono] = None
+    work_start: Optional[HoraHHMM] = None
+    work_end: Optional[HoraHHMM] = None
+    onboarding: Optional[OnboardingProfile] = None
+    # UUID do funil (onboarding_events) gerado no navegador; no /save liga os
+    # eventos anteriores ao cadastro a esta conta.
+    anon_id: Optional[uuid.UUID] = None
+
+    @model_validator(mode="after")
+    def _expediente_completo(self):
+        if (self.work_start is None) != (self.work_end is None):
+            raise ValueError("Informe o início e o fim do expediente.")
+        return self
 
 
 class ClassifyResponse(BaseModel):
     cronotipo: str
     pontos: dict[str, int]
+    # Só vem quando o pedido trouxe `horarios`. Clientes antigos ignoram.
+    jet_lag_social_min: Optional[int] = None
+
+
+class OnboardingEvent(BaseModel):
+    step: IdCurto
+    event: Literal["view", "answer", "back", "skip", "complete", "error"]
+    # Só o id da opção, nunca o texto digitado (nome, tarefa) — ver Migration 38.
+    option_id: Optional[IdCurto] = None
+
+
+class OnboardingEventsRequest(BaseModel):
+    anon_id: uuid.UUID
+    flow_version: IdCurto
+    platform: Literal["web", "android", "ios"]
+    # Em lote para não fazer uma requisição por tela.
+    events: list[OnboardingEvent] = Field(min_length=1, max_length=50)
+
+
+class ChronotypeDistributionResponse(BaseModel):
+    disponivel: bool
+    porcentagens: dict[str, int]
 
 
 # --- Profile ---
