@@ -8,6 +8,10 @@ Três destinos independentes. Depois de commitar, atualize os que mudaram.
 | **Backend** api.axonapp.tech | `./scripts/deploy.sh backend` | site e app (é a mesma API) |
 | **App mobile** | `./scripts/build-apk.sh` + reinstalar | quem tem o APK instalado |
 
+Para publicar uma versão nova **nas lojas** (Play Store e TestFlight/App
+Store), o roteiro é o `docs/ATUALIZAR_APP_LOJAS.md`. Este arquivo trata do
+dia a dia: site, backend e APK de teste instalado à mão.
+
 ## O fluxo normal
 
 ```bash

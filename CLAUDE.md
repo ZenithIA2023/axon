@@ -61,7 +61,7 @@ Android (live reload): `CAP_SERVER_URL` liga `server.url` no `capacitor.config.t
 
 ## Mapa rápido
 
-- **Entrada do backend:** `backend/main.py` registra os 20 routers, os middlewares de segurança e o APScheduler (`planning_scheduler.run` a cada 5 min).
+- **Entrada do backend:** `backend/main.py` registra os 21 routers, os middlewares de segurança e o APScheduler (`planning_scheduler.run` a cada 5 min).
 - **Modelo do Claude:** constante `_MODEL` em `backend/services/claude_service.py`. Prompts em `services/prompts.py`; contexto do chat em `services/chat_context.py`.
 - **Esquema do banco:** `backend/supabase_schema.sql` (base) + `backend/migrations.sql` (numeradas). **Confira o número da última no próprio arquivo antes de escrever uma nova** — `grep -n "^-- Migration" backend/migrations.sql | tail -1`. Este texto já ficou duas migrations atrasado uma vez (dizia 34 quando a última era a 36, em 20/10/2026), e um número errado aqui faz a migration nova colidir com uma existente.
 - **Frontend:** rotas em `axonweb/src/app/App.tsx`; todo HTTP em `axonweb/src/lib/api.ts` (~2.100 linhas; procure a função existente antes de criar outra). Alias `@` → `axonweb/src`.

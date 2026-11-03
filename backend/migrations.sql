@@ -1337,3 +1337,80 @@ comment on column public.profiles.apple_refresh_token is
 
 comment on column public.profiles.apple_client_id is
   'Client ID que emitiu apple_refresh_token (Services ID da web ou Bundle ID do iOS). A revogação exige o mesmo.';
+
+-- =============================================
+-- Migration 38: novo onboarding — dados do questionário e funil por tela
+-- ---------------------------------------------
+-- O onboarding foi redesenhado (nov/2026): o questionário roda ANTES do
+-- cadastro, quase sempre no site, e o usuário só instala o app depois. Tudo o
+-- que ele responde precisa morar na CONTA — nunca só no navegador —, senão se
+-- perde na troca de plataforma. Por isso as respostas novas vão para
+-- `profiles` no momento do cadastro (o localStorage guarda só até lá).
+--
+-- Colunas com tipo próprio para o que o backend calcula ou usa no
+-- planejamento (expediente, horários de sono → jet lag social, horário do
+-- plano diário, aviso de desacelerar). O resto, que só personaliza texto
+-- (objetivos, dor, ocupação, o que já tentou, faixa etária, quando faz a
+-- tarefa importante, origem), fica em `onboarding_profile` (jsonb) para não
+-- precisar de migration a cada ajuste de pergunta.
+--
+-- Quem já tem conta continua como está: as colunas novas ficam NULL e nada
+-- muda para esses usuários.
+-- =============================================
+alter table public.profiles
+  add column if not exists onboarding_profile jsonb,
+  add column if not exists work_start      time,
+  add column if not exists work_end        time,
+  add column if not exists workday_sleep   time,
+  add column if not exists workday_wake    time,
+  add column if not exists freeday_sleep   time,
+  add column if not exists freeday_wake    time;
+
+comment on column public.profiles.onboarding_profile is
+  'Respostas do onboarding que só personalizam texto: goals[], main_pain, occupation, tried_before[], age_range, current_focus_time, acquisition_source, flow_version.';
+comment on column public.profiles.work_start is
+  'Início do expediente/estudo quando schedule_type = fixed. NULL = flexível ou não informado.';
+comment on column public.profiles.freeday_sleep is
+  'Horário em que dormiria num dia livre. Com workday_sleep/wake e freeday_wake calcula o jet lag social.';
+
+-- Funil do onboarding: uma linha por evento de tela. Sem isso não dá para
+-- saber em que tela as pessoas desistem nem se o fluxo novo é melhor que o
+-- antigo.
+--
+-- `anon_id` é um UUID gerado no navegador na primeira tela, porque a maior
+-- parte do funil acontece ANTES de existir conta. No cadastro, o backend
+-- preenche `user_id` nas linhas desse anon_id (sempre conferindo que o
+-- anon_id veio do mesmo cliente que acabou de se cadastrar).
+--
+-- NUNCA guarde aqui texto livre (nome, a primeira tarefa) nem horários
+-- digitados: só o id da tela, o tipo de evento e, no máximo, o id da opção
+-- escolhida. O endpoint que grava é público (pré-cadastro) e precisa de
+-- rate limit por IP.
+--
+-- RLS ligada e sem política: só o backend (service_role) lê e escreve.
+-- =============================================
+create table if not exists public.onboarding_events (
+  id           bigint generated always as identity primary key,
+  anon_id      uuid not null,
+  user_id      uuid references auth.users(id) on delete cascade,
+  flow_version text not null,
+  step         text not null,
+  event        text not null check (event in ('view', 'answer', 'back', 'skip', 'complete', 'error')),
+  option_id    text,
+  platform     text not null check (platform in ('web', 'android', 'ios')),
+  created_at   timestamptz not null default now()
+);
+
+alter table public.onboarding_events enable row level security;
+
+-- Consulta típica da análise: quantos anon_id distintos chegaram a cada tela
+-- de uma versão do fluxo num período.
+create index if not exists onboarding_events_flow_step_idx
+  on public.onboarding_events(flow_version, step, created_at desc);
+
+-- Usado no cadastro para vincular as linhas pré-conta ao usuário.
+create index if not exists onboarding_events_anon_idx
+  on public.onboarding_events(anon_id);
+
+comment on table public.onboarding_events is
+  'Funil do onboarding por tela. Sem dados pessoais: só tela, evento e id de opção. anon_id liga os eventos anteriores ao cadastro.';
