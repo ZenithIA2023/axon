@@ -229,31 +229,31 @@ CHRONOTYPE_BLOCKS: dict[str, list[tuple[str, str]]] = {
         ("sono",          "Você está acordando. Beba água, alongue-se, respire. Momento ideal para uma caminhada matinal leve ou organização do dia."),                                                          # 04:30
         ("foco_profundo", "Sua energia está subindo. Use esse bloco para responder mensagens, organizar suas tarefas e começar as tarefas importantes. "),     # 06:00
         ("pico",          "Esse é seu momento de ouro. Seu cérebro está no máximo da capacidade, execute a tarefa mais difícil e mais importante do seu dia. Evite ao máximo distrações nesse período."),      # 07:30
-        ("pico",          "Você ainda está no topo. Continue suas tarefas mais complexas.Esse é o bloco também é ideal para decisões importantes, criação e trabalho de alta complexidade."),     # 09:00
-        ("pico",          "Ótimo momento para continuar projetos complexos ou iniciar algo que exige concentração, tente terminar suas tarefas mais importante está o final da manhã."),        # 10:30
+        ("pico",          "Você ainda está no topo. Continue suas tarefas mais complexas. Esse bloco também é ideal para decisões importantes, criação e trabalho de alta complexidade."),     # 09:00
+        ("pico",          "Ótimo momento para continuar projetos complexos ou iniciar algo que exige concentração, tente terminar suas tarefas mais importantes até o final da manhã."),        # 10:30
         ("foco_moderado", "Sua energia está encontrando um ritmo mais tranquilo. Ótimo para almoço, reuniões, consumir conteúdo relevante ou organizar ideias que surgiram ao longo da manhã."),            # 12:00
         ("foco_moderado", "É natural sentir uma queda aqui, é apenas seu corpo pedindo uma pequena pausa. Use esse momento para responder mensagens, organizar arquivos ou fazer tarefas que não exigem muito raciocínio."),             # 13:30
         ("foco_moderado", "Seu organismo está começando a se recuperar. Aproveite para planejar o restante do dia, resolver pendências simples ou começar o restante das tarefas do dia."),     # 15:00
         ("foco_moderado", "Ótimo momento para reuniões ativas, estudos ou terminar as atividades pendentes do dia."),                    # 16:30
         ("foco_moderado", "Seu dia de alta produtividade está se encerrando. Use esse bloco para revisar o que fez, planejar amanhã e terminar tarefas de baixa complexidade que ficaram pendentes."),            # 18:00
-        ("foco_leve",     "Seu cérebro precisa descansar.Faça atividades leves,passe tempo com pessoas que você gosta ou algo que te relaxa. Evite trabalho pesado por hoje."),           # 19:30
+        ("foco_leve",     "Seu cérebro precisa descansar. Faça atividades leves, passe tempo com pessoas que você gosta ou algo que te relaxa. Evite trabalho pesado por hoje."),           # 19:30
         ("recuperacao",   "Seu corpo está sinalizando que quer descansar. Diminua a luz, evite telas e crie o ambiente certo para um sono reparador e relaxante."),               # 21:00
         ("sono",          "É hora de desligar. Você deu o seu melhor hoje, agora deixe seu corpo e mente se recuperarem para termos um dia ainda melhor amanhã."),                                      # 22:30
     ],
     "evening": [
         ("foco_leve",     "Sei que você ainda tem energia, mas seu corpo precisa de descanso, comece a desacelerar. Resista à tentação de continuar trabalhando, aproveite essa energia para organizar o que deve ser feito amanhã."),                    # 00:00
-        ("sono",          "Preparece para dormir. Seu cérebro vai processar tudo que aconteceu hoje e te preparar para um dia ainda melhor amanhã."),                                             # 01:30
+        ("sono",          "Prepare-se para dormir. Seu cérebro vai processar tudo que aconteceu hoje e te preparar para um dia ainda melhor amanhã."),                                             # 01:30
         ("sono",          "Sono profundo ativo. Esse é o momento mais reparador da sua noite, evite ao máximo ficar acordado até esse momento."),                                  # 03:00
         ("sono",          "Ainda em sono. Respeite esse tempo, ele é parte essencial da sua performance no próximo dia."),                           # 04:30
-        ("sono",          "Continue descansando, caso precise acrodar nesse horário o use para se prepar para o seu dia, faça uma atividade leve para cordar e beba água."),                     # 06:00
+        ("sono",          "Continue descansando, caso precise acordar nesse horário, use-o para se preparar para o seu dia: faça uma atividade leve para acordar e beba água."),                     # 06:00
         ("recuperacao",   "Seu corpo está acordando lentamente, mas seu cérebro ainda não está pronto. Hidrate-se, tome seu café e não force decisões importantes agora."),    # 07:30
         ("foco_moderado", "Bom momento para tarefas simples e automáticas. Responda e-mails, organize sua agenda e comece as tarefas mais leves do seu dia."),    # 09:00
-        ("foco_moderado", "Sua energia está subindo gradualmente. Use esse bloco para planejamento, WhatsApp e tarefas operacionais, agaurde seu foco para fazer as tarefas mais complexas com maior produtividade."),   # 10:30
-        ("foco_moderado", "Você está entrando em ritmo. Bom momento para reuniões ativas, leitura e aprendizado, seu cérebro está entrando em rítmo."),         # 12:00
+        ("foco_moderado", "Sua energia está subindo gradualmente. Use esse bloco para planejamento, WhatsApp e tarefas operacionais, guarde seu foco para fazer as tarefas mais complexas com maior produtividade."),   # 10:30
+        ("foco_moderado", "Você está entrando em ritmo. Bom momento para reuniões ativas, leitura e aprendizado, seu cérebro está entrando no ritmo."),         # 12:00
         ("foco_profundo", "É normal sentir um leve cansaço depois do almoço mas a sua energia segue estável. Aproveite para reuniões, organização de projetos, consumir conteúdo relevante para o seu trabalho ou para começar suas tarefas mais complexas."),                # 13:30
-        ("foco_profundo", "Você está aquecido e concentrado. Ótimo momento para atacar projetos importantes e trabalho que exige raciocínio aprofundado evite ao máxim odsitrações nesse período."),    # 15:00
-        ("pico",          "Seu pico chegou. É o momento ideal para fazer a suas tarefas mais importantes e desafiadoras do seu dia, seu cérebro está no máximo. Evite ao máximo distroções nesse período."),               # 16:30
-        ("pico",          "Ainda no topo. Não se distraia esse é seu segundo bloco de ouro para continuar seu trabalho decisões críticas, criação e demais tarefas de alta complexidade."),         # 18:00
+        ("foco_profundo", "Você está aquecido e concentrado. Ótimo momento para atacar projetos importantes e trabalho que exige raciocínio aprofundado. Evite ao máximo distrações nesse período."),    # 15:00
+        ("pico",          "Seu pico chegou. É o momento ideal para fazer as suas tarefas mais importantes e desafiadoras do seu dia, seu cérebro está no máximo. Evite ao máximo distrações nesse período."),               # 16:30
+        ("pico",          "Ainda no topo. Não se distraia: esse é seu segundo bloco de ouro para continuar seu trabalho, decisões críticas, criação e demais tarefas de alta complexidade."),         # 18:00
         ("pico",          "Continue em projetos importantes ou finalize o que ficou pendente com qualidade."),    # 19:30
         ("foco_profundo", "Sua energia está desacelerando gradualmente. Bom momento para revisar o dia, planejar amanhã e resolver pendências de menor complexidade."),                    # 21:00
         ("foco_moderado", "Hora de soltar o peso do dia. Tarefas leves, conversas tranquilas, nada que exija raciocínio intenso agora. Use esse momento para hobbies ou ficar com sua família."),                   # 22:30
@@ -264,52 +264,52 @@ CHRONOTYPE_BLOCKS: dict[str, list[tuple[str, str]]] = {
         ("sono",          "Sono profundo ativo. Seu cérebro está consolidando memória e recuperando energia, deixe esse processo acontecer sem interrupções."),                   # 03:00
         ("sono",          "Ainda em sono. Respeite seu ritmo biológico lembre-se que seu descanso é o seu maior aliado para manter um dia de alta produtividade."),                   # 04:30
         ("sono",          "Seu corpo ainda está em recuperação. Acordar forçado agora vai comprometer toda sua performance ao longo do dia."),                           # 06:00
-        ("recuperacao",   "Seu corpo está acordando gradualmente. Mentenha-se descansando para evitar cansoços ao longo do dia "),                                  # 07:30
+        ("recuperacao",   "Seu corpo está acordando gradualmente. Mantenha-se descansando para evitar cansaço ao longo do dia."),                                  # 07:30
         ("foco_leve",     "Despertar gradual, seu cérebro está acordando. Café, alongamento, tarefas automáticas, dê tempo para o seu organismo estar totalmente preparado antes de exigir foco profundo."),           # 09:00
         ("foco_leve",     "Use esse momento para e-mails, WhatsApp, planejamento e tarefas simples que não exigem muito raciocínio."),     # 10:30
-        ("foco_moderado", "Energia subindo de forma constante. Use esse bloco para organizar sua agenda, almoçar resolver pendências operacionais e se preparar para o restante do dia."),            # 12:00
-        ("foco_moderado", "Bom momento para reuniões ativas, aprendizado, estudos e projetos que exigem atenção, agaurde para realizar suas tarefas mais complexas mais tarde"),        # 13:30
-        ("foco_moderado", "Sua energia segue crescendo. Aproveite para completar suas tarefas que não exijam muito do seu cérebro, deixe seu cerebro o mais confortável possível e livre de preocupações para o seu pico."),               # 15:00
-        ("foco_moderado", "Você está chegando no seu melhor. Ótimo momento para atacar projetos importantes e trabalho complexo, seu cérebro está receptivo e concentrado use esse momento para aproveitar sua família e estudos."),      # 16:30
-        ("pico",          "Seu pico chegou. Agora é o momento para fazer as tarefas mais difíceis e complexas do seua dia. Esse é seu momento de máxima capacidade cognitiva. Evite ao máximo distrações nesse momento."),           # 18:00
-        ("pico",          "Ainda no topo, não se distraia continue focado na suas tarefas importantes e trabalho de alta complexidade."),                      # 19:30
+        ("foco_moderado", "Energia subindo de forma constante. Use esse bloco para organizar sua agenda, almoçar, resolver pendências operacionais e se preparar para o restante do dia."),            # 12:00
+        ("foco_moderado", "Bom momento para reuniões ativas, aprendizado, estudos e projetos que exigem atenção; guarde para realizar suas tarefas mais complexas mais tarde"),        # 13:30
+        ("foco_moderado", "Sua energia segue crescendo. Aproveite para completar suas tarefas que não exijam muito do seu cérebro, deixe seu cérebro o mais confortável possível e livre de preocupações para o seu pico."),               # 15:00
+        ("foco_moderado", "Você está chegando no seu melhor. Ótimo momento para atacar projetos importantes e trabalho complexo, seu cérebro está receptivo e concentrado. Use esse momento para aproveitar sua família e estudos."),      # 16:30
+        ("pico",          "Seu pico chegou. Agora é o momento para fazer as tarefas mais difíceis e complexas do seu dia. Esse é seu momento de máxima capacidade cognitiva. Evite ao máximo distrações nesse momento."),           # 18:00
+        ("pico",          "Ainda no topo. Não se distraia, continue focado nas suas tarefas importantes e trabalho de alta complexidade."),                      # 19:30
         ("pico",          "Continue no que é importante ou finalize com qualidade o que ficou pendente, você está no máximo da sua performance nesse momento."),                # 21:00
-        ("pico",          "Esse é um dos seus melhores momentos do dia continue seu trbalho e suas tarefas para poder descansar logo mais."),                   # 22:30
+        ("pico",          "Esse é um dos seus melhores momentos do dia continue seu trabalho e suas tarefas para poder descansar logo mais."),                   # 22:30
     ],
     "bimodal": [
         ("sono",          "Descanse. Seu corpo está trabalhando para você enquanto dorme, esse processo é essencial para sustentar os dois picos de energia que te esperam amanhã."),                           # 00:00
         ("sono",          "Sono profundo ativo. Seu cérebro está consolidando memória e recuperando energia — deixe esse processo acontecer sem interrupções."),                                  # 01:30
         ("sono",          "Ainda em sono. Respeite esse tempo, ele é a base de toda sua performance como bimodal."),                   # 03:00
         ("sono",          "Seu organismo ainda está em recuperação. Aproveite cada minuto restante de descanso antes do seu primeiro pico do dia."),                     # 04:30
-        ("recuperacao",   "Você está acordadndo. Hidrate-se, faça atividades leves e use esse momento para planejar o seu dia."),         # 06:00
+        ("recuperacao",   "Você está acordando. Hidrate-se, faça atividades leves e use esse momento para planejar o seu dia."),         # 06:00
         ("foco_profundo", "Ótimo momento para começar seus projetos ou atividades mais importantes e trabalho que exige concentração."),        # 07:30
-        ("pico",          "Esse é o momento de fazer a tarefa mais importante e mais difícil na do seu dia, seu cérebro está no máximo da capacidade. Evite ao máximo distrações nessse período."),       # 09:00
-        ("pico",          "Decisões críticas, criação profunda e trabalho de alta complexidade pertencem são ideais para serem feitos nesse bloco."),        # 10:30
-        ("foco_moderado", "Aproveite que seu corpo naturalmente tem uma queda nesse hoprário e se prepare para o almoço e atividades mais leves, um cochilo nesse momento pode salvar o restante do seu dia."),              # 12:00
+        ("pico",          "Esse é o momento de fazer a tarefa mais importante e mais difícil do seu dia, seu cérebro está no máximo da capacidade. Evite ao máximo distrações nesse período."),       # 09:00
+        ("pico",          "Decisões críticas, criação profunda e trabalho de alta complexidade são ideais para este bloco."),        # 10:30
+        ("foco_moderado", "Aproveite que seu corpo naturalmente tem uma queda nesse horário e se prepare para o almoço e atividades mais leves, um cochilo nesse momento pode salvar o restante do seu dia."),              # 12:00
         ("foco_moderado", "É natural sentir uma queda aqui, é apenas seu corpo pedindo uma pequena pausa. Use esse momento para responder mensagens, organizar arquivos ou fazer tarefas que não exigem muito raciocínio."),     # 13:30
         ("foco_moderado", "Ainda no vale. Não force foco profundo agora, use esse tempo para resolver pendências operacionais, estudar, consumir conteúdos relevantes ou se preparar para o segundo pico que vem logo mais."),                    # 15:00
         ("foco_profundo", "Seu segundo ciclo está começando. A energia está voltando com força, esse é um ótimo momento para retomar projetos importantes e trabalho que exige concentração."),     # 16:30
         ("pico",          "Esse é o momento para terminar as pendências complexas do dia, aproveite que sua energia está em alta para zerar a sua lista de tarefas, evite ao máximo distrações nesse período."),      # 18:00
-        ("pico",          "Continue fazendo o que é importante seu pico está chegando no fim, momento ideial para estudos profundo e para terminar de vez com as tarefas pendentes de alta complexidade."),      # 19:30
+        ("pico",          "Continue fazendo o que é importante seu pico está chegando no fim, momento ideal para estudos profundos e para terminar de vez com as tarefas pendentes de alta complexidade."),      # 19:30
         ("foco_moderado", "Bom momento para revisar o dia, planejar o amanhã e finalizar pendências com qualidade. Aproveite esse momento para passar um tempo com sua família e praticar hobbies."),               # 21:00
         ("foco_leve",     "Hora de desacelerar. Você teve dois picos hoje, seu corpo merece esse descanso para repetir amanhã. Desligue as telas e prepare o ambiente para uma boa e relaxante noite."),           # 22:30
     ],
     "intermediate": [
         ("sono",          "Descanse. Seu corpo está trabalhando silenciosamente para você, esse sono é o que garante a energia consistente que define seu cronotipo."),                           # 00:00
         ("sono",          "Sono profundo ativo. Seu cérebro está consolidando tudo que aprendeu hoje e se preparando para um novo dia de energia estável."),                                  # 01:30
-        ("sono",          "Ainda em sono. Respeite esse tempo, ele é a base da sua consistância ao longo do dia."),                   # 03:00
+        ("sono",          "Ainda em sono. Respeite esse tempo, ele é a base da sua consistência ao longo do dia."),                   # 03:00
         ("sono",          "Seu organismo ainda está em recuperação. Aproveite cada minuto restante de descanso antes de começar mais um dia produtivo."),                     # 04:30
-        ("recuperacao",   "Seu corpo está acordando naturalmente. Hidrate-se, faça atividades físicas moderadase e não force decisões importantes ainda."),            # 06:00
-        ("foco_leve",     "Bom momento para e-mails, WhatsApp, planejamento do dia e para realizar suas tarefas mais simples, você tem uma energia muito consistente aproveite isso com sabedoria ao longo do dia"),             # 07:30
-        ("foco_moderado", "Reuniões ativas, aprendizado, organização de projetos agora e suas tarefas imporntes são bem-vindo agora"),          # 09:00
-        ("pico",          "Seu melhor momento da manhã. Ataque agora projetos importantes e trabalho que exige concentração, você está no topo da sua curva matinal. Evite ao máximo distrações nesse período"),             # 10:30
+        ("recuperacao",   "Seu corpo está acordando naturalmente. Hidrate-se, faça atividades físicas moderadas e não force decisões importantes ainda."),            # 06:00
+        ("foco_leve",     "Bom momento para e-mails, WhatsApp, planejamento do dia e para realizar suas tarefas mais simples, você tem uma energia muito consistente aproveite isso com sabedoria ao longo do dia."),             # 07:30
+        ("foco_moderado", "Reuniões ativas, aprendizado, organização de projetos e suas tarefas importantes são bem-vindos agora"),          # 09:00
+        ("pico",          "Seu melhor momento da manhã. Ataque agora projetos importantes e trabalho que exige concentração, você está no topo da sua curva matinal. Evite ao máximo distrações nesse período."),             # 10:30
         ("foco_moderado", "Ótimo para reuniões, leitura e organização e uma pausa para o almoço. Seu ponto forte é exatamente essa consistência que outros cronotipos não têm nesse horário."),             # 12:00
-        ("foco_leve",     "Sentir um aleve queda de energia é natural nesse momento. Use para tarefas operacionais, e-mails e planejamento e até mesmo um breve descanço"),                    # 13:30
-        ("foco_profundo", "Aproveite esse momento para dar continuidade as tarefas mais impontes e complexas do sua dia, evite ao máximo distrações nesse período"),             # 15:00
-        ("pico",          "Segundo melhor momento do dia. Retome projetos importantes ou finalize o que ficou pendente pela manhã, evite ao máximo distrações nesse período"),       # 16:30
+        ("foco_leve",     "Sentir uma leve queda de energia é natural nesse momento. Use para tarefas operacionais, e-mails, planejamento e até mesmo um breve descanso."),                    # 13:30
+        ("foco_profundo", "Aproveite esse momento para dar continuidade às tarefas mais importantes e complexas do seu dia. Evite ao máximo distrações nesse período."),             # 15:00
+        ("pico",          "Segundo melhor momento do dia. Retome projetos importantes ou finalize o que ficou pendente pela manhã. Evite ao máximo distrações nesse período."),       # 16:30
         ("foco_profundo", "Use esse momento para revisar o dia, planejar amanhã, resolver pendências que exigem atenção ou para estudos. Momento ideal para atividades físicas."),        # 18:00
         ("foco_leve",     "Use esse momento para tarefas leves, passar um tempo com sua família, estudos leves ou praticar seus hobbies, tentar forçar produtividade nesse momento pode acabar com o seu dia de amanhã."),      # 19:30
-        ("foco_leve",     "Se desconecte. Atividades relaxantes, tempo com pessoas que você gosta ou algo que te renova comece a preparar o terreno para uma boa noite de sono."),           # 21:00
+        ("foco_leve",     "Se desconecte. Atividades relaxantes, tempo com pessoas que você gosta ou algo que te renova. Comece a preparar o terreno para uma boa noite de sono."),           # 21:00
         ("recuperacao",   "Hora de desacelerar. Você teve um dia consistente e produtivo — agora deixe seu corpo e mente se recuperarem para repetir amanhã com a mesma qualidade."),           # 22:30
     ],
 }
@@ -332,6 +332,68 @@ def get_chronotype_context(chronotype: str, hour: int) -> dict:
         "focus_window": meta["focus_window"],
         "low_energy":   meta["low_energy"],
     }
+
+
+# ---------------------------------------------------------------------------
+# Curva do dia para o resultado do onboarding
+# ---------------------------------------------------------------------------
+
+# Cronotipo (como gravado no perfil) → chave das tabelas de curva/blocos.
+CURVE_KEY: dict[str, str] = {
+    "Matutino": "morning",
+    "Vespertino": "evening",
+    "Noturno": "night",
+    "Misto": "intermediate",
+    "Bimodal": "bimodal",
+}
+
+
+def energia_do_dia(cronotipo: str) -> list[int]:
+    """Energia (0–100) de cada hora, 0h a 23h, da curva do cronotipo."""
+    curva = ENERGY_LEVELS.get(CURVE_KEY.get(cronotipo, "intermediate"), ENERGY_LEVELS["intermediate"])
+    return [curva[h] for h in range(24)]
+
+
+def _hhmm(minutos: int) -> str:
+    minutos %= 24 * 60
+    return f"{minutos // 60:02d}:{minutos % 60:02d}"
+
+
+def segmentos_do_dia(cronotipo: str) -> list[dict]:
+    """
+    Os 16 blocos de 90 min do cronotipo, com os vizinhos de mesmo nível fundidos
+    num trecho só ("Pico, 07:30–12:00"). É o que a tela "cada trecho da curva"
+    explica.
+
+    O texto do trecho é o do PRIMEIRO bloco dele: é o que descreve a entrada
+    naquele estado ("Seu pico chegou…"). O sono que atravessa a meia-noite
+    (22:30 → 04:30) vira um trecho só, começando na noite anterior.
+    """
+    blocos = CHRONOTYPE_BLOCKS.get(CURVE_KEY.get(cronotipo, "intermediate"), CHRONOTYPE_BLOCKS["intermediate"])
+
+    # Começa num ponto de troca de nível, para não partir ao meio o trecho que
+    # atravessa a meia-noite.
+    inicio = next((i for i in range(16) if blocos[i][0] != blocos[i - 1][0]), 0)
+
+    segmentos: list[dict] = []
+    for k in range(16):
+        i = (inicio + k) % 16
+        nivel, texto = blocos[i]
+        if segmentos and segmentos[-1]["level"] == nivel:
+            segmentos[-1]["_fim"] = (i + 1) * 90
+            continue
+        segmentos.append({"level": nivel, "_ini": i * 90, "_fim": (i + 1) * 90, "text": texto.strip()})
+
+    return [
+        {
+            "start": _hhmm(s["_ini"]),
+            "end": _hhmm(s["_fim"]),
+            "level": s["level"],
+            "label": (BLOCK_LEVELS.get(s["level"]) or BLOCK_LEVELS["foco_leve"])["label"],
+            "text": s["text"],
+        }
+        for s in sorted(segmentos, key=lambda s: s["_ini"])
+    ]
 
 
 def classify_chronotype(scores: dict) -> str:
@@ -384,6 +446,15 @@ TABELA_PONTOS: dict[str, dict[str, dict[str, int]]] = {
         "B": {"Matutino": 2, "Vespertino": 1, "Noturno": 0, "Misto": 2, "Bimodal": 1},
         "C": {"Matutino": 0, "Vespertino": 2, "Noturno": 1, "Misto": 1, "Bimodal": 2},
         "D": {"Matutino": 0, "Vespertino": 0, "Noturno": 3, "Misto": 0, "Bimodal": 1},
+        # Faixas do onboarding novo (nov/2026). A–D acima continuam valendo para
+        # o APK instalado, que ainda manda as faixas antigas. As novas separam
+        # quem sente sono antes e depois da meia-noite, onde a antiga "C"
+        # (22h30–00h30) juntava quase todo mundo.
+        "H1": {"Matutino": 3, "Vespertino": 0, "Noturno": 0, "Misto": 0, "Bimodal": 0},  # antes das 21h
+        "H2": {"Matutino": 2, "Vespertino": 1, "Noturno": 0, "Misto": 2, "Bimodal": 1},  # 21h–22h30
+        "H3": {"Matutino": 0, "Vespertino": 2, "Noturno": 0, "Misto": 2, "Bimodal": 2},  # 22h30–00h
+        "H4": {"Matutino": 0, "Vespertino": 2, "Noturno": 2, "Misto": 0, "Bimodal": 1},  # 00h–1h30
+        "H5": {"Matutino": 0, "Vespertino": 0, "Noturno": 3, "Misto": 0, "Bimodal": 0},  # depois da 1h30
     },
     "P8": {
         "A": {"Matutino": 3, "Vespertino": 0, "Noturno": 0, "Misto": 0, "Bimodal": 1},
@@ -398,6 +469,11 @@ TABELA_PONTOS: dict[str, dict[str, dict[str, int]]] = {
         "D": {"Matutino": 0, "Vespertino": 2, "Noturno": 1, "Misto": 1, "Bimodal": 1},
         "E": {"Matutino": 0, "Vespertino": 0, "Noturno": 2, "Misto": 0, "Bimodal": 2},
         "F": {"Matutino": 0, "Vespertino": 0, "Noturno": 3, "Misto": 0, "Bimodal": 0},
+        # Faixas do onboarding novo: A9 = até 9h, B9 = 9h–12h. Mesmos pontos de
+        # A e B; ids próprios porque o chat traduz a resposta em texto
+        # (prompts._ANSWER_OPTIONS) e "A" gravado antes significa "antes das 10h".
+        "A9": {"Matutino": 3, "Vespertino": 0, "Noturno": 0, "Misto": 0, "Bimodal": 1},
+        "B9": {"Matutino": 2, "Vespertino": 1, "Noturno": 0, "Misto": 1, "Bimodal": 2},
     },
     "P11": {
         "A": {"Matutino": 3, "Vespertino": 0, "Noturno": 0, "Misto": 0, "Bimodal": 1},

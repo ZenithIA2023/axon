@@ -88,12 +88,12 @@ export default function LandingAxonCapabilities() {
             um pouco abaixo do palco do robô (ver MobileCapabilities). */}
         <div className="mx-auto mt-[4.75rem] flex max-w-[22rem] justify-center lg:mt-9">
             <Link
-                to="/signup"
+                to="/comecar"
                 className="relative z-10 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-[#2d0850] px-6 text-sm font-black text-white shadow-[0_18px_42px_rgba(45,8,80,0.18)] transition hover:bg-[#3d0b6d] active:scale-[0.98] sm:w-auto sm:min-w-[14rem] dark:bg-[#7b2cbf] dark:text-white dark:hover:bg-[#8d31dd]"
                 style={{ color: "#ffffff" }}
                 >
                 <span className="relative z-10 text-white" style={{ color: "#ffffff" }}>
-                    Criar conta
+                    Descobrir meu ritmo
                 </span>
 
                 <ArrowRight className="relative z-10 h-4 w-4 text-white" />
@@ -135,7 +135,7 @@ function MobileCapabilities() {
       {/* Wrapper sem overflow-hidden e sem altura fixa: o padrão AXON precisa
           de mais altura do que o palco (340px) para não cortar a última linha
           de texto, então ele vive aqui fora, livre para bleedar um pouco
-          abaixo do palco. O respiro extra antes do botão "Criar conta"
+          abaixo do palco. O respiro extra antes do botão "Descobrir meu ritmo"
           (mt-[4.75rem] mais abaixo) existe por causa disso. */}
       <div className="relative mx-auto max-w-[23rem]">
         {/* Primeiro filho: como os irmãos são todos absolutos e sem z-index, a

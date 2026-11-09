@@ -50,18 +50,72 @@ class AuthResponse(BaseModel):
 # --- Classify ---
 
 # --- Onboarding (nov/2026) ---
-# Os ids das opções são o contrato com o frontend (config das telas). Literal
-# em vez de str livre: o que chega aqui vai para o perfil e para o contexto do
-# chat, e texto livre nesses campos seria dado pessoal sem limite.
+# Os ids das opções são o contrato com o frontend (data/onboardingSteps.ts).
+# Literal em vez de str livre: o que chega aqui vai para o perfil e para o
+# contexto do chat. O único texto livre é o "outro" de dores e objetivos,
+# curto e limpo (TextoOutro).
 
 HoraHHMM = Annotated[str, Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")]
 IdCurto = Annotated[str, Field(pattern=r"^[a-z0-9_]{1,40}$")]
 # Chaves e alternativas do questionário ("P1": "A") — maiúsculas, curtas.
 IdResposta = Annotated[str, Field(pattern=r"^[A-Za-z0-9_]{1,10}$")]
 
+DiaSemana = Literal["seg", "ter", "qua", "qui", "sex", "sab", "dom"]
+
+Dor = Literal[
+    "procrastination", "distraction", "energy_swings", "prioritizing",
+    "no_structure", "busy_no_progress", "exhaustion",
+]
+Objetivo = Literal[
+    "work", "study", "stop_procrastinating", "business",
+    "projects", "energy", "balance", "routine",
+]
+
+
+def _texto_curto(v: Optional[str], limite: int) -> Optional[str]:
+    """Junta espaços e quebras de linha; vazio vira None."""
+    if v is None:
+        return None
+    limpo = " ".join(v.split())
+    if not limpo:
+        return None
+    if len(limpo) > limite:
+        raise ValueError(f"Use no máximo {limite} caracteres.")
+    return limpo
+
+
+class FixedCommitment(BaseModel):
+    """Um compromisso fixo de trabalho/estudo (Migration 39)."""
+    activity: str = Field(max_length=60)
+    days: list[DiaSemana] = Field(min_length=1, max_length=7)
+    start: HoraHHMM
+    end: HoraHHMM
+
+    @field_validator("activity")
+    @classmethod
+    def _atividade(cls, v: str) -> str:
+        limpo = _texto_curto(v, 60)
+        if not limpo:
+            raise ValueError("Diga qual é o compromisso (ex.: trabalho, faculdade).")
+        return limpo
+
+    @field_validator("days")
+    @classmethod
+    def _dias_sem_repeticao(cls, v: list[str]) -> list[str]:
+        ordem = ["seg", "ter", "qua", "qui", "sex", "sab", "dom"]
+        return [d for d in ordem if d in set(v)]
+
+    @model_validator(mode="after")
+    def _horario(self):
+        # Fim antes do início é válido (turno da noite que passa da meia-noite);
+        # só o mesmo horário nas duas pontas não faz sentido.
+        if self.start == self.end:
+            raise ValueError("O início e o fim do compromisso não podem ser iguais.")
+        return self
+
 
 class HorariosSono(BaseModel):
-    """Telas 12 e 13: dormir/acordar em dia útil e em dia livre."""
+    """Horários de dormir/acordar em dia útil e em dia livre."""
     workday_sleep: HoraHHMM
     workday_wake: HoraHHMM
     freeday_sleep: HoraHHMM
@@ -70,23 +124,26 @@ class HorariosSono(BaseModel):
 
 class OnboardingProfile(BaseModel):
     """Respostas que só personalizam texto. Vão para profiles.onboarding_profile."""
-    goals: list[Literal["work", "study", "business", "energy", "balance", "projects"]] = Field(
-        default_factory=list, max_length=2
-    )
-    main_pain: Optional[Literal[
-        "procrastination", "energy_dip", "where_to_start",
-        "no_structure", "busy_no_progress", "sleep",
-    ]] = None
-    occupation: Optional[Literal["student", "fixed_job", "entrepreneur", "freelancer", "other"]] = None
-    tried_before: list[Literal["calendar", "todo_list", "pomodoro", "habit_apps", "nothing"]] = Field(
-        default_factory=list, max_length=5
-    )
-    age_range: Optional[Literal["under_18", "18_24", "25_34", "35_49", "50_plus"]] = None
-    current_focus_time: Optional[Literal["morning", "afternoon", "night", "leftover", "varies"]] = None
-    acquisition_source: Optional[Literal[
-        "instagram", "tiktok", "youtube", "google", "friend", "store", "other",
-    ]] = None
+    # Em ORDEM de importância: o primeiro item é o que a pessoa marcou primeiro.
+    pains: list[Dor] = Field(default_factory=list, max_length=3)
+    pains_other: Optional[str] = None
+    goals: list[Objetivo] = Field(default_factory=list, max_length=3)
+    goals_other: Optional[str] = None
+    # Texto livre de quem não se identificou com nenhuma opção de qualidade do sono.
+    sleep_other: Optional[str] = None
+    current_focus_time: Optional[Literal["early_morning", "morning", "afternoon", "night", "leftover", "varies"]] = None
     flow_version: Optional[IdCurto] = None
+
+    @field_validator("pains_other", "goals_other", "sleep_other")
+    @classmethod
+    def _outro(cls, v: Optional[str]) -> Optional[str]:
+        return _texto_curto(v, 120)
+
+    @field_validator("pains", "goals")
+    @classmethod
+    def _sem_repeticao(cls, v: list[str]) -> list[str]:
+        # Preserva a ordem (é a prioridade); só tira duplicata.
+        return list(dict.fromkeys(v))
 
 
 class ClassifyRequest(BaseModel):
@@ -98,18 +155,20 @@ class ClassifyRequest(BaseModel):
     # Campos do onboarding novo. Todos opcionais: o APK já instalado manda só
     # os três de cima e precisa continuar funcionando.
     horarios: Optional[HorariosSono] = None
-    work_start: Optional[HoraHHMM] = None
-    work_end: Optional[HoraHHMM] = None
+    fixed_commitments: Optional[list[FixedCommitment]] = Field(default=None, max_length=10)
     onboarding: Optional[OnboardingProfile] = None
     # UUID do funil (onboarding_events) gerado no navegador; no /save liga os
     # eventos anteriores ao cadastro a esta conta.
     anon_id: Optional[uuid.UUID] = None
 
-    @model_validator(mode="after")
-    def _expediente_completo(self):
-        if (self.work_start is None) != (self.work_end is None):
-            raise ValueError("Informe o início e o fim do expediente.")
-        return self
+
+class EnergySegment(BaseModel):
+    """Trecho contínuo do dia com o mesmo nível de energia (blocos de 90 min fundidos)."""
+    start: str  # "HH:MM"
+    end: str
+    level: str  # sono | recuperacao | foco_leve | foco_moderado | foco_profundo | pico
+    label: str
+    text: str
 
 
 class ClassifyResponse(BaseModel):
@@ -117,6 +176,10 @@ class ClassifyResponse(BaseModel):
     pontos: dict[str, int]
     # Só vem quando o pedido trouxe `horarios`. Clientes antigos ignoram.
     jet_lag_social_min: Optional[int] = None
+    # Curva do cronotipo para o resultado do onboarding: energia (0–100) em cada
+    # hora do dia e os trechos do dia explicados. Clientes antigos ignoram.
+    energia: list[int] = Field(default_factory=list)
+    segmentos: list[EnergySegment] = Field(default_factory=list)
 
 
 class OnboardingEvent(BaseModel):
@@ -139,6 +202,7 @@ class ChronotypeDistributionResponse(BaseModel):
     porcentagens: dict[str, int]
 
 
+
 # --- Profile ---
 
 class ProfileResponse(BaseModel):
@@ -155,12 +219,19 @@ class ProfileResponse(BaseModel):
     calendar_setup_choice: Optional[str] = None
     # Só o booleano; o refresh token nunca sai do backend.
     google_connected: bool = False
+    # Migration 39. Lista vazia quando nunca preenchida.
+    fixed_commitments: list[FixedCommitment] = Field(default_factory=list)
 
 
 class ProfileUpdate(BaseModel):
     name: Optional[str] = None
     # None = não mexer. Não existe "desfazer a escolha" pelo PATCH.
     calendar_setup_choice: Optional[str] = None
+    # Estilo de rotina das Configurações. Antes a tela mandava este campo e o
+    # PATCH o descartava em silêncio (não existia aqui).
+    schedule_type: Optional[Literal["flexible", "fixed"]] = None
+    # None = não mexer; [] = apagar todos (Migration 39).
+    fixed_commitments: Optional[list[FixedCommitment]] = Field(default=None, max_length=10)
 
 
 # --- Tag preferences ---

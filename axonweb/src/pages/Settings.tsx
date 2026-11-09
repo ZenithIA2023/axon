@@ -28,20 +28,14 @@ import { results, type ChronotypeResultKey } from "../data/results";
 import * as api from "../lib/api";
 import { BUILD_COMMIT } from "../lib/buildInfo";
 import { openAuthUrl } from "../lib/nativeAuth";
-import type { ProfileData } from "../lib/api";
+import type { FixedCommitment, ProfileData } from "../lib/api";
+import FixedCommitmentsEditor from "../components/schedule/FixedCommitmentsEditor";
+import { commitmentsFromDrafts, draftsFromCommitments, type CommitmentDraft } from "../lib/fixedCommitments";
 type SettingsSectionKey = "organization" | "appearance" | "voice" | "integrations" | "about";
 type ScheduleType = "flexible" | "fixed";
 type CalendarKind = "task" | "event" | "routine";
 type CalendarColor = "purple" | "lilac" | "mint" | "cyan" | "amber" | "rose" | "blue";
 type CalendarColors = Record<CalendarKind, CalendarColor>;
-type WeekDayKey = "seg" | "ter" | "qua" | "qui" | "sex" | "sab" | "dom";
-type FixedRoutineEntry = {
-  id: string;
-  activity: string;
-  days: WeekDayKey[];
-  startTime: string;
-  endTime: string;
-};
 const CALENDAR_STORAGE_KEY = "axon:planning:desktop-calendar-colors";
 const CALENDAR_UPDATED_EVENT = "axon:planning-desktop-calendar-colors-updated";
 const SETTINGS_SECTIONS: Array<{
@@ -70,24 +64,6 @@ const DEFAULT_CALENDAR_COLORS: CalendarColors = {
   event: "blue",
   routine: "mint",
 };
-const WEEK_DAYS: Array<{ key: WeekDayKey; label: string; fullLabel: string }> = [
-  { key: "seg", label: "S", fullLabel: "Segunda" },
-  { key: "ter", label: "T", fullLabel: "Terça" },
-  { key: "qua", label: "Q", fullLabel: "Quarta" },
-  { key: "qui", label: "Q", fullLabel: "Quinta" },
-  { key: "sex", label: "S", fullLabel: "Sexta" },
-  { key: "sab", label: "S", fullLabel: "Sábado" },
-  { key: "dom", label: "D", fullLabel: "Domingo" },
-];
-function createFixedRoutineEntry(): FixedRoutineEntry {
-  return {
-    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    activity: "",
-    days: [],
-    startTime: "",
-    endTime: "",
-  };
-}
 const CHRONOTYPE_TO_KEY: Record<string, ChronotypeResultKey> = {
   Matutino: "Matutino",
   Vespertino: "Vespertino",
@@ -146,23 +122,23 @@ export default function Settings() {
   const result = results[resultKey];
   const scheduleType: ScheduleType = profile?.schedule_type === "fixed" ? "fixed" : "flexible";
   async function updateSchedule(next: ScheduleType) {
-    setProfile((current) =>
-      current ? ({ ...current, schedule_type: next } as ProfileData) : current
-    );
+    const previous = profile?.schedule_type;
+    setProfile((current) => (current ? { ...current, schedule_type: next } : current));
     try {
-      const payload = { schedule_type: next } as unknown as Parameters<typeof api.updateProfile>[0];
-      const updated = await api.updateProfile(payload);
-      setProfile((current) =>
-        ({
-          ...(current ?? {}),
-          ...updated,
-          schedule_type: next,
-        }) as ProfileData
-      );
+      const updated = await api.updateProfile({ schedule_type: next });
+      setProfile(updated);
       setToast("Estilo de rotina atualizado");
     } catch {
-      setToast("A alteração será sincronizada quando possível");
+      // Antes o erro dizia "será sincronizada quando possível", mas nada
+      // sincronizava depois: volta ao valor real para a tela não mentir.
+      setProfile((current) => (current ? { ...current, schedule_type: previous } : current));
+      setToast("Não foi possível salvar o estilo de rotina. Tente de novo.");
     }
+  }
+  async function saveCommitments(commitments: FixedCommitment[]) {
+    const updated = await api.updateProfile({ fixed_commitments: commitments });
+    setProfile(updated);
+    setToast("Compromissos salvos");
   }
   function updateCalendarColor(kind: CalendarKind, color: CalendarColor) {
     const next = { ...calendarColors, [kind]: color };
@@ -201,8 +177,13 @@ export default function Settings() {
   const sections: Record<SettingsSectionKey, ReactNode> = {
     organization: (
       <OrganizationSection
+        // Remonta quando o perfil chega: o editor começa com os compromissos
+        // gravados, não com um cartão vazio.
+        key={profile ? "perfil" : "carregando"}
         scheduleType={scheduleType}
         onScheduleChange={updateSchedule}
+        savedCommitments={profile?.fixed_commitments}
+        onSaveCommitments={saveCommitments}
       />
     ),
     appearance: (
@@ -335,37 +316,33 @@ function SettingsCard({ title, description, children }: { title: string; descrip
 function OrganizationSection({
   scheduleType,
   onScheduleChange,
+  savedCommitments,
+  onSaveCommitments,
 }: {
   scheduleType: ScheduleType;
   onScheduleChange: (value: ScheduleType) => void;
+  savedCommitments?: FixedCommitment[];
+  onSaveCommitments: (commitments: FixedCommitment[]) => Promise<void>;
 }) {
-  const [fixedRoutines, setFixedRoutines] = useState<FixedRoutineEntry[]>([
-    createFixedRoutineEntry(),
-  ]);
-  function updateFixedRoutine(
-    id: string,
-    field: "activity" | "startTime" | "endTime",
-    value: string,
-  ) {
-    setFixedRoutines((current) =>
-      current.map((routine) =>
-        routine.id === id ? { ...routine, [field]: value } : routine,
-      ),
-    );
-  }
-  function toggleRoutineDay(id: string, day: WeekDayKey) {
-    setFixedRoutines((current) =>
-      current.map((routine) =>
-        routine.id === id
-          ? {
-              ...routine,
-              days: routine.days.includes(day)
-                ? routine.days.filter((currentDay) => currentDay !== day)
-                : [...routine.days, day],
-            }
-          : routine,
-      ),
-    );
+  const [drafts, setDrafts] = useState<CommitmentDraft[]>(() => draftsFromCommitments(savedCommitments));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save() {
+    const { commitments, error: invalid } = commitmentsFromDrafts(drafts);
+    if (invalid) {
+      setError(invalid);
+      return;
+    }
+    setError("");
+    setSaving(true);
+    try {
+      await onSaveCommitments(commitments);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível salvar os compromissos.");
+    } finally {
+      setSaving(false);
+    }
   }
   const routineControl = (
     <div>
@@ -390,35 +367,19 @@ function OrganizationSection({
           <p className="text-xs leading-5 text-slate-500 dark:text-white/45">
             Cadastre cada compromisso fixo com seus dias e horários.
           </p>
-          {fixedRoutines.map((routine, index) => (
-            <FixedRoutineEditor
-              key={routine.id}
-              routine={routine}
-              index={index}
-              canRemove={fixedRoutines.length > 1}
-              onRemove={() =>
-                setFixedRoutines((current) =>
-                  current.filter((item) => item.id !== routine.id),
-                )
-              }
-              onChange={(field, value) =>
-                updateFixedRoutine(routine.id, field, value)
-              }
-              onToggleDay={(day) => toggleRoutineDay(routine.id, day)}
-            />
-          ))}
+          <FixedCommitmentsEditor drafts={drafts} onChange={setDrafts} />
+          {error && (
+            <p role="alert" className="text-xs font-semibold text-red-600 dark:text-red-300">
+              {error}
+            </p>
+          )}
           <button
             type="button"
-            onClick={() =>
-              setFixedRoutines((current) => [
-                ...current,
-                createFixedRoutineEntry(),
-              ])
-            }
-            className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-dashed border-[#6d28d9]/30 bg-[#6d28d9]/[0.05] px-4 text-xs font-black text-[#6d28d9] transition active:scale-[0.98] dark:bg-[#6d28d9]/10 dark:text-purple-300"
+            onClick={save}
+            disabled={saving}
+            className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-[#6d28d9] px-4 text-xs font-black text-white transition active:scale-[0.98] disabled:opacity-60"
           >
-            <Plus className="mr-2 h-4 w-4" />
-            Adicionar outra rotina
+            {saving ? "Salvando..." : "Salvar compromissos"}
           </button>
         </div>
       )}
@@ -463,114 +424,6 @@ function OrganizationSection({
         </SettingsCard>
       </div>
     </>
-  );
-}
-function FixedRoutineEditor({
-  routine,
-  index,
-  canRemove,
-  onRemove,
-  onChange,
-  onToggleDay,
-}: {
-  routine: FixedRoutineEntry;
-  index: number;
-  canRemove: boolean;
-  onRemove: () => void;
-  onChange: (field: "activity" | "startTime" | "endTime", value: string) => void;
-  onToggleDay: (day: WeekDayKey) => void;
-}) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/[0.035]">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="text-[0.65rem] font-black uppercase tracking-[0.12em] text-slate-400 dark:text-white/35">
-          Rotina {index + 1}
-        </p>
-        {canRemove && (
-          <button
-            type="button"
-            onClick={onRemove}
-            className="flex h-8 w-8 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-red-500 transition active:scale-[0.94] dark:border-red-400/20 dark:bg-red-500/10 dark:text-red-300"
-            aria-label="Remover rotina"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-        )}
-      </div>
-      <ScheduleInput
-        label="Tipo de compromisso"
-        placeholder="Ex.: trabalho, faculdade, estágio"
-        value={routine.activity}
-        onChange={(value) => onChange("activity", value)}
-      />
-      <div className="mt-3">
-        <p className="mb-2 text-xs font-semibold text-slate-500 dark:text-white/45">
-          Dias da semana
-        </p>
-        <div className="grid grid-cols-7 gap-1.5">
-          {WEEK_DAYS.map((day) => {
-            const active = routine.days.includes(day.key);
-            return (
-              <button
-                key={day.key}
-                type="button"
-                onClick={() => onToggleDay(day.key)}
-                title={day.fullLabel}
-                className={`flex h-9 items-center justify-center rounded-xl border text-xs font-black transition active:scale-[0.94] ${
-                  active
-                    ? "border-[#6d28d9] bg-[#6d28d9] text-white"
-                    : "border-slate-200 bg-white text-slate-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/45"
-                }`}
-              >
-                {day.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <ScheduleInput
-          label="Início"
-          type="time"
-          value={routine.startTime}
-          onChange={(value) => onChange("startTime", value)}
-        />
-        <ScheduleInput
-          label="Fim"
-          type="time"
-          value={routine.endTime}
-          onChange={(value) => onChange("endTime", value)}
-        />
-      </div>
-    </div>
-  );
-}
-function ScheduleInput({
-  label,
-  value,
-  onChange,
-  placeholder,
-  type = "text",
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  type?: "text" | "time";
-}) {
-  return (
-    <label className="block">
-      <span className="mb-2 block text-xs font-semibold text-slate-500 dark:text-white/45">
-        {label}
-      </span>
-      <input
-        type={type}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#6d28d9]/40 dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:placeholder:text-white/25"
-      />
-    </label>
   );
 }
 function AppearanceSection({

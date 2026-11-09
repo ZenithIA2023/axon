@@ -25,7 +25,7 @@ import starDecoration from "../assets/decorations/star.svg";
 
 const heroMetrics = [
   {
-    value: "15 minutos",
+    value: "7 minutos",
     label: "para configurar",
   },
   {
@@ -234,8 +234,8 @@ function HeroTopBar() {
       <HeroLogo />
 
       <nav className="hidden items-center gap-2 lg:flex">
-        <HeroTopButton to="/signup" variant="outline">
-          Criar
+        <HeroTopButton to="/comecar" variant="outline">
+          Começar
         </HeroTopButton>
 
         <HeroTopButton to="/login" variant="filled">
@@ -335,13 +335,13 @@ function HeroMobileActions() {
       transition={{ duration: 0.48, delay: 0.16 }}
       className="relative z-30 mt-5 grid w-full max-w-[12.4rem] gap-2.5 sm:mt-6 sm:max-w-[20rem] sm:grid-cols-2 lg:hidden"
     >
-      <HeroButton to="/login" variant="primary">
-        Entrar
+      <HeroButton to="/comecar" variant="primary">
+        Começar
         <ArrowRight className="h-4 w-4" />
       </HeroButton>
 
-      <HeroButton to="/signup" variant="secondary">
-        Criar conta
+      <HeroButton to="/login" variant="secondary">
+        Entrar
       </HeroButton>
     </motion.div>
   );

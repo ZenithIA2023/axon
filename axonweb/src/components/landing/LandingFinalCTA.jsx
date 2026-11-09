@@ -9,7 +9,7 @@ import { ArrowRight } from "lucide-react";
 
 const ctaMetrics = [
   {
-    value: "15 minutos",
+    value: "7 minutos",
     label: "para configurar",
   },
   {
@@ -59,10 +59,10 @@ export default function LandingFinalCTA() {
         </div>
 
         <Link
-          to="/signup"
+          to="/comecar"
           className="mt-8 inline-flex min-h-12 w-full max-w-[21rem] items-center justify-center gap-2 rounded-full border border-white/80 bg-[#fbf8ff] px-6 text-sm font-black text-[#2d0850] transition hover:bg-white active:scale-[0.98] sm:mt-10 sm:max-w-[32rem] dark:bg-[#12001f] dark:text-white dark:hover:bg-[#1c0a33]"
         >
-          Criar conta
+          Descobrir meu ritmo
           <ArrowRight className="h-4 w-4" />
         </Link>
       </div>

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import * as api from "../lib/api";
+import { finishPendingOnboarding, ONBOARDING_ROUTE } from "../lib/onboarding";
 
 export default function AuthCallback() {
   const navigate = useNavigate();
@@ -25,18 +26,17 @@ export default function AuthCallback() {
       return;
     }
 
-    // Após salvar a sessão, usuários novos seguem para o questionário de cronotipo.
+    // Após salvar a sessão: quem veio da tela 29 do onboarding (botão Google ou
+    // Apple) tem as respostas gravadas na conta agora; usuários novos sem
+    // respostas seguem para o onboarding, já logados.
     api
       .exchangeGoogleSession(sessionCode)
-      .then((session) => {
+      .then(async (session) => {
         api.saveSession(session);
         void api.syncChronotypeFromProfile();
 
-        if (session.has_chronotype) {
-          navigate("/app-loading");
-        } else {
-          navigate("/questionnaire-intro");
-        }
+        const destino = await finishPendingOnboarding(session.has_chronotype);
+        navigate(destino ?? (session.has_chronotype ? "/app-loading" : ONBOARDING_ROUTE));
       })
       .catch(() => {
         navigate("/login?error=Falha+na+autenticação");

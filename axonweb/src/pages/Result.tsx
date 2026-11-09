@@ -79,7 +79,7 @@ export default function Result() {
       if (fromProfile) {
         navigate("/profile");
       } else {
-        navigate("/dashboard-loading");
+        navigate("/dashboard");
       }
 
       return;
@@ -563,7 +563,7 @@ function getResultIcon(resultKey: ChronotypeResultKey) {
 // uma pilha enfileirada e não de cartas espalhadas. A superfície acompanha a do
 // card da frente (branco no claro, #11101a no escuro), apenas mais recuada.
 // Ordem do array = ordem de pintura: do card mais distante para o mais próximo.
-// Mantido em sincronia com QuestionnaireIntro.jsx e Questionnaire.tsx.
+// Mantido em sincronia com o mesmo bloco de components/onboarding/OnboardingUI.tsx.
 const UPCOMING_CARD_LAYERS = [
   "translate-x-[0.00rem] translate-y-[0.10rem] rotate-[5deg] scale-[1.02] border-white/42 bg-white/30 shadow-[0_16px_44px_rgba(45,8,80,0.16)] dark:border-white/10 dark:bg-[#11101a]/45 dark:shadow-[0_16px_44px_rgba(0,0,0,0.34)]",
   "translate-x-[0.00rem] translate-y-[0.08rem] rotate-[3deg] scale-[1.01] border-white/62 bg-white/55 shadow-[0_18px_48px_rgba(45,8,80,0.18)] dark:border-white/14 dark:bg-[#11101a]/50 dark:shadow-[0_18px_48px_rgba(0,0,0,0.38)]",

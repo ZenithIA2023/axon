@@ -208,6 +208,43 @@ BASE_IDENTITY = (
 # 2. BLOCO DA AGENDA — flexível vs. fixo
 # =============================================================
 
+_DIAS_LABEL = {"seg": "seg", "ter": "ter", "qua": "qua", "qui": "qui", "sex": "sex", "sab": "sáb", "dom": "dom"}
+_ORDEM_DIAS = list(_DIAS_LABEL)
+
+
+def _dias_texto(dias: list) -> str:
+    """["seg","ter","qua","qui","sex"] → "seg a sex"; dias soltos → "seg, qua, sex"."""
+    idx = sorted(_ORDEM_DIAS.index(d) for d in dias if d in _DIAS_LABEL)
+    if not idx:
+        return ""
+    if len(idx) > 2 and idx == list(range(idx[0], idx[-1] + 1)):
+        return f"{_DIAS_LABEL[_ORDEM_DIAS[idx[0]]]} a {_DIAS_LABEL[_ORDEM_DIAS[idx[-1]]]}"
+    return ", ".join(_DIAS_LABEL[_ORDEM_DIAS[i]] for i in idx)
+
+
+def _compromissos_fixos_block(compromissos) -> str | None:
+    """
+    Compromissos fixos que o usuário cadastrou (Migration 39). Com eles o agente
+    não precisa mais PERGUNTAR os horários (instrução do bloco "fixed"): já sabe
+    onde não pode encaixar nada.
+    """
+    if not isinstance(compromissos, list):
+        return None
+    linhas = []
+    for c in compromissos:
+        if not isinstance(c, dict):
+            continue
+        dias = _dias_texto(c.get("days") or [])
+        if c.get("activity") and dias and c.get("start") and c.get("end"):
+            linhas.append(f"- {c['activity']}: {dias}, {c['start']}–{c['end']}")
+    if not linhas:
+        return None
+    return (
+        "COMPROMISSOS FIXOS DO USUÁRIO (informados por ele; não agende nada por cima):\n"
+        + "\n".join(linhas)
+    )
+
+
 SCHEDULE_BEHAVIOR = {
     "flexible": (
         "AGENDA DO USUÁRIO: flexível.\n"
@@ -308,6 +345,7 @@ _ANSWER_OPTIONS = {
     "P10": {  # Horário de pico mental
         "A": "antes das 10h", "B": "entre 10h e 12h", "C": "entre 13h30 e 16h",
         "D": "entre 16h e 21h", "E": "entre 21h e 00h", "F": "depois da meia-noite",
+        "A9": "até as 9h", "B9": "entre 9h e 12h",  # onboarding novo (nov/2026)
     },
     "P11": {  # Período mais produtivo para concentração
         "A": "nas primeiras horas da manhã (5h–9h)", "B": "no final da manhã (9h–12h)",
@@ -519,6 +557,10 @@ def build_agent_prompt(
     # Se ainda não sabemos, instruímos o agente a descobrir.
     if schedule_type in SCHEDULE_BEHAVIOR:
         estaveis.append(SCHEDULE_BEHAVIOR[schedule_type])
+        if schedule_type == "fixed":
+            compromissos = _compromissos_fixos_block(perfil.get("compromissos_fixos"))
+            if compromissos:
+                estaveis.append(compromissos)
     else:
         estaveis.append(
             "AGENDA DO USUÁRIO: ainda desconhecida.\n"

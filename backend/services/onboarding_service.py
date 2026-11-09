@@ -124,18 +124,17 @@ def jet_lag_dos_horarios(horarios: Optional[dict]) -> Optional[int]:
 def campos_de_perfil(
     horarios: Optional[dict],
     schedule_type: Optional[str],
-    work_start: Optional[str],
-    work_end: Optional[str],
+    fixed_commitments: Optional[list[dict]],
     onboarding: Optional[dict],
 ) -> dict:
     """
-    Colunas de `profiles` (Migration 38) que o onboarding novo grava no
+    Colunas de `profiles` (Migrations 38 e 39) que o onboarding novo grava no
     cadastro. Só inclui o que veio: o APK antigo não manda nada disso, e um
     update com None apagaria dado de quem já tinha.
 
-    Horário flexível limpa o expediente: quem trocou de fixo para flexível ao
-    refazer o teste não pode continuar com o planejamento evitando um
-    expediente que não existe mais.
+    Os compromissos fixos só são gravados quando o horário é fixo. Quem refaz o
+    teste e responde "flexível" mantém a lista antiga guardada — ela só vale
+    com schedule_type = fixed, e assim não se perde se a pessoa voltar atrás.
     """
     campos: dict = {}
     if horarios:
@@ -145,12 +144,8 @@ def campos_de_perfil(
             "freeday_sleep": horarios["freeday_sleep"],
             "freeday_wake": horarios["freeday_wake"],
         })
-    if schedule_type == "flexible":
-        campos["work_start"] = None
-        campos["work_end"] = None
-    elif work_start and work_end:
-        campos["work_start"] = work_start
-        campos["work_end"] = work_end
+    if schedule_type == "fixed" and fixed_commitments is not None:
+        campos["fixed_commitments"] = fixed_commitments
     if onboarding:
         campos["onboarding_profile"] = onboarding
     return campos
