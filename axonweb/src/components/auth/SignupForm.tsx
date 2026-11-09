@@ -1,0 +1,276 @@
+import React, { useState } from "react";
+import { AlertCircle, Check, Eye, EyeOff, Lock, Mail, User } from "lucide-react";
+
+import AppleAuthButton from "./AppleAuthButton";
+import GoogleAuthButton from "./GoogleAuthButton";
+import * as api from "../../lib/api";
+import { isNative } from "../../lib/nativeAuth";
+
+// Formulário de cadastro, compartilhado pela página /signup e pela tela 29 do
+// onboarding (onde o cadastro vira "salvar meu resultado"). Antes vivia só no
+// Signup.tsx; copiar para o onboarding duplicaria validação e termos.
+//
+// O InputField daqui é a variante com rótulo VISÍVEL — não é duplicata do
+// components/auth/InputField (rótulo só para leitor de tela).
+
+// Na web, as páginas legais saem do próprio site (assim o link funciona também
+// no dev e no preview, antes do deploy). No app, a WebView serve o bundle em
+// localhost e abriria a página por cima do cadastro; lá vai o endereço público.
+const LEGAL_BASE = isNative() ? "https://axonapp.tech" : "";
+
+// ===========================================================================
+// CAMPOS DO FORMULÁRIO
+// ===========================================================================
+
+type InputFieldProps = {
+  icon: React.ElementType;
+  label: string;
+  type?: string;
+  placeholder?: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+};
+
+function InputField({
+  icon: Icon,
+  label,
+  type = "text",
+  placeholder,
+  value,
+  onChange,
+}: InputFieldProps) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-[0.62rem] font-black text-[#5b21b6] dark:text-white/78">
+        {label}
+      </span>
+
+      <div className="flex min-h-10 items-center gap-3 rounded-2xl border border-[#7b2cbf]/20 bg-[#fbf8ff] px-3.5 dark:border-white/10 dark:bg-[#191722] text-[#5b21b6] dark:text-white/78 transition focus-within:border-[#7b2cbf]/45 focus-within:bg-white dark:focus-within:border-[#a855f7]/45 dark:focus-within:bg-[#211c2d]">
+        <Icon className="h-4 w-4 shrink-0 text-[#7b2cbf] dark:text-[#d8b4fe]/85" />
+
+        <input
+          type={type}
+          placeholder={placeholder}
+          value={value}
+          onChange={onChange}
+          required
+          className="auth-input w-full bg-transparent text-[0.72rem] font-medium text-[#4c1d95] outline-none placeholder:text-[#7b2cbf]/42 dark:text-white/82 dark:placeholder:text-white/38"
+        />
+      </div>
+    </label>
+  );
+}
+
+type PasswordFieldProps = {
+  label: string;
+  placeholder?: string;
+  value: string;
+  onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+};
+
+function PasswordField({
+  label,
+  placeholder,
+  value,
+  onChange,
+}: PasswordFieldProps) {
+  const [showPassword, setShowPassword] = useState(false);
+
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-[0.62rem] font-black text-[#5b21b6] dark:text-white/78">
+        {label}
+      </span>
+
+      <div className="flex min-h-10 items-center gap-3 rounded-2xl border border-[#7b2cbf]/20 bg-[#fbf8ff] px-3.5 dark:border-white/10 dark:bg-[#191722] text-[#5b21b6] dark:text-white/78 transition focus-within:border-[#7b2cbf]/45 focus-within:bg-white dark:focus-within:border-[#a855f7]/45 dark:focus-within:bg-[#211c2d]">
+        <Lock className="h-4 w-4 shrink-0 text-[#7b2cbf] dark:text-[#d8b4fe]/85" />
+
+        <input
+          type={showPassword ? "text" : "password"}
+          placeholder={placeholder}
+          value={value}
+          onChange={onChange}
+          className="auth-input w-full bg-transparent text-[0.72rem] font-medium text-[#4c1d95] outline-none placeholder:text-[#7b2cbf]/42 dark:text-white/82 dark:placeholder:text-white/38"
+        />
+
+        <button
+          type="button"
+          onClick={() => setShowPassword((prev) => !prev)}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-[#7b2cbf] dark:text-[#d8b4fe]/70 transition hover:bg-[#7b2cbf]/10 hover:text-[#6d28d9] dark:text-[#d8b4fe] active:scale-[0.96]"
+          aria-label={showPassword ? "Esconder senha" : "Mostrar senha"}
+        >
+          {showPassword ? (
+            <EyeOff className="h-4 w-4" />
+          ) : (
+            <Eye className="h-4 w-4" />
+          )}
+        </button>
+      </div>
+    </label>
+  );
+}
+
+// ===========================================================================
+// FORMULÁRIO
+// ===========================================================================
+
+type SignupFormProps = {
+  initialName?: string;
+  // Sessão já salva (saveSession) quando isto é chamado; quem usa decide a rota.
+  onRegistered: (res: api.AuthResponse) => void | Promise<void>;
+};
+
+export default function SignupForm({ initialName = "", onRegistered }: SignupFormProps) {
+  const [name, setName] = useState(initialName);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+
+    if (password !== confirmPassword) {
+      setError("As senhas não coincidem.");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("A senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+
+    if (!acceptedTerms) {
+      setError(
+        "Você precisa aceitar os Termos de Uso e a Política de Privacidade."
+      );
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const res = await api.register(name, email, password);
+      api.saveSession(res);
+      void api.syncChronotypeFromProfile();
+      await onRegistered(res);
+    } catch (err: unknown) {
+      setError(
+        (err as Error).message ?? "Erro ao criar conta. Tente novamente."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <form className="space-y-2.5" onSubmit={handleSubmit}>
+      <InputField
+        icon={User}
+        label="Nome"
+        type="text"
+        placeholder="Como devemos te chamar?"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+
+      <InputField
+        icon={Mail}
+        label="E-mail"
+        type="email"
+        placeholder="seuemail@exemplo.com"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
+
+      <PasswordField
+        label="Senha"
+        placeholder="Crie uma senha segura"
+        value={password}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+          setPassword(e.target.value)
+        }
+      />
+
+      <PasswordField
+        label="Confirmar senha"
+        placeholder="Repita sua senha"
+        value={confirmPassword}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+          setConfirmPassword(e.target.value)
+        }
+      />
+
+      <label className="flex cursor-pointer items-start gap-2 pt-1">
+        <input
+          type="checkbox"
+          checked={acceptedTerms}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+            setAcceptedTerms(e.target.checked)
+          }
+          className="peer sr-only"
+        />
+
+        <span aria-hidden="true" className="mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border border-[#7b2cbf]/40 bg-white text-white transition peer-checked:border-[#7b2cbf] peer-checked:bg-[#7b2cbf] peer-focus-visible:ring-2 peer-focus-visible:ring-[#a855f7] peer-focus-visible:ring-offset-2 dark:border-white/25 dark:bg-[#211a2b] dark:peer-checked:border-[#a855f7] dark:peer-checked:bg-[#9333ea] dark:peer-focus-visible:ring-offset-[#16111f]">
+          {acceptedTerms && <Check className="h-3.5 w-3.5 stroke-[3]" />}
+        </span>
+
+        <span className="text-[0.62rem] leading-4 text-[#6d28d9] dark:text-white/62">
+          Li e concordo com os{" "}
+          <a
+            href={`${LEGAL_BASE}/legal/termos.html`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-black text-[#6d28d9] dark:text-[#d8b4fe] hover:text-[#7b2cbf]"
+          >
+            Termos de Uso
+          </a>{" "}
+          e a{" "}
+          <a
+            href={`${LEGAL_BASE}/legal/privacidade.html`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-black text-[#6d28d9] dark:text-[#d8b4fe] hover:text-[#7b2cbf]"
+          >
+            Política de Privacidade
+          </a>
+          .
+        </span>
+      </label>
+
+      {error && (
+        <div className="flex items-center gap-2 rounded-2xl border border-red-400/20 dark:border-red-300/20 bg-red-500/10 dark:bg-red-500/14 px-4 py-3">
+          <AlertCircle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-200" />
+          <p className="text-xs text-red-600 dark:text-red-200">{error}</p>
+        </div>
+      )}
+
+      <button
+        type="submit"
+        disabled={loading}
+        className="mt-2 inline-flex min-h-10 w-full items-center justify-center rounded-2xl bg-[#7b2cbf] px-6 text-sm font-medium text-white shadow-[0_18px_42px_rgba(123,44,191,0.22)] transition hover:bg-[#8d31dd] dark:bg-[#a855f7] dark:hover:bg-[#b968ff] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {loading ? "Criando conta..." : "Criar conta"}
+      </button>
+
+      <div className="py-3">
+        <div className="flex items-center gap-3">
+          <div className="h-px flex-1 bg-[#7b2cbf]/28 dark:bg-white/18" />
+          <span className="text-[0.68rem] font-medium text-[#6d28d9] dark:text-white/62">
+            ou
+          </span>
+          <div className="h-px flex-1 bg-[#7b2cbf]/28 dark:bg-white/18" />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2.5">
+        <GoogleAuthButton label="Continuar com o Google" />
+        <AppleAuthButton label="Continuar com a Apple" />
+      </div>
+    </form>
+  );
+}

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { BrowserRouter, HashRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, HashRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 
 import ScrollToTop from "../components/layout/ScrollToTop";
@@ -19,11 +19,8 @@ import NativeShell from "../components/layout/NativeShell";
 import { BottomNavGate } from "../components/layout/BottomNav";
 
 // Onboarding
-import QuestionnaireIntro from "../pages/QuestionnaireIntro";
-import Questionnaire from "../pages/Questionnaire";
-import Analyzing from "../pages/Analyzing";
+import Onboarding from "../pages/Onboarding";
 import Result from "../pages/Result";
-import DashboardLoading from "../pages/DashboardLoading";
 import AppLoading from "../pages/AppLoading";
 import NotificationToastProvider from "../components/notifications/NotificationToastProvider";
 import DayClosureQuestion from "../components/notifications/DayClosureQuestion";
@@ -100,12 +97,18 @@ export default function App() {
         />
 
         {/* Onboarding */}
-        <Route path="/questionnaire-intro" element={<QuestionnaireIntro />} />
-        <Route path="/questionnaire" element={<Questionnaire />} />
-        <Route path="/analyzing" element={<Analyzing />} />
+        <Route path="/comecar" element={<Onboarding />} />
+        {/* Rotas do questionário antigo (substituído em nov/2026). Continuam
+            existindo para links e favoritos antigos; levam ao onboarding novo
+            com a mesma query e o mesmo state (ex.: autoOnboarding). */}
+        <Route path="/questionnaire-intro" element={<ToOnboarding />} />
+        <Route path="/questionnaire" element={<ToOnboarding />} />
+        <Route path="/analyzing" element={<ToOnboarding />} />
         <Route path="/result" element={<Result />} />
         <Route path="/app-loading" element={<AppLoading />} />
-        <Route path="/dashboard-loading" element={<DashboardLoading />} />
+        {/* Era a espera encenada depois do resultado antigo; o onboarding novo
+            termina direto no Dashboard. Fica o redirect para links antigos. */}
+        <Route path="/dashboard-loading" element={<Navigate to="/dashboard" replace />} />
 
         {/* App interno */}
         <Route path="/dashboard" element={<Dashboard />} />
@@ -135,4 +138,11 @@ export default function App() {
       </Routes>
     </Router>
   );
+}
+
+// Redireciona preservando query e state: `?refazer=1` e o `autoOnboarding`
+// do redirecionamento automático precisam chegar ao onboarding.
+function ToOnboarding() {
+  const location = useLocation();
+  return <Navigate to={{ pathname: "/comecar", search: location.search }} state={location.state} replace />;
 }

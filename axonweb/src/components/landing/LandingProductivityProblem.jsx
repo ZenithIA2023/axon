@@ -53,12 +53,12 @@ export default function LandingProductivityProblem() {
 
         <div className="mx-auto mt-9 flex max-w-[22rem] justify-center">
             <Link
-                to="/signup"
+                to="/comecar"
                 className="relative z-10 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-[#2d0850] px-6 text-sm font-black text-white shadow-[0_18px_42px_rgba(45,8,80,0.18)] transition hover:bg-[#3d0b6d] active:scale-[0.98] sm:w-auto sm:min-w-[14rem] dark:bg-[#7b2cbf] dark:text-white dark:hover:bg-[#8d31dd]"
                 style={{ color: "#ffffff" }}
                 >
                 <span className="relative z-10 text-white" style={{ color: "#ffffff" }}>
-                    Criar conta
+                    Descobrir meu ritmo
                 </span>
 
                 <ArrowRight className="relative z-10 h-4 w-4 text-white" />

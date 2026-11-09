@@ -21,7 +21,7 @@ sys.modules.setdefault("database", _fake)
 from pydantic import ValidationError  # noqa: E402
 
 from models.schemas import ClassifyRequest, OnboardingEventsRequest  # noqa: E402
-from services.chronotype import classificar_cronotipo  # noqa: E402
+from services.chronotype import classificar_cronotipo, energia_do_dia, segmentos_do_dia  # noqa: E402
 from services.onboarding_service import (  # noqa: E402
     campos_de_perfil,
     completar_respostas,
@@ -134,17 +134,27 @@ eq("P17-F não derruba um Matutino claro",
    classificar_cronotipo({**forte, "P17": "F"})[0], "Matutino")
 
 print("\n— campos_de_perfil —")
+trabalho = [{"activity": "Trabalho", "days": ["seg", "sex"], "start": "09:00", "end": "18:00"}]
 eq("APK antigo (nada novo) não grava nada",
-   campos_de_perfil(None, "fixed", None, None, None), {})
-eq("flexível limpa o expediente",
-   campos_de_perfil(None, "flexible", None, None, None),
-   {"work_start": None, "work_end": None})
-eq("fixo grava o expediente",
-   campos_de_perfil(None, "fixed", "09:00", "18:00", None),
-   {"work_start": "09:00", "work_end": "18:00"})
+   campos_de_perfil(None, "fixed", None, None), {})
+eq("fixo grava os compromissos",
+   campos_de_perfil(None, "fixed", trabalho, None), {"fixed_commitments": trabalho})
+eq("flexível não apaga os compromissos guardados",
+   campos_de_perfil(None, "flexible", trabalho, None), {})
 eq("horários e perfil entram juntos",
-   sorted(campos_de_perfil(horarios, None, None, None, {"goals": ["study"]})),
+   sorted(campos_de_perfil(horarios, None, None, {"goals": ["study"]})),
    ["freeday_sleep", "freeday_wake", "onboarding_profile", "workday_sleep", "workday_wake"])
+
+print("\n— segmentos_do_dia —")
+seg = segmentos_do_dia("Matutino")
+eq("cobre as 24h sem buraco",
+   all(seg[i]["end"] == seg[(i + 1) % len(seg)]["start"] for i in range(len(seg))), True)
+eq("sono que atravessa a meia-noite é um trecho só",
+   [s["start"] + "-" + s["end"] for s in seg if s["level"] == "sono"], ["22:30-06:00"])
+eq("pico do matutino de manhã",
+   [s["start"] + "-" + s["end"] for s in seg if s["level"] == "pico"], ["07:30-12:00"])
+eq("energia tem 24 horas", len(energia_do_dia("Noturno")), 24)
+eq("cronotipo desconhecido cai no Misto", segmentos_do_dia("xyz") == segmentos_do_dia("Misto"), True)
 
 print("\n— schemas: o que o APK antigo manda continua aceito —")
 antigo = ClassifyRequest(respostas={"P1": "A", "P18": "G"}, qualidade_sono="B",
@@ -157,15 +167,47 @@ recusa("hora inválida (25:00)", ClassifyRequest,
        {**base, "horarios": {**horarios, "workday_sleep": "25:00"}})
 recusa("hora sem zero (7:00)", ClassifyRequest,
        {**base, "horarios": {**horarios, "workday_wake": "7:00"}})
-recusa("só o início do expediente", ClassifyRequest, {**base, "work_start": "09:00"})
-recusa("três objetivos (máx. 2)", ClassifyRequest,
-       {**base, "onboarding": {"goals": ["work", "study", "energy"]}})
-recusa("opção que não existe", ClassifyRequest,
-       {**base, "onboarding": {"main_pain": "outra coisa"}})
+recusa("quatro objetivos (máx. 3)", ClassifyRequest,
+       {**base, "onboarding": {"goals": ["work", "study", "energy", "balance"]}})
+recusa("dor que não existe", ClassifyRequest,
+       {**base, "onboarding": {"pains": ["outra coisa"]}})
+recusa("'outro' longo demais", ClassifyRequest,
+       {**base, "onboarding": {"pains_other": "x" * 121}})
+recusa("compromisso sem dia", ClassifyRequest,
+       {**base, "fixed_commitments": [{"activity": "Trabalho", "days": [], "start": "09:00", "end": "18:00"}]})
+recusa("compromisso sem nome", ClassifyRequest,
+       {**base, "fixed_commitments": [{"activity": "   ", "days": ["seg"], "start": "09:00", "end": "18:00"}]})
+recusa("compromisso de 0 minutos", ClassifyRequest,
+       {**base, "fixed_commitments": [{"activity": "Aula", "days": ["seg"], "start": "09:00", "end": "09:00"}]})
+
+print("\n— schemas: limpeza das respostas —")
+limpo = ClassifyRequest(**{**base, "onboarding": {
+    "pains": ["distraction", "procrastination", "distraction"],
+    "pains_other": "  muitas   reuniões\n ",
+    "goals_other": "   ",
+}}).onboarding
+eq("ordem preservada, duplicata removida", limpo.pains, ["distraction", "procrastination"])
+eq("'outro' com espaços normalizados", limpo.pains_other, "muitas reuniões")
+eq("'outro' vazio vira None", limpo.goals_other, None)
+turno = ClassifyRequest(**{**base, "fixed_commitments": [
+    {"activity": " Plantão ", "days": ["dom", "seg", "seg"], "start": "22:00", "end": "06:00"}]}).fixed_commitments[0]
+eq("turno que passa da meia-noite é aceito", (turno.start, turno.end), ("22:00", "06:00"))
+eq("dias em ordem e sem repetição", turno.days, ["seg", "dom"])
+eq("atividade sem espaços nas pontas", turno.activity, "Plantão")
 recusa("texto livre na resposta", ClassifyRequest,
        {**base, "respostas": {"P1": "acordo cedo sempre"}})
 recusa("respostas demais", ClassifyRequest,
        {**base, "respostas": {f"P{i}": "A" for i in range(40)}})
+
+print("\nfaixas novas do sono e da tarefa difícil")
+eq("depois da 1h30 pontua só Noturno", classificar_cronotipo({"P7": "H5"})[1]["Noturno"], 9)
+eq("antes das 21h pontua só Matutino", classificar_cronotipo({"P7": "H1"})[1]["Matutino"], 9)
+eq("resposta antiga da P7 ainda pontua (APK instalado)", classificar_cronotipo({"P7": "D"})[1]["Noturno"], 9)
+eq("A9 pontua como A", classificar_cronotipo({"P10": "A9"})[1], classificar_cronotipo({"P10": "A"})[1])
+eq("B9 pontua como B", classificar_cronotipo({"P10": "B9"})[1], classificar_cronotipo({"P10": "B"})[1])
+com_texto = ClassifyRequest(**{**base, "onboarding": {"sleep_other": "  durmo   em dois turnos ", "current_focus_time": "early_morning"}}).onboarding
+eq("texto do sono limpo", com_texto.sleep_other, "durmo em dois turnos")
+eq("bem cedo aceito", com_texto.current_focus_time, "early_morning")
 
 evento_ok = {"anon_id": "0b6f6f0e-3c1e-4c5a-9f3e-2f1a7c9d8e11", "flow_version": "v1",
              "platform": "web", "events": [{"step": "t03_nome", "event": "view"}]}

@@ -1414,3 +1414,37 @@ create index if not exists onboarding_events_anon_idx
 
 comment on table public.onboarding_events is
   'Funil do onboarding por tela. Sem dados pessoais: só tela, evento e id de opção. anon_id liga os eventos anteriores ao cadastro.';
+
+-- =============================================
+-- Migration 39: compromissos fixos (trabalho/estudo) por dia e horário
+-- ---------------------------------------------
+-- Quem tem horário fixo raramente tem UM horário só: trabalho de segunda a
+-- sexta, faculdade à noite em três dias, estágio no sábado. As Configurações
+-- já tinham um editor com várias rotinas (atividade, dias, início, fim), mas
+-- ele nunca gravou nada — era só estado da tela, perdido ao sair. E o
+-- `schedule_type` que a mesma tela mudava também não chegava ao banco
+-- (PATCH /profile não aceitava o campo).
+--
+-- Agora o onboarding (tela de horários) e as Configurações gravam a lista
+-- aqui. Formato de cada item, validado em models/schemas.py:FixedCommitment:
+--   {"activity": "Trabalho", "days": ["seg","ter","qua","qui","sex"],
+--    "start": "09:00", "end": "18:00"}
+--
+-- A lista só vale quando schedule_type = 'fixed'. Ela fica guardada quando a
+-- pessoa troca para flexível, para não perder o que digitou se voltar atrás.
+--
+-- Substitui work_start/work_end (Migration 38), que comportavam um único
+-- horário e nunca chegaram a ser gravados por nenhuma versão publicada do
+-- app. As duas colunas ficam sem uso; podem ser removidas numa migration
+-- futura depois de conferir que estão vazias.
+-- =============================================
+alter table public.profiles
+  add column if not exists fixed_commitments jsonb;
+
+comment on column public.profiles.fixed_commitments is
+  'Compromissos fixos de trabalho/estudo: lista de {activity, days[seg..dom], start HH:MM, end HH:MM}. Só vale com schedule_type = fixed.';
+
+comment on column public.profiles.work_start is
+  'SEM USO desde a Migration 39 (substituída por fixed_commitments).';
+comment on column public.profiles.work_end is
+  'SEM USO desde a Migration 39 (substituída por fixed_commitments).';

@@ -1,6 +1,6 @@
 import time
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from models.schemas import ProfileResponse, ProfileUpdate, TagItem, TagPreferences, PlanningPreferences
+from models.schemas import FixedCommitment, ProfileResponse, ProfileUpdate, TagItem, TagPreferences, PlanningPreferences
 from auth_helper import get_current_user
 from database import supabase
 from services import chronotype as chronotype_service
@@ -67,7 +67,25 @@ def _build_profile_response(data: dict, current_user: dict) -> ProfileResponse:
         has_chronotype=bool(chronotype_key),
         calendar_setup_choice=_resolve_calendar_setup_choice(data),
         google_connected=bool(data.get("google_refresh_token")),
+        fixed_commitments=_valid_commitments(data.get("fixed_commitments")),
     )
+
+
+def _valid_commitments(raw) -> list[FixedCommitment]:
+    """
+    Lista gravada (jsonb) → itens válidos. Um item que não passa na validação
+    (editado à mão no banco, formato antigo) é ignorado em vez de derrubar o
+    GET /profile, que toda tela do app chama.
+    """
+    if not isinstance(raw, list):
+        return []
+    itens = []
+    for item in raw:
+        try:
+            itens.append(FixedCommitment.model_validate(item))
+        except ValueError:
+            continue
+    return itens
 
 
 CALENDAR_SETUP_CHOICES = {"google", "independent"}
@@ -95,7 +113,7 @@ def _fetch_profile_data(user_id: str) -> dict:
         supabase.table("profiles")
         .select(
             "name, email, chronotype, schedule_type, avatar_url, "
-            "calendar_setup_choice, google_refresh_token"
+            "calendar_setup_choice, google_refresh_token, fixed_commitments"
         )
         .eq("id", user_id)
         .single()
@@ -125,6 +143,12 @@ def update_profile(body: ProfileUpdate, current_user: dict = Depends(get_current
         if body.calendar_setup_choice not in CALENDAR_SETUP_CHOICES:
             raise HTTPException(status_code=400, detail="Opção de calendário inválida.")
         updates["calendar_setup_choice"] = body.calendar_setup_choice
+
+    if body.schedule_type is not None:
+        updates["schedule_type"] = body.schedule_type
+
+    if body.fixed_commitments is not None:
+        updates["fixed_commitments"] = [c.model_dump() for c in body.fixed_commitments]
 
     if updates:
         supabase.table("profiles").update(updates).eq("id", user_id).execute()

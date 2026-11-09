@@ -8,6 +8,7 @@ import GoogleAuthButton from "../components/auth/GoogleAuthButton";
 import AuthGlow from "../components/auth/AuthGlow";
 import InputField from "../components/auth/InputField";
 import * as api from "../lib/api";
+import { finishPendingOnboarding, ONBOARDING_ROUTE } from "../lib/onboarding";
 
 type PasswordFieldProps = {
   label: string;
@@ -68,7 +69,10 @@ export default function Login() {
       const res = await api.login(email, password);
       api.saveSession(res, rememberMe);
       void api.syncChronotypeFromProfile();
-      navigate(res.has_chronotype ? "/app-loading" : "/questionnaire-intro");
+      // Quem respondeu o onboarding no site e entrou por aqui (link "Já tenho
+      // conta" da tela 29) tem as respostas gravadas na conta agora.
+      const destino = await finishPendingOnboarding(res.has_chronotype);
+      navigate(destino ?? (res.has_chronotype ? "/app-loading" : ONBOARDING_ROUTE));
     } catch (err: unknown) {
       setError((err as Error).message ?? "Erro ao entrar. Verifique suas credenciais.");
     } finally {

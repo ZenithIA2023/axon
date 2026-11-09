@@ -38,6 +38,30 @@ function clearSessionItems() {
   // uma sessão expirada deixava o cronotipo da conta anterior para a próxima
   // que logasse neste navegador.
   for (const key of ACCOUNT_CACHE_KEYS) localStorage.removeItem(key);
+  clearAccountOnboarding();
+}
+
+// Progresso do onboarding (lib/onboardingState.ts, ONBOARDING_PROGRESS_KEY).
+// A chave é repetida aqui para o api.ts não importar o conteúdo das telas.
+const ONBOARDING_KEY = "axon_onboarding_v2";
+
+/**
+ * Apaga o onboarding que pertence a uma CONTA (logado, "refazer" ou já
+ * gravado): ele guarda o resultado, os horários e as respostas da pessoa, e
+ * num computador compartilhado o próximo a abrir /comecar via tudo isso.
+ * O de visitante que ainda não criou conta fica — é dele, e é isso que o
+ * leva até o cadastro.
+ */
+function clearAccountOnboarding(): void {
+  try {
+    const raw = localStorage.getItem(ONBOARDING_KEY);
+    if (!raw) return;
+    const p = JSON.parse(raw) as { origin?: unknown; saved?: unknown };
+    if (p?.origin !== "new" || p?.saved) localStorage.removeItem(ONBOARDING_KEY);
+  } catch {
+    // Ilegível não serve para retomar nada: apaga.
+    localStorage.removeItem(ONBOARDING_KEY);
+  }
 }
 
 /**
@@ -410,6 +434,19 @@ function recordChronotypeStatus(hasChronotype: unknown) {
   else localStorage.setItem(NEEDS_QUESTIONNAIRE_KEY, "1");
 }
 
+// Nome da conta guardado na sessão (vem do cadastro/login). Usado para
+// preencher a tela de nome do onboarding de quem já está logado.
+export function getStoredUserName(): string {
+  try {
+    const raw = localStorage.getItem("axon_user") ?? sessionStorage.getItem("axon_user");
+    const name = raw ? (JSON.parse(raw) as { name?: unknown }).name : undefined;
+    return typeof name === "string" ? name : "";
+  } catch {
+    // JSON corrompido: o resultado só não cumprimenta pelo nome.
+    return "";
+  }
+}
+
 export function needsQuestionnaire(): boolean {
   return localStorage.getItem(NEEDS_QUESTIONNAIRE_KEY) === "1";
 }
@@ -549,15 +586,32 @@ export interface ProfileData {
   calendar_setup_choice: CalendarSetupChoice | null;
   // Só o booleano: o refresh token do Google nunca sai do backend.
   google_connected: boolean;
+  // Migration 39. Só vale quando schedule_type = "fixed".
+  fixed_commitments?: FixedCommitment[];
 }
 
 export type CalendarSetupChoice = "google" | "independent";
+
+export type WeekDayKey = "seg" | "ter" | "qua" | "qui" | "sex" | "sab" | "dom";
+
+// Compromisso fixo de trabalho/estudo (models/schemas.py:FixedCommitment).
+export interface FixedCommitment {
+  activity: string;
+  days: WeekDayKey[];
+  start: string; // "HH:MM"
+  end: string;
+}
 
 export function getProfile() {
   return request<ProfileData>("/profile");
 }
 
-export function updateProfile(payload: { name?: string }) {
+export function updateProfile(payload: {
+  name?: string;
+  schedule_type?: "flexible" | "fixed";
+  // [] apaga todos; ausente não mexe.
+  fixed_commitments?: FixedCommitment[];
+}) {
   return request<ProfileData>("/profile", {
     method: "PATCH",
     body: JSON.stringify(payload),
@@ -625,37 +679,102 @@ export function updateTagPreferences(prefs: TagPreferences): Promise<TagPreferen
  * Dados do usuário atual e salvamento do resultado do questionário.
  * ========================================================================== */
 
+// Trecho do dia com o mesmo nível de energia (blocos de 90 min fundidos).
+export interface EnergySegment {
+  start: string; // "HH:MM"
+  end: string;
+  level: "sono" | "recuperacao" | "foco_leve" | "foco_moderado" | "foco_profundo" | "pico";
+  label: string;
+  text: string;
+}
+
 export interface ClassifyResponse {
   cronotipo: string;
   pontos: Record<string, number>;
+  // Só vem quando o pedido trouxe `horarios` (onboarding novo).
+  jet_lag_social_min?: number | null;
+  // Curva do cronotipo: energia 0–100 de cada hora (0h a 23h) e os trechos do dia.
+  energia?: number[];
+  segmentos?: EnergySegment[];
 }
 
-// Calcula o cronotipo sem necessariamente persistir no perfil do usuário.
-export function classify(
-  respostas: Record<string, string>,
-  qualidade_sono: string,
-  schedule_type?: string
-) {
+// Corpo de /classify e /classify/save (models/schemas.py:ClassifyRequest).
+// Os ids das opções seguem o contrato de data/onboardingSteps.ts.
+export interface ClassifyPayload {
+  respostas: Record<string, string>;
+  qualidade_sono: string;
+  schedule_type?: "flexible" | "fixed";
+  horarios?: {
+    workday_sleep: string;
+    workday_wake: string;
+    freeday_sleep: string;
+    freeday_wake: string;
+  };
+  // Só com schedule_type = "fixed".
+  fixed_commitments?: FixedCommitment[];
+  onboarding?: {
+    // Em ordem de importância (o primeiro é o principal).
+    pains: string[];
+    pains_other?: string;
+    goals: string[];
+    goals_other?: string;
+    sleep_other?: string;
+    current_focus_time?: string;
+    flow_version?: string;
+  };
+  anon_id?: string;
+}
+
+// Calcula o cronotipo sem gravar nada. Público: roda antes do cadastro.
+export function classify(payload: ClassifyPayload) {
   return request<ClassifyResponse>("/classify/", {
     method: "POST",
-    body: JSON.stringify({ respostas, qualidade_sono, schedule_type }),
+    body: JSON.stringify(payload),
   });
 }
 
-// Usado no fluxo final do questionário para classificar e salvar em uma chamada.
-export async function classifyAndSave(
-  respostas: Record<string, string>,
-  qualidade_sono: string,
-  schedule_type?: string
-) {
+// Classifica e grava no perfil (respostas, cronotipo, dados do onboarding).
+export async function classifyAndSave(payload: ClassifyPayload) {
   const result = await request<ClassifyResponse>("/classify/save", {
     method: "POST",
-    body: JSON.stringify({ respostas, qualidade_sono, schedule_type }),
+    body: JSON.stringify(payload),
   });
   // O cronotipo acabou de ser salvo: sem isto, quem conclui o questionário
   // seria mandado de volta a ele na próxima abertura.
   recordChronotypeStatus(true);
   return result;
+}
+
+export interface OnboardingEvent {
+  step: string;
+  event: "view" | "answer" | "back" | "skip" | "complete" | "error";
+  // Só o id da opção; nunca texto digitado (ver Migration 38).
+  option_id?: string;
+}
+
+// Funil do onboarding. `keepalive` deixa o último lote chegar mesmo quando a
+// pessoa fecha a aba logo depois (o fetch normal é cancelado junto com ela).
+export function sendOnboardingEvents(body: {
+  anon_id: string;
+  flow_version: string;
+  platform: "web" | "android" | "ios";
+  events: OnboardingEvent[];
+}) {
+  return request<void>("/onboarding/events", {
+    method: "POST",
+    body: JSON.stringify(body),
+    keepalive: true,
+  });
+}
+
+export interface ChronotypeDistribution {
+  // false enquanto a base for pequena demais para a porcentagem significar algo.
+  disponivel: boolean;
+  porcentagens: Record<string, number>;
+}
+
+export function getChronotypeDistribution() {
+  return request<ChronotypeDistribution>("/onboarding/distribution");
 }
 
 /* ============================================================================

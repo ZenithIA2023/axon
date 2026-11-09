@@ -31,6 +31,13 @@ export type ChronotypeResult = {
   idealEnd: string;
   bestActivities: string[];
   avoid: string[];
+  // O que o Axon FAZ com o resultado. Cada frase precisa existir no código
+  // (revisado em 09/11/2026): horário escolhido pelo pico em
+  // routines_service.pick_best_slot ("Axon decide" e rotinas); aviso de tarefa
+  // em bloco de sono/recuperação em notification_analyzer; calibração após 14
+  // registros em calibration_service. Os textos antigos prometiam "perguntar o
+  // estado do usuário" e "sugerir pausas", que o app não faz. Não prometa o que
+  // não existe: aparece no onboarding e no relatório do Perfil (Result.tsx).
   axonSetup: string[];
   // Blocos sugeridos exibidos como janelas de foco no resultado completo.
   focusBlocks: {
@@ -89,9 +96,9 @@ export const results: Record<ChronotypeResultKey, ChronotypeResult> = {
       "Começar o dia sem prioridade definida",
     ],
     axonSetup: [
-      "Priorizar tarefas complexas no primeiro bloco do dia.",
-      "Sugerir pausas e tarefas leves depois do almoço.",
-      "Evitar recomendações de foco profundo à noite.",
+      "Quando o Axon escolher o horário, suas tarefas mais importantes vão para a manhã, o seu pico de energia.",
+      "Se uma tarefa cair num horário em que você costuma estar sem energia, ele avisa e sugere outro melhor.",
+      "Com 14 registros diários, seu mapa de energia passa a seguir o seu ritmo real, não só o do cronotipo.",
     ],
     focusBlocks: [
       {
@@ -156,9 +163,9 @@ export const results: Record<ChronotypeResultKey, ChronotypeResult> = {
       "Estender o trabalho até muito tarde todos os dias",
     ],
     axonSetup: [
-      "Organizar manhãs com tarefas leves e preparação.",
-      "Reservar a tarde para blocos de alta importância.",
-      "Sugerir transição gradual no começo do dia.",
+      "Quando o Axon escolher o horário, suas tarefas mais importantes vão para a tarde, longe das suas manhãs mais lentas.",
+      "Se uma tarefa cair num horário em que você costuma estar sem energia, ele avisa e sugere outro melhor.",
+      "Com 14 registros diários, seu mapa de energia passa a seguir o seu ritmo real, não só o do cronotipo.",
     ],
     focusBlocks: [
       {
@@ -223,9 +230,9 @@ export const results: Record<ChronotypeResultKey, ChronotypeResult> = {
       "Usar o pico noturno para tarefas pouco importantes",
     ],
     axonSetup: [
-      "Evitar sugerir tarefas complexas no início da manhã.",
-      "Proteger blocos noturnos para foco profundo.",
-      "Monitorar sinais de sono atrasado e fadiga acumulada.",
+      "Quando o Axon escolher o horário, suas tarefas mais importantes vão para o fim do dia, onde fica o seu pico.",
+      "Se uma tarefa cair num horário em que você costuma estar sem energia, ele avisa e sugere outro melhor.",
+      "Com 14 registros diários, seu mapa de energia passa a seguir o seu ritmo real, não só o do cronotipo.",
     ],
     focusBlocks: [
       {
@@ -290,9 +297,9 @@ export const results: Record<ChronotypeResultKey, ChronotypeResult> = {
       "Ignorar sinais de cansaço ou oscilação",
     ],
     axonSetup: [
-      "Perguntar o estado do usuário antes de sugerir blocos.",
-      "Criar planejamentos flexíveis por dia.",
-      "Mapear padrões reais ao longo do uso.",
+      "Quando o Axon escolher o horário, suas tarefas mais importantes vão para os blocos de mais energia do seu dia.",
+      "Se uma tarefa cair num horário em que você costuma estar sem energia, ele avisa e sugere outro melhor.",
+      "No seu caso, os registros diários contam ainda mais: com 14 deles, o Axon passa a seguir os picos que você mostra de verdade.",
     ],
     focusBlocks: [
       {
@@ -357,9 +364,9 @@ export const results: Record<ChronotypeResultKey, ChronotypeResult> = {
       "Ignorar a necessidade de pausa entre blocos",
     ],
     axonSetup: [
-      "Criar dois blocos principais de foco no dia.",
-      "Reservar a tarde para baixa carga mental.",
-      "Usar a noite para revisão, criatividade ou finalização.",
+      "Quando o Axon escolher o horário, suas tarefas mais importantes vão para os seus dois picos, de manhã e no começo da noite.",
+      "Se uma tarefa cair num horário em que você costuma estar sem energia, ele avisa e sugere outro melhor.",
+      "Com 14 registros diários, seu mapa de energia passa a seguir o seu ritmo real, não só o do cronotipo.",
     ],
     focusBlocks: [
       {

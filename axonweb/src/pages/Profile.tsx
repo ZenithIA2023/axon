@@ -68,6 +68,7 @@ import ConfirmDialog from "../components/ui/ConfirmDialog";
 import { results, type ChronotypeResultKey } from "../data/results";
 
 import * as api from "../lib/api";
+import { ONBOARDING_ROUTE, startRetake } from "../lib/onboarding";
 
 import type { ProfileData } from "../lib/api";
 
@@ -263,17 +264,26 @@ export default function Profile() {
 
   const userEmail = profile?.email || "";
 
+  // Com cronotipo é "refazer": o onboarding pula a abertura e o cadastro e
+  // volta ao Perfil no fim. Sem cronotipo, é o onboarding normal de quem está
+  // logado.
+  function openQuestionnaire() {
+    if (hasChronotype) startRetake();
+    navigate(hasChronotype ? `${ONBOARDING_ROUTE}?refazer=1` : ONBOARDING_ROUTE);
+  }
+
   function openResult() {
 
     if (!hasChronotype) {
 
-      navigate("/questionnaire-intro");
+      navigate(ONBOARDING_ROUTE);
 
       return;
 
     }
 
-    navigate(`/result-report?chronotype=${resultKey}`);
+    // Era /result-report, rota que nunca existiu: o botão levava à landing.
+    navigate(`/result?from=profile&chronotype=${resultKey}`);
 
   }
 
@@ -338,7 +348,7 @@ export default function Profile() {
 
               <ProfileHeader userName={userName} userEmail={userEmail} avatarUrl={profile?.avatar_url} onEditProfile={() => setIsEditOpen(true)} />
 
-              <ProductiveProfileCard hasChronotype={hasChronotype} result={result} resultKey={resultKey} onOpenResult={openResult} onQuestionnaire={() => navigate("/questionnaire-intro")} />
+              <ProductiveProfileCard hasChronotype={hasChronotype} result={result} resultKey={resultKey} onOpenResult={openResult} onQuestionnaire={openQuestionnaire} />
               <MyPlanCard onOpen={() => navigate("/my-plan")} />
 
             </div>
@@ -416,7 +426,7 @@ export default function Profile() {
 
             onOpenResult={openResult}
 
-            onQuestionnaire={() => navigate("/questionnaire-intro")}
+            onQuestionnaire={openQuestionnaire}
 
           />
               <MyPlanCard onOpen={() => navigate("/my-plan")} />

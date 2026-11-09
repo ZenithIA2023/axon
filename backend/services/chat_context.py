@@ -79,7 +79,7 @@ def load_perfil(user_id: str, tz_header: str | None = None) -> dict:
     """Carrega o perfil completo do usuário para montar o prompt do agente."""
     profile_res = (
         supabase.table("profiles")
-        .select("name, chronotype, qualidade_sono, schedule_type, timezone, axon_direct_onboarding_completed")
+        .select("name, chronotype, qualidade_sono, schedule_type, fixed_commitments, timezone, axon_direct_onboarding_completed")
         .eq("id", user_id)
         .single()
         .execute()
@@ -143,6 +143,7 @@ def load_perfil(user_id: str, tz_header: str | None = None) -> dict:
         "nome": profile_data.get("name"),
         "cronotipo": chronotype,
         "schedule_type": profile_data.get("schedule_type"),
+        "compromissos_fixos": profile_data.get("fixed_commitments") or [],
         "qualidade_sono": profile_data.get("qualidade_sono"),
         "respostas": respostas,
         "memories": memories,
