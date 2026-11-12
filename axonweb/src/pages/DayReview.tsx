@@ -426,9 +426,13 @@ export default function DayReview({
         {/* Sheet mobile-first de revisão diária. */}
         {isOpen && (
           <>
+            {/* Fundo escuro: tocar fora fecha, mas ele fica fora da árvore de
+                acessibilidade. Antes era ele que se chamava "Fechar", e quem
+                usa leitor de tela ouvia o rótulo no fundo e nada no X real. */}
             <motion.button
               type="button"
-              aria-label="Fechar"
+              aria-hidden="true"
+              tabIndex={-1}
               onClick={onClose}
               className="fixed inset-0 z-[100] bg-black/55 backdrop-blur-sm"
               initial={{ opacity: 0 }}
@@ -461,6 +465,7 @@ export default function DayReview({
                 <button
                   type="button"
                   onClick={onClose}
+                  aria-label="Fechar registro"
                   className="flex h-9 w-9 items-center justify-center rounded-2xl border border-soft bg-surface-muted text-muted transition active:scale-[0.96]"
                 >
                   <X className="h-5 w-5" />

@@ -1,4 +1,5 @@
 import { isNative, withPlatform } from "./nativeAuth";
+import { resetAutoReviewMark } from "./autoReviewMark";
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -39,6 +40,9 @@ function clearSessionItems() {
   // que logasse neste navegador.
   for (const key of ACCOUNT_CACHE_KEYS) localStorage.removeItem(key);
   clearAccountOnboarding();
+  // A marca "pop-up de registro já apareceu hoje" também é da conta, e tem uma
+  // cópia em memória que só o próprio módulo zera (ver lib/autoReviewMark).
+  resetAutoReviewMark();
 }
 
 // Progresso do onboarding (lib/onboardingState.ts, ONBOARDING_PROGRESS_KEY).
@@ -876,6 +880,11 @@ export interface DashboardData {
   day_blocks: DayBlock[];
   routine_consistency: RoutineConsistency[];
   streak: Streak;
+  // Se a conta já existia ontem (no fuso do usuário). Falso numa conta criada
+  // hoje: o pop-up automático não pede registro de um dia anterior à conta.
+  // Opcional: um backend anterior não manda o campo, e aí vale o comportamento
+  // antigo (pedir ontem).
+  can_review_yesterday?: boolean;
 }
 
 // Usado no Dashboard para carregar blocos atuais, próximos e tarefas do dia.

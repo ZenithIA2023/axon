@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, CheckCircle2, ChevronDown, Clock3, Pause, Play, RotateCcw, Target, X, Sparkles } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
+import { toISODate } from "../lib/localDate";
 import * as api from "../lib/api";
 import type { Task, TaskStatus } from "../lib/api";
 import axonHead from "../assets/axon/axon-head-happy.png";
@@ -9,7 +10,6 @@ type FocusStatus = "ready" | "running" | "paused";
 const PRESETS = [25, 45, 90];
 const IMMERSIVE_DELAY_MS = 4200;
 
-function localISO(date: Date) { return date.toLocaleDateString("sv-SE"); }
 function minutesOf(value?: string | null) {
   if (!value) return null;
   const match = value.match(/^(\d{1,2}):(\d{2})/);
@@ -54,7 +54,7 @@ export default function Focus() {
   const immersiveTimerRef = useRef<number | null>(null);
   const [immersive, setImmersive] = useState(false);
 
-  const today = localISO(now);
+  const today = toISODate(now);
   const todayTasks = useMemo(() => tasks.filter(t => taskForToday(t, today)).sort((a,b) => (a.start_time ?? "99:99").localeCompare(b.start_time ?? "99:99")), [tasks, today]);
   // Só é "do momento" quando o relógio está dentro da janela agendada.
   const momentTask = useMemo(() => {
