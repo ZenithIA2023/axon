@@ -23,7 +23,7 @@ Dia livre (`is_day_off`) conta como dia registrado: a ofensiva mede o hábito de
 registrar, não de produzir.
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone, tzinfo
 
 # Janela de busca. Cobre ofensivas longas sem varrer a tabela inteira; uma
 # ofensiva maior que isso é truncada aqui (aceitável: o número segue subindo,
@@ -190,3 +190,33 @@ def forfeit_day(user_id: str, day: date) -> None:
         {"user_id": user_id, "date": str(day)},
         on_conflict="user_id,date",
     ).execute()
+
+
+def yesterday_reviewable(created_at: object, tz: tzinfo, today: date) -> bool:
+    """
+    A conta já existia ONTEM, no fuso do usuário? Pura.
+
+    O pop-up automático do Dashboard pedia o registro de ontem a toda conta sem
+    registro de ontem — inclusive a recém-criada, que via como primeira tela um
+    pedido para avaliar sono, humor e produtividade de um dia em que nem
+    conhecia o app. Regra: nunca pedir registro de data anterior à conta.
+
+    A comparação é feita na DATA LOCAL do usuário, nunca em UTC: `created_at`
+    é timestamptz, e quem cria a conta às 22h em UTC-3 tem created_at no dia
+    seguinte em UTC — comparado sem converter, o dia de criação viraria
+    "amanhã" e o pop-up de ontem sumiria no dia seguinte, quando é devido.
+
+    `today` é a data local de hoje. Valor ausente ou ilegível devolve True: é
+    o comportamento de antes desta regra, e uma conta sem data de criação
+    conhecida é conta antiga, não nova.
+    """
+    if not created_at:
+        return True
+    try:
+        criado = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    if criado.tzinfo is None:
+        # timestamptz sempre vem com fuso; sem ele, a única leitura segura é UTC.
+        criado = criado.replace(tzinfo=timezone.utc)
+    return criado.astimezone(tz).date() <= today - timedelta(days=1)

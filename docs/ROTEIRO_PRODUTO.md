@@ -3,7 +3,7 @@
 Levantado em 10/11/2026 a partir da lista do Bernardo, com cada item conferido
 no código. **Faça de cima para baixo.** Um número por item, uma lista só.
 
-**Progresso: 13 de 46 feitos · 1 adiado · 32 na fila**
+**Progresso: 14 de 46 feitos · 1 adiado · 31 na fila**
 
 Legenda — 🤖 tarefa de agente · 🧍 tarefa do Bernardo · ⏸️ adiado · ✅ feito
 
@@ -55,11 +55,6 @@ implicação de loja:
   através do Nginx. Se o corpo for descartado, o `confirm_email` não chega e o
   backend exclui sem a segunda checagem — falha ABERTA. O freio do frontend
   continua valendo, mas a defesa em profundidade desaparece em silêncio.
-
-### 5. 🤖 Bug da ofensiva no registro diário
-Sair do registro → aviso de perder a ofensiva → salvar → o mesmo aviso de novo
-→ atualizar → de novo. Fechar fora faz sumir e nada se perde. Assusta sobre
-perda de dado.
 
 ### 6. 🤖 Popup de "registro de ontem" em conta nova
 É a primeira tela de quem acabou de chegar, pedindo registro de um dia em que a
@@ -263,8 +258,9 @@ o Axon conhecer a pessoa, não para desviar da agenda.
 | Evento concluir ao passar o horário | `_event_completed` → fração 1.0 |
 | Reformulação do onboarding | em produção 09/11/2026 |
 | Política de privacidade reescrita | 5 mudanças em `privacidade.html`, aprovadas em 10/11 — **falta publicar** |
-| Janela de datas no Planning | medido em 12/11 no banco: 819 → 233 linhas por abertura (tarefas 599→233, subtarefas 220→0); cache auditado, 15/15 mutações invalidam — **falta commit** |
-| Exclusão de conta pedindo o e-mail | conferido funcionando pelo Bernardo em 12/11 — **falta commit**; acabamentos no item 34 |
+| Janela de datas no Planning | medido em 12/11 no banco: 819 → 233 linhas por abertura (tarefas 599→233, subtarefas 220→0); cache auditado, 15/15 mutações invalidam; commitado em 12/11 |
+| Exclusão de conta pedindo o e-mail | conferido funcionando pelo Bernardo em 12/11; commitado em 12/11; acabamentos no item 34 |
+| Bug da ofensiva no registro diário | causa: `DayReview.handleSave` chamava `onSaved`+`onClose` no mesmo tick e o `onClose` do pop-up disparava o aviso; a condição virou "o dia pendente ainda está em branco?" (`Dashboard.tsx`); conferido pelo Bernardo em 12/11 |
 
 > Falta só confirmar a **bolinha visual** dos eventos — o cálculo já está certo.
 

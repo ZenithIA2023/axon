@@ -47,6 +47,7 @@ import ConfirmDialog from "../components/ui/ConfirmDialog";
 import TaskAdvancedOptions from "../components/tasks/TaskAdvancedOptions";
 import RoutineAnalysisCard from "../components/planning/RoutineAnalysisCard";
 import EmptyState from "../components/ui/EmptyState";
+import { toISODate } from "../lib/localDate";
 import { ScrollArea } from "../components/ui/ScrollArea";
 
 // ===========================================================================
@@ -226,13 +227,6 @@ const NOTIFICATIONS_PAGE_SIZE = 10;
 // ===========================================================================
 // HELPERS DE DATA E STATUS
 // ===========================================================================
-
-function toISODate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
 
 function getTaskEndDate(task: Task): string | undefined {
   return (task as Task & { end_date?: string | null }).end_date || undefined;

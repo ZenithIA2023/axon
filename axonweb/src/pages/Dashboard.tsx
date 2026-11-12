@@ -29,6 +29,8 @@ import { shortenedMinutes } from "../lib/api";
 import { AppBackground } from "../components/layout/AppBackground";
 import axonHeadHappy from "../assets/axon/axon-head-happy.png";
 import EmptyState from "../components/ui/EmptyState";
+import { localTodayISO, toISODate } from "../lib/localDate";
+import { autoReviewShownOn, markAutoReviewShown } from "../lib/autoReviewMark";
 
 // Gesto de arrastar nas linhas de "Hoje" -----------------------------------
 // Folga (px) antes de assumir o toque como horizontal: abaixo disso o gesto
@@ -147,6 +149,12 @@ export default function Dashboard() {
   // em que a ofensiva está em jogo.
   const [streakWarnOpen, setStreakWarnOpen] = useState(false);
   const [streakModalOpen, setStreakModalOpen] = useState(false);
+  // Dias registrados NESTA sessão, atualizado de forma síncrona no onSaved.
+  // Existe porque o DayReview, ao salvar, chama onSaved e onClose no mesmo
+  // tick: dentro do onClose o yesterdayLog/todayLog do estado ainda é o
+  // valor velho, e o aviso de perda saía justamente para quem acabou de
+  // registrar (e, pelo "Salvar minha ofensiva", em laço).
+  const registeredThisSession = useRef(new Set<string>());
   // Linhas de "Hoje" já resolvidas por gesto (concluir/adiar) e escondidas na
   // hora, antes de o dashboard recarregar. A lista do servidor é a verdade: um
   // id só sai daqui quando some da resposta (ver efeito abaixo) ou quando a
@@ -171,7 +179,7 @@ export default function Dashboard() {
       // backend usa o mesmo "hoje" no fuso do usuário, via X-Timezone). Antes
       // baixava as subtarefas da conta inteira a cada abertura. "Hoje" é
       // calculado a cada carga para acompanhar a virada do dia.
-      const today = new Date().toLocaleDateString("sv-SE");
+      const today = localTodayISO();
       const all = await api.getSubtasks({ from: today, to: today });
 
       const map: Record<string, Subtask[]> = {};
@@ -314,11 +322,11 @@ export default function Dashboard() {
         ids.includes(task.id) ? ids : [...ids, task.id]
       );
 
-      // "sv-SE" = YYYY-MM-DD no fuso local, o mesmo formato que o backend usa
-      // em scheduled_date (o ISO em UTC erraria o dia perto da meia-noite).
+      // Data LOCAL (lib/localDate), o mesmo formato que o backend usa em
+      // scheduled_date (o ISO em UTC erraria o dia perto da meia-noite).
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowISO = tomorrow.toLocaleDateString("sv-SE");
+      const tomorrowISO = toISODate(tomorrow);
 
       try {
         // Sem toast no sucesso: a própria linha saindo da lista já é o retorno
@@ -431,58 +439,103 @@ export default function Dashboard() {
   }
 
   // --------------------------------------------------------------------------
+  // Aviso de perda de ofensiva: a condição é o DIA, não o fechamento
+  // O aviso quer dizer "este dia continua sem registro e a sua sequência está
+  // em jogo". Então ele só vale enquanto o dia pendente (streak.pending_date,
+  // que com a ofensiva congelada é ontem) segue sem registro — e não sempre
+  // que o pop-up fecha, que foi o que fazia salvar disparar o aviso.
+  // --------------------------------------------------------------------------
+  function isStreakDayStillOpen(): boolean {
+    const pending = data?.streak?.pending_date;
+    if (!data?.streak?.frozen || !pending) return false;
+    if (registeredThisSession.current.has(pending)) return false;
+    return pending !== yesterdayLog?.date && pending !== todayLog?.date;
+  }
+
+  // Registro salvo (pop-up automático ou manual): marca o dia e rebusca o
+  // dashboard. Sem a rebusca, data.streak ficava congelado pelo resto da
+  // sessão e a chama mostrava a ofensiva de antes do registro.
+  function handleLogSaved(log: api.DailyLog) {
+    registeredThisSession.current.add(log.date);
+    loadDashboard();
+  }
+
+  // --------------------------------------------------------------------------
   // Pop-up automático de registro diário (1x por dia)
   // Prioridade: ontem sem registro > hoje incompleto.
+  //
+  // Em duas etapas: os registros de ontem/hoje são buscados na montagem, em
+  // paralelo com o dashboard, e a decisão só é tomada quando os dois
+  // chegaram. Ela depende do dashboard por causa de `can_review_yesterday`:
+  // uma conta criada hoje não tem registro de ontem porque não EXISTIA ontem,
+  // e pedir esse registro era a primeira coisa que uma conta nova via.
   // --------------------------------------------------------------------------
+  const [autoReviewLogs, setAutoReviewLogs] = useState<{
+    yesterday: api.DailyLog | null;
+    today: api.DailyLog | null;
+  } | null>(null);
+  const autoReviewDecided = useRef(false);
+
   useEffect(() => {
     if (!api.isLoggedIn()) return;
 
-    // sv-SE produz YYYY-MM-DD no fuso LOCAL. toISOString() converteria para
-    // UTC e, em UTC-3 após as 21h, devolveria a data de amanhã.
-    const todayISO = new Date().toLocaleDateString("sv-SE");
-    if (localStorage.getItem("axon_last_opened") === todayISO) return;
-
-    // A marca é gravada só quando o pop-up REALMENTE abre. Gravar antes fazia
-    // com que abrir o app de manhã (quando ainda não há o que registrar)
-    // queimasse a única chance do dia — à noite o pop-up não vinha mais e o
-    // registro se perdia.
-    const markShown = () => localStorage.setItem("axon_last_opened", todayISO);
+    // A trava do dia vem antes das buscas: se o pop-up já apareceu hoje, nem
+    // os registros são pedidos (era assim antes e continua).
+    if (autoReviewShownOn() === localTodayISO()) return;
 
     Promise.all([
       api.getDailyLogYesterday().catch(() => null),
       api.getDailyLogToday().catch(() => null),
     ]).then(([yesterday, today]) => {
       setYesterdayLog(yesterday);
-
-      // Ontem sem registro: prioridade máxima.
-      if (!yesterday) {
-        const d = new Date();
-        d.setDate(d.getDate() - 1);
-        setAutoReviewDate(d.toLocaleDateString("sv-SE"));
-        setAutoReviewOpen(true);
-        markShown();
-        return;
-      }
-
-      // Ontem ok — hoje está completo?
-      const todayComplete =
-        today?.sleep_rating != null &&
-        today?.mood_rating != null &&
-        today?.productivity_rating != null;
-
-      // Só pede o registro de HOJE quando o dia já rendeu algo para avaliar.
-      // Abrir de manhã não faz sentido: o usuário ainda não tem como dizer
-      // como foi a produtividade do dia, e o pop-up vira ruído logo na
-      // abertura do app. À noite (18h+) é quando o registro é respondível —
-      // mesmo horário em que o card "Revisar dia" aparece.
-      const REVIEW_HOUR = 18;
-      if (!todayComplete && new Date().getHours() >= REVIEW_HOUR) {
-        setAutoReviewDate(undefined); // sem targetDate = hoje
-        setAutoReviewOpen(true);
-        markShown();
-      }
+      setAutoReviewLogs({ yesterday, today });
     });
   }, []);
+
+  useEffect(() => {
+    // Decide uma vez só, quando registros E dashboard chegaram. Se o
+    // dashboard falhou de vez (loadError, depois das retentativas), decide
+    // sem ele, com a regra antiga: melhor pedir ontem a uma conta nova num
+    // caso raro do que nunca pedir o registro a ninguém quando a API oscila.
+    if (autoReviewDecided.current || !autoReviewLogs) return;
+    if (!data && !loadError) return;
+    autoReviewDecided.current = true;
+
+    const todayISO = localTodayISO();
+    const { yesterday, today } = autoReviewLogs;
+    const canReviewYesterday = data?.can_review_yesterday !== false;
+
+    // Ontem sem registro: prioridade máxima — desde que a conta já existisse
+    // ontem. Quando não existia, NÃO é retorno antecipado: segue para a
+    // checagem de hoje abaixo, senão a conta nova perderia também o pop-up de
+    // hoje. E nada é marcado aqui (ver markAutoReviewShown).
+    if (!yesterday && canReviewYesterday) {
+      const d = new Date();
+      d.setDate(d.getDate() - 1);
+      setAutoReviewDate(toISODate(d));
+      setAutoReviewOpen(true);
+      markAutoReviewShown(todayISO);
+      return;
+    }
+
+    // Hoje está completo?
+    const todayComplete =
+      today?.sleep_rating != null &&
+      today?.mood_rating != null &&
+      today?.productivity_rating != null;
+
+    // Só pede o registro de HOJE quando o dia já rendeu algo para avaliar.
+    // Abrir de manhã não faz sentido: o usuário ainda não tem como dizer
+    // como foi a produtividade do dia, e o pop-up vira ruído logo na
+    // abertura do app. À noite (18h+) é quando o registro é respondível —
+    // mesmo horário em que o card "Revisar dia" aparece.
+    const REVIEW_HOUR = 18;
+    if (!todayComplete && new Date().getHours() >= REVIEW_HOUR) {
+      setAutoReviewDate(undefined); // sem targetDate = hoje
+      setAutoReviewOpen(true);
+      markAutoReviewShown(todayISO);
+    }
+  }, [autoReviewLogs, data, loadError]);
 
   // --------------------------------------------------------------------------
   // Dados derivados do dashboard
@@ -1098,7 +1151,10 @@ export default function Dashboard() {
         isOpen={reviewOpen}
         onClose={() => setReviewOpen(false)}
         existing={todayLog}
-        onSaved={(log) => setTodayLog(log)}
+        onSaved={(log) => {
+          setTodayLog(log);
+          handleLogSaved(log);
+        }}
       />
 
       <DayReview
@@ -1108,7 +1164,11 @@ export default function Dashboard() {
           // Fechar sem registrar com a ofensiva por um fio: pergunta antes de
           // deixar passar. O aviso NÃO marca nada sozinho — só o botão de
           // confirmação dentro dele desiste do dia.
-          if (data?.streak?.frozen) {
+          //
+          // Este onClose também roda logo depois de SALVAR (o DayReview fecha
+          // a si mesmo). Por isso a pergunta é "o dia ainda está em branco?"
+          // e não "fechou?": salvar nunca avisa, fechar sem registrar avisa.
+          if (isStreakDayStillOpen()) {
             setStreakModalOpen(false);
             setStreakWarnOpen(true);
           }
@@ -1120,13 +1180,21 @@ export default function Dashboard() {
           setAutoReviewOpen(false);
           if (autoReviewDate) setYesterdayLog(log);
           else setTodayLog(log);
+          handleLogSaved(log);
         }}
       />
 
       {/* O mesmo componente visual tem uma variante para o aviso de perda.
           Fechar não desiste da ofensiva; somente a ação explícita chama a API. */}
       <StreakModal
-        isOpen={streakWarnOpen && !autoReviewOpen && Boolean(data?.streak)}
+        // A mesma condição vale na exibição: se o dia foi registrado por
+        // outro caminho enquanto o aviso estava pedido, ele não aparece.
+        isOpen={
+          streakWarnOpen &&
+          !autoReviewOpen &&
+          Boolean(data?.streak) &&
+          isStreakDayStillOpen()
+        }
         variant="warning"
         onClose={() => setStreakWarnOpen(false)}
         streakDays={data?.streak?.current ?? 0}

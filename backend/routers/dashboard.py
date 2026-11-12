@@ -54,7 +54,7 @@ def get_dashboard(
 
     profile = (
         supabase.table("profiles")
-        .select("name, chronotype")
+        .select("name, chronotype, created_at")
         .eq("id", user_id)
         .single()
         .execute()
@@ -111,6 +111,14 @@ def get_dashboard(
         # dashboard em vez de um endpoint próprio: é 1 query, e uma chamada
         # separada custaria outro round-trip na abertura do app.
         "streak": streak_service.get_streak(user_id, now.date()),
+        # O pop-up automático só pode pedir o registro de ONTEM se a conta já
+        # existia ontem. Calculado aqui, no fuso do usuário, porque o
+        # created_at é UTC e "ontem" é local — ver
+        # streak_service.yesterday_reviewable. Vem no dashboard (que a tela já
+        # busca e que já leu o perfil) para não somar uma requisição à abertura.
+        "can_review_yesterday": streak_service.yesterday_reviewable(
+            data.get("created_at"), tz, now.date()
+        ),
     }
 
 
