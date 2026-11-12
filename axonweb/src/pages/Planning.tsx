@@ -359,6 +359,53 @@ function weekDaysOf(selected: Date): Date[] {
 }
 
 // ===========================================================================
+// JANELA DE BUSCA DO PLANEJAMENTO
+// ---------------------------------------------------------------------------
+// O Planning baixava a conta INTEIRA (todas as tarefas e subtarefas já
+// criadas) a cada abertura: numa conta nova era instantâneo, numa com meses de
+// histórico o calendário demorava (iPhone do Bernardo, 23/10/2026). Agora ele
+// busca uma janela por MÊS de `selectedDate`, com folga nas pontas.
+//
+// Por mês e não por `viewMode`: a tela tem TRÊS grades de mês — MonthCalendar
+// (celular), DesktopMonthBoard e DesktopMiniMonthCalendar, esta última sempre
+// visível na lateral do desktop, inclusive na vista de semana. As três partem
+// do dia 1 menos o dia da semana e vão até 42 células, entrando nos meses
+// vizinhos; a semana (weekDaysOf, segunda a domingo) passa no máximo 6 dias
+// das pontas do mês. A folga de 14 dias cobre tudo isso, e trocar de semana
+// dentro do mesmo mês não precisa de request novo.
+// ===========================================================================
+
+const PLANNING_WINDOW_MARGIN_DAYS = 14;
+
+type PlanningWindow = api.DateWindow & { key: string };
+
+function planningWindowOf(year: number, month: number): PlanningWindow {
+  return {
+    key: `${year}-${month}`,
+    from: toISODate(new Date(year, month, 1 - PLANNING_WINDOW_MARGIN_DAYS)),
+    // Dia 14 do mês seguinte (o Date normaliza mês 12 para janeiro).
+    to: toISODate(new Date(year, month + 1, PLANNING_WINDOW_MARGIN_DAYS)),
+  };
+}
+
+// Agrupa por task_id e ordena por posição, para renderização rápida.
+function groupSubtasksByTask(list: Subtask[]): Record<string, Subtask[]> {
+  const map: Record<string, Subtask[]> = {};
+  for (const subtask of list) {
+    (map[subtask.task_id] ??= []).push(subtask);
+  }
+  Object.values(map).forEach((items) => {
+    items.sort((a, b) => a.position - b.position);
+  });
+  return map;
+}
+
+type PlanningWindowData = {
+  tasks: Task[];
+  subtasksMap: Record<string, Subtask[]>;
+};
+
+// ===========================================================================
 // CONFIGURAÇÃO DO HUB DE PLANEJAMENTO
 // ===========================================================================
 
@@ -684,43 +731,156 @@ function AgendaView({
 
   const result = results[resultKey];
 
-  // Carrega todas as subtarefas e agrupa por task_id para renderização rápida.
-  const loadSubtasks = useCallback(async () => {
-    try {
-      const all = await api.getSubtasks();
+  // useCallback (e não função solta) porque o efeito da troca de mês o usa.
+  const showToast = useCallback((message: string) => {
+    setToast(message);
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(null), 2800);
+  }, []);
 
-      const map: Record<string, Subtask[]> = {};
+  // --------------------------------------------------------------------------
+  // Janela visível + cache em memória (decisão de 24/10/2026)
+  //
+  // Cada mês visitado fica guardado por chave de janela: voltar a um mês já
+  // visto não busca de novo. É cache de SESSÃO (some ao sair da tela), por
+  // isso um ref e não localStorage.
+  //
+  // REGRA QUE NÃO PODE SER AFROUXADA: toda mutação invalida o cache INTEIRO,
+  // não só a janela atual. Criar, editar, mover, excluir, concluir e o
+  // carryForward podem mexer em datas de OUTRA janela (arrastar uma tarefa de
+  // 31/10 para 01/11 atravessa o mês); um cache que só atualizasse a janela
+  // visível faria a tarefa reaparecer no lugar velho ao voltar. Todas as
+  // mutações terminam em loadTasks()/loadSubtasks(), e as duas limpam tudo.
+  // --------------------------------------------------------------------------
+  const windowYear = selectedDate.getFullYear();
+  const windowMonth = selectedDate.getMonth();
+  const currentWindow = useMemo(
+    () => planningWindowOf(windowYear, windowMonth),
+    [windowYear, windowMonth]
+  );
+  // A janela atual para quem roda fora do render (loadTasks é chamado depois
+  // de mutações, com identidade estável). Sincronizado em efeito, antes do
+  // efeito que reage à troca de mês (efeitos rodam na ordem declarada).
+  const currentWindowRef = useRef(currentWindow);
+  const windowCache = useRef(new Map<string, PlanningWindowData>());
+  // Sobe a cada invalidação. Uma busca que começou ANTES de uma mutação traz a
+  // agenda de antes dela: o resultado não entra no cache.
+  const cacheGeneration = useRef(0);
+  // Só a busca mais recente pode mexer na tela. Sem isso, navegar rápido por
+  // três meses deixaria a resposta mais lenta (de um mês já deixado para trás)
+  // sobrescrever a do mês que está na tela.
+  const latestRequest = useRef(0);
+  const initialLoadDone = useRef(false);
+  // Indicador discreto enquanto um mês ainda não visitado carrega. As tarefas
+  // anteriores continuam na tela até lá: tela em branco a cada troca de mês
+  // seria pior do que o problema que a janela resolve.
+  const [windowLoading, setWindowLoading] = useState(false);
 
-      for (const subtask of all) {
-        if (!map[subtask.task_id]) {
-          map[subtask.task_id] = [];
-        }
+  const invalidateWindowCache = useCallback(() => {
+    windowCache.current.clear();
+    cacheGeneration.current += 1;
+  }, []);
 
-        map[subtask.task_id].push(subtask);
+  // Tarefas e subtarefas da janela, em paralelo. Falha nas subtarefas não
+  // derruba a tela (a lista sai sem o checklist, como antes), mas também não
+  // entra no cache — a próxima visita tenta de novo.
+  const fetchWindow = useCallback(
+    async (win: PlanningWindow): Promise<PlanningWindowData> => {
+      const generation = cacheGeneration.current;
+      const [windowTasks, windowSubtasks] = await Promise.all([
+        api.getTasks({ window: win }),
+        api.getSubtasks(win).catch(() => null),
+      ]);
+      const data: PlanningWindowData = {
+        tasks: windowTasks,
+        subtasksMap: windowSubtasks ? groupSubtasksByTask(windowSubtasks) : {},
+      };
+      if (windowSubtasks && generation === cacheGeneration.current) {
+        windowCache.current.set(win.key, data);
       }
+      return data;
+    },
+    []
+  );
 
-      Object.values(map).forEach((items) => {
-        items.sort((a, b) => a.position - b.position);
-      });
-
-      setSubtasksMap(map);
+  // Recarrega só as subtarefas da janela atual (onSubtaskChange dos itens).
+  // Também invalida o cache: mexer numa subtarefa recalcula o status da mãe
+  // no servidor, e a mãe pode estar guardada em outra janela.
+  const loadSubtasks = useCallback(async () => {
+    invalidateWindowCache();
+    try {
+      setSubtasksMap(groupSubtasksByTask(await api.getSubtasks(currentWindowRef.current)));
     } catch {
       setSubtasksMap({});
     }
-  }, []);
+  }, [invalidateWindowCache]);
 
-  // Carrega tarefas e subtarefas em conjunto.
+  // Carrega tarefas e subtarefas da janela atual. Mesma assinatura de antes:
+  // os pontos que chamam loadTasks() depois de uma mutação não mudaram. Limpa
+  // o cache inteiro antes de buscar (ver a regra acima).
   const loadTasks = useCallback(async () => {
+    invalidateWindowCache();
+    const request = ++latestRequest.current;
     setError(null);
     try {
-      const [data] = await Promise.all([api.getTasks(), loadSubtasks()]);
-      setTasks(data);
+      const data = await fetchWindow(currentWindowRef.current);
+      if (request === latestRequest.current) {
+        setTasks(data.tasks);
+        setSubtasksMap(data.subtasksMap);
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro ao carregar tarefas");
+      if (request === latestRequest.current) {
+        setError(e instanceof Error ? e.message : "Erro ao carregar tarefas");
+      }
     } finally {
       setLoading(false);
+      if (request === latestRequest.current) setWindowLoading(false);
+      initialLoadDone.current = true;
     }
-  }, [loadSubtasks]);
+  }, [fetchWindow, invalidateWindowCache]);
+
+  useEffect(() => {
+    currentWindowRef.current = currentWindow;
+  }, [currentWindow]);
+
+  // Troca de mês: do cache se já visitado, senão busca. A primeira janela fica
+  // com a carga inicial (carryForward → loadTasks), que precisa rodar antes
+  // para a tela não mostrar as pendentes de ontem no dia velho.
+  useEffect(() => {
+    if (!initialLoadDone.current) return;
+    const request = ++latestRequest.current;
+    const cached = windowCache.current.get(currentWindow.key);
+    // Atualizações de estado sempre fora do corpo do efeito, inclusive no
+    // acerto do cache, para não renderizar em cascata dentro dele.
+    if (cached) {
+      queueMicrotask(() => {
+        if (request !== latestRequest.current) return;
+        setTasks(cached.tasks);
+        setSubtasksMap(cached.subtasksMap);
+        setWindowLoading(false);
+      });
+      return;
+    }
+    queueMicrotask(() => {
+      if (request === latestRequest.current) setWindowLoading(true);
+    });
+    fetchWindow(currentWindow)
+      .then((data) => {
+        if (request !== latestRequest.current) return;
+        setTasks(data.tasks);
+        setSubtasksMap(data.subtasksMap);
+      })
+      .catch(() => {
+        // As tarefas do mês anterior seguem na tela; o aviso diz por que as
+        // células deste mês estão vazias. Nada é guardado: voltar tenta de novo.
+        if (request === latestRequest.current) {
+          showToast("Não foi possível carregar este período. Tente novamente.");
+        }
+      })
+      .finally(() => {
+        if (request === latestRequest.current) setWindowLoading(false);
+      });
+  }, [currentWindow, fetchWindow, showToast]);
 
   // Tira o ?google= da URL para o aviso não voltar ao recarregar a página.
   useEffect(() => {
@@ -950,11 +1110,6 @@ function AgendaView({
     }
   }
 
-  function showToast(message: string) {
-    setToast(message);
-    if (toastTimer.current) window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(null), 2800);
-  }
 
   useEffect(() => {
     return () => {
@@ -1158,13 +1313,23 @@ function AgendaView({
                   </div>
 
                   {/* Resumo e anel do dia selecionado: comuns aos dois modos. */}
-                  <p className="mt-5 text-center text-sm text-muted">
-                    <span className="font-semibold text-primary">
-                      {completedItems} de {totalItems}
-                    </span>{" "}
-                    {totalItems === 1
-                      ? "tarefa concluída"
-                      : "tarefas concluídas"}
+                  <p className="mt-5 flex items-center justify-center gap-1.5 text-center text-sm text-muted">
+                    <span>
+                      <span className="font-semibold text-primary">
+                        {completedItems} de {totalItems}
+                      </span>{" "}
+                      {totalItems === 1
+                        ? "tarefa concluída"
+                        : "tarefas concluídas"}
+                    </span>
+                    {/* Mês ainda não visitado carregando: discreto, sem tirar
+                        da tela o que já está nela. */}
+                    {windowLoading && (
+                      <Loader2
+                        className="h-3.5 w-3.5 animate-spin text-accent"
+                        aria-label="Carregando este período"
+                      />
+                    )}
                   </p>
 
                   <div className="mt-4 flex justify-center">
@@ -1387,6 +1552,7 @@ function AgendaView({
           undatedTasks={undatedTasks}
           subtasksMap={subtasksMap}
           loading={loading}
+          windowLoading={windowLoading}
           error={error}
           progress={progress}
           completedItems={completedItems}
@@ -1521,6 +1687,7 @@ function DesktopAgendaExperience({
   undatedTasks,
   subtasksMap,
   loading,
+  windowLoading,
   error,
   progress,
   completedItems,
@@ -1555,6 +1722,8 @@ function DesktopAgendaExperience({
   undatedTasks: Task[];
   subtasksMap: Record<string, Subtask[]>;
   loading: boolean;
+  // Mês ainda não visitado carregando (o conteúdo atual segue na tela).
+  windowLoading: boolean;
   error: string | null;
   progress: number;
   completedItems: number;
@@ -1640,6 +1809,12 @@ function DesktopAgendaExperience({
               </div>
 
               <div className="flex items-center justify-end gap-2">
+                {windowLoading && (
+                  <Loader2
+                    className="h-4 w-4 animate-spin text-accent"
+                    aria-label="Carregando este período"
+                  />
+                )}
                 <button
                   type="button"
                   onClick={() => shiftPeriod(-1)}

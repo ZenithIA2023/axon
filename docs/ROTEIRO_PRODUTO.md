@@ -1,0 +1,307 @@
+# Roteiro do AXON — uma lista, em ordem
+
+Levantado em 10/11/2026 a partir da lista do Bernardo, com cada item conferido
+no código. **Faça de cima para baixo.** Um número por item, uma lista só.
+
+**Progresso: 13 de 46 feitos · 1 adiado · 32 na fila**
+
+Legenda — 🤖 tarefa de agente · 🧍 tarefa do Bernardo · ⏸️ adiado · ✅ feito
+
+---
+
+# AGORA
+
+### 1. 🧍 Reconferir os 13 pontos de iOS num iPhone
+Meia hora com a Build 3, que já está no TestFlight. **Tem relógio correndo:**
+você convidou testadores para uma build cujo comportamento no iPhone só foi
+verificado no onboarding. A lista dos 13 pontos está no histórico de 23/10.
+Não compete com nenhum agente — dá para fazer enquanto um trabalha.
+
+### 33. 🤖 O hub do Planning monta tudo duas vezes
+Descoberto em 12/11/2026 no log do VPS. UMA abertura do Planning gera
+`GET /routines` ×2, `GET /profile` ×3, `POST /tasks/carry-forward` ×2,
+`GET /tasks` ×2, `GET /subtasks` ×2 e `GET /tasks/daily-stats` ×4.
+
+Causa: `Planning.tsx:522` monta `<AgendaView embedded />` e `:530` monta outra
+com `desktopMode`. O container do desktop é `hidden lg:block` — o CSS esconde,
+mas o React monta e roda os efeitos das DUAS. Vale também para `Routines`
+(`/routines` ×2) e `Goals`. O código já admitia em `Planning.tsx:695`.
+
+**Não corrompe dado.** O `carry_forward_tasks` é seguro na corrida: quem lê
+depois do update não acha mais a linha (`scheduled_date` já é hoje), e quem lê
+antes grava o mesmo `carry_count`. O custo é desperdício puro — na conta do
+Bernardo, 1.638 linhas de tarefa por abertura em vez de 819.
+
+Efeito colateral visível: o aviso "N pendentes movidas" vive em estado local de
+cada instância, e quem ganha a corrida pode ser a instância ESCONDIDA. O aviso
+pode não aparecer mesmo tendo havido movimentação.
+
+**É o maior ganho restante no Planning** e é independente do item 3: a janela
+corta linhas por request, isto corta requests. Cuidado ao consertar: `lg:hidden`
+/ `hidden lg:block` é CSS, não desmontagem — precisa de renderização
+condicional de verdade, e os dois modos têm props diferentes.
+
+### 34. 🤖 Dois acabamentos da exclusão de conta
+Saíram da revisão do item 4 em 10/11. Nenhum bloqueia, mas o primeiro tem
+implicação de loja:
+
+- Se o perfil não carregar, `userEmail` fica vazio em `Profile.tsx` e o botão de
+  excluir **nunca habilita** — a pessoa não consegue excluir a conta, que a Play
+  exige estar disponível. Mostrar "não foi possível carregar, recarregue" em vez
+  de um botão morto.
+- `account_service.confirmation_matches` usa `.single()`: sem linha em `profiles`
+  estoura 500 em vez de 400. Falha fechada (nada é apagado), é cosmético.
+- **No deploy, conferir na aba Network** se o `DELETE /account` leva o corpo
+  através do Nginx. Se o corpo for descartado, o `confirm_email` não chega e o
+  backend exclui sem a segunda checagem — falha ABERTA. O freio do frontend
+  continua valendo, mas a defesa em profundidade desaparece em silêncio.
+
+### 5. 🤖 Bug da ofensiva no registro diário
+Sair do registro → aviso de perder a ofensiva → salvar → o mesmo aviso de novo
+→ atualizar → de novo. Fechar fora faz sumir e nada se perde. Assusta sobre
+perda de dado.
+
+### 6. 🤖 Popup de "registro de ontem" em conta nova
+É a primeira tela de quem acabou de chegar, pedindo registro de um dia em que a
+pessoa nem usava o app.
+
+---
+
+# 🏪 PENDÊNCIAS DE LOJA — decidido em 10/11 fazer depois
+
+Têm relógio (as duas lojas estão revisando o app agora) mas o Bernardo optou
+por agrupar com as configurações. Registrado aqui para não se perder.
+
+- **Subir a política nova** (`./scripts/deploy.sh site`). O texto está escrito e
+  aprovado; a página no ar ainda é a de 19/10 e não menciona o funil. É o link
+  que as duas lojas abrem.
+- **Declarar App activity → App interactions** no formulário da Play Console. O
+  formulário foi preenchido com o documento de setembro, que afirma "não há
+  analytics"; desde 09/11 existe o funil. *Não se sabe se mexer no Data Safety
+  com a revisão de produção em andamento afeta a revisão — vale perguntar ao
+  suporte da Play antes.*
+- **Confirmar se as telas de sono do onboarding** (`t09_sono_util`,
+  `t10_sono_livre`) podem ser puladas. Se não puderem, dado de saúde virou
+  obrigatório e a linha do formulário muda de "Não" para "Sim".
+- **Atualizar `docs/play-store/DATA_SAFETY.md`**: acrescentar App activity,
+  OpenRouter e Google Cloud TTS na tabela de terceiros, corrigir a frase "não há
+  analytics", a do "único dado que sobrevive à exclusão" e a data (está em
+  28/09, anterior à troca de modelos e ao onboarding novo). É documento de
+  apoio: a Play pergunta **se** há compartilhamento, não com quem.
+- **Etiquetas de privacidade da App Store** (Fase 5, ainda não preenchidas): o
+  funil e os dados do onboarding precisam entrar desde o começo.
+
+---
+
+# CUSTO — antes de escalar
+
+### 7. 🤖 Travar o trabalho automático de contas inativas
+O `planning_scheduler` processa todo perfil com cronotipo a cada 5 min, sem
+olhar se a pessoa ainda usa o app (`planning_scheduler.py:120-138`). Para quem
+sumiu há semanas, o backend segue gerando relatório e análise — **os dois
+chamam o Claude** — e mandando push.
+**Prompt escrito em 10/11, no histórico da conversa** (peça para eu salvar como
+arquivo quando for usar).
+
+### 8. 🧍 Decidir planos, modelos e limites
+Decisão sua, não de agente. O `Plans.tsx` é maquete e o backend não tem
+conceito de plano. **Destrava o item 9.**
+
+### 9. 🤖 Cota e % de uso por usuário
+O `usage_service` já grava custo por chamada (Claude, OpenRouter, STT, TTS).
+Falta a cota e o percentual — e sem o item 8 não dá para saber o que é 100%.
+
+---
+
+# RETENÇÃO — o que traz o usuário de volta
+
+### 10. 🤖 As quatro notificações faltantes
+30 min antes da tarefa · começo do dia · fim do dia para o registro · fim do
+dia para organizar o amanhã.
+
+### 11. 🤖 Botões "planejar agora" / "já planejei" nas notificações de planejamento
+
+### 12. 🤖 Análise de rotina detectar choque de horário
+Conferido: `routine_analysis_service` só revalida conflito ao **aplicar** um
+movimento; nunca procura sobreposição como achado.
+
+### 13. 🤖 `atualizar_tarefa` do agente não checa conflito nenhum
+Nem com outra tarefa. Pedir ao Axon para mover uma tarefa para cima de outra
+passa sem aviso — o `criar_tarefa` avisa, o `atualizar_tarefa` não.
+
+### 14. 🤖 Verificação de conflito ao criar tarefa pela tela
+Popup pedindo confirmação, desligável nas configurações. Irmão do 12 e do 13.
+
+---
+
+# PROFUNDIDADE DO PRODUTO
+
+### 15. 🤖 O Axon quando o plano quebra
+**Consolida quatro itens da sua lista original:** queda de energia no meio do
+dia · destravar tarefa em que o usuário está parado · "melhorar a inteligência
+do Axon" (hábitos, estratégias para energia baixa e para excesso de demandas) ·
+"fazer o Axon quebrar tarefas difíceis".
+
+É um recurso só. Separados, viram três entregas que se contradizem — e o
+conteúdo sobre hábitos e estratégias é justamente o que impede o conselho de
+sair genérico.
+
+Máquina que já existe: `calibration_service.get_block_scores`,
+`_block_level_at`, `_find_good_slot`, `_pick_free_good_slot`,
+`_compaction_candidate`. Entrada decidida: conversa, de preferência pela página
+de voz, com uma tool em `agent_tools.py` gravando a linha estruturada. O que
+faz a v2 funcionar é o par **intervenção → resultado**, então precisa de uma
+pergunta de retorno ("voltou?") algum tempo depois.
+
+### 16. 🤖 Ajustar horários ao longo do dia e da semana
+Análises às 8h, 12h e 18h, e aos domingos e segundas.
+
+### 17. 🤖 Adiantar tarefas dos próximos dias e redistribuir a semana
+O caso das 10 aulas: fez 3 na segunda, algum outro dia passa a ter 1.
+
+### 18. 🤖 Sugerir tarefa nova quando o usuário adiantar uma
+Prompt da Fase 2 já escrito (está na sua lista original). Depende de coisas que
+já estão prontas, então é o mais barato deste grupo.
+
+### 19. 🤖 Notas do usuário
+Usuário e Axon escrevem; serve de memória para os dois.
+
+### 20. 🤖 Chat: orientações predefinidas
+### 21. 🤖 Chat: botão de parar no meio da resposta
+Conferido: não existe. É pequeno.
+
+### 22. 🤖 Melhorar a criação dos insights
+Você escreveu que nem você sabe como funcionam hoje. **Comece por entender,
+não por mudar** — depende do item 23.
+
+---
+
+# ESTRUTURA
+
+### 23. 🤖 Documentar o aplicativo
+**Vale antecipar.** Barateia todo o resto da lista e é o que você escreveu
+querer: agentes com contexto sem gastar tantos tokens. Pré-requisito do 22.
+
+### 24. 🤖 Otimizações de segurança
+### 25. 🤖 Dashboard de métricas da empresa (com Instagram e TikTok)
+### 26. 🤖 Site/página de feedback dos usuários
+
+---
+
+# DESIGN E ACABAMENTO
+
+### 27. 🤖 Objetivos — os três juntos
+Reformular o design (card) · criar etapas com subtarefas dentro · objetivos
+mensais, semanais ou fixos com reset por período. **É a mesma página**: fazer
+separado significa redesenhar Objetivos três vezes.
+
+### 28. 🤖 Registro diário — os dois juntos
+Tags menos usadas somem depois de 10–15 · ajuste visual de dormir/acordar.
+Mesma tela.
+
+### 29. 🤖 Abrir a tarefa por dentro + o design interno
+O link entre tarefa, objetivo e rotina já existe; falta abrir ao tocar e
+desenhar o interior.
+
+### 30. 🤖 Página de configurações: decidir o conjunto e o design
+### 31. 🤖 Reformulação do design mobile
+### 32. 🤖 Modal do calendário desktop no hover (design da Luiza)
+
+---
+
+# ⏸️ ADIADO
+
+### Horários bloqueados do usuário
+**Adiado em 10/11/2026, decisão do Bernardo.** O código está pronto e correto
+(`services/fixed_commitments.py`, 59 testes, fiação em 6 caminhos de
+agendamento) — **não foi para a `main` de propósito**, e as alterações do
+agente foram revertidas.
+
+**Por que parou:** o campo captura "trabalho, faculdade, estágio" como bloco
+único. Quem trabalha das 08:00 às 18:00 cadastra dez horas; tratado como
+ocupado, isso apaga o expediente inteiro da agenda do Axon. Um matutino com
+emprego **nunca** usaria o próprio pico, e a tese do app deixa de valer para a
+maior parte da base. **O Axon deve organizar as tarefas de expediente** — então
+horário de trabalho é contexto, não bloqueio.
+
+**Desenho proposto para quando voltar:** opção em Configurações chamada "Meus
+horários bloqueados", onde o usuário adiciona intervalos em dias específicos,
+cada um com um título. No caso do Bernardo, uma linha: o almoço.
+
+**Por que esse desenho é seguro e o atual não é: ele nasce vazio.** O
+`fixed_commitments` é preenchido pelo onboarding, então todos que responderam
+têm o expediente lá — ligar o bloqueio quebra a agenda de todos de uma vez.
+Lista vazia = comportamento idêntico ao de hoje.
+
+**O formato é o mesmo** (`{título, days[], start, end}`), então o trabalho já
+feito serve direto. Falta a tela em Configurações e um campo próprio.
+
+**Decisão pendente:** telas separadas ("meu expediente" × "meus horários
+bloqueados") ou lista única com tipo por linha.
+
+**Soltar primeiro para um grupo pequeno** pelo TestFlight externo.
+
+**Dívida aberta:** o onboarding continua coletando o campo e o `prompts.py` já
+o entrega ao Axon no chat. O Axon conversa sabendo do expediente e agenda sem
+saber. Fecha-se com uma mudança de texto na tela — deixar claro que serve para
+o Axon conhecer a pessoa, não para desviar da agenda.
+
+---
+
+# ✅ FEITO
+
+| Item | Evidência |
+|---|---|
+| Encurtar tarefa concluída cedo | "min livres" em `Planning.tsx`, `Dashboard.tsx`, `api.ts`, `RoutineAnalysisCard.tsx` |
+| Mostrar minutos economizados | mesma máquina; validado no app em 22/09/2026 |
+| Linkar tarefas ↔ objetivos ↔ rotinas | `objective_id` em tarefas e subtarefas |
+| App para iOS | Build 3 em revisão no TestFlight, 09/11 |
+| Onboarding: tela fixa, sem arrastar | `html.is-native { overscroll-behavior: none }` |
+| Onboarding: múltipla escolha | tipo `ranked` em `onboardingSteps.ts` |
+| Onboarding: voltar uma pergunta | `goBack` em `Onboarding.tsx` |
+| Objetivos: subtarefa contar ponto | `objective_steps` em `subtasks_service` |
+| Evento concluir ao passar o horário | `_event_completed` → fração 1.0 |
+| Reformulação do onboarding | em produção 09/11/2026 |
+| Política de privacidade reescrita | 5 mudanças em `privacidade.html`, aprovadas em 10/11 — **falta publicar** |
+| Janela de datas no Planning | medido em 12/11 no banco: 819 → 233 linhas por abertura (tarefas 599→233, subtarefas 220→0); cache auditado, 15/15 mutações invalidam — **falta commit** |
+| Exclusão de conta pedindo o e-mail | conferido funcionando pelo Bernardo em 12/11 — **falta commit**; acabamentos no item 34 |
+
+> Falta só confirmar a **bolinha visual** dos eventos — o cálculo já está certo.
+
+---
+
+# Hipóteses descartadas por medição
+
+Guardadas para ninguém gastar tempo nelas de novo. As duas pareciam graves no
+papel e caíram na medição de 12/11/2026.
+
+- **`tags_for_tasks` estourando o limite de URL.** O `.in_("task_id", ...)` manda
+  todos os ids num filtro só: com 599 tarefas são ~22 KB de URL, acima do limite
+  típico de 8 KB do nginx, e o erro é engolido em `tasks_service.py` com um
+  `print`. Conferido ao vivo no `journalctl -u axon-api` abrindo o Planning em
+  produção: a linha "tags não carregadas" **não aparece**, e o controle (as
+  linhas `GET /tasks` do uvicorn no mesmo log) prova que o journal captura o
+  stdout. O Supabase aceita a URL longa. Reabrir só se alguém passar de umas
+  1.500 tarefas.
+- **`db-max-rows` truncando listas em silêncio.** O padrão do PostgREST é 1.000
+  linhas. A maior conta tem **599** tarefas; a segunda, 66. Ninguém está sendo
+  truncado. Reabrir quando a maior conta chegar perto de 1.000.
+
+
+# Dependências
+
+```
+23 (documentar)   →  22 (insights)
+8  (planos)       →  9  (cota e %)
+3 e 4             →  mesmo prompt, um agente resolve os dois
+12 ↔ 13 ↔ 14      →  a mesma noção de conflito, em 3 momentos
+```
+
+# Como usar
+
+Marque aqui, **não em outro lugar**. Quando um item sair, mova para a tabela
+"FEITO" com a evidência — foi a falta disso que fez metade da lista original
+conter coisas que já estavam prontas.
+
+Quando reordenar, mantenha **uma numeração só**. A versão anterior deste
+arquivo tinha três numerações cruzadas e ficou impossível de seguir.

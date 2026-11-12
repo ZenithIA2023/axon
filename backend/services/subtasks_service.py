@@ -6,9 +6,10 @@ status da tarefa mãe são recalculados automaticamente.
 Cascade de exclusão via FK: deletar a tarefa mãe apaga as subtarefas.
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from database import supabase
+from services.tasks_service import apply_date_window
 
 
 def _serialize(row: dict) -> dict:
@@ -171,17 +172,62 @@ def _recalculate_task_progress(user_id: str, task_id: str) -> None:
         print(f"[subtasks] recálculo falhou (task={task_id}): {e}", flush=True)
 
 
-def list_all(user_id: str) -> list[dict]:
-    """Retorna todas as subtarefas do usuário (para carga em bulk no frontend)."""
-    res = (
-        supabase.table("subtasks")
-        .select("*")
-        .eq("user_id", user_id)
-        .order("position", desc=False)
-        .order("created_at", desc=False)
-        .execute()
-    )
-    return [_serialize(r) for r in (res.data or [])]
+# Quantos ids de tarefa vão num único `in_()`. O filtro viaja na URL do
+# PostgREST (~37 caracteres por UUID): 150 ids dão ~5,5 KB, folgado para
+# qualquer limite de URL no caminho. Um mês de agenda costuma caber num lote só.
+_IN_CHUNK = 150
+
+
+def list_all(
+    user_id: str,
+    scheduled_from: date | None = None,
+    scheduled_to: date | None = None,
+) -> list[dict]:
+    """
+    Subtarefas do usuário, para a carga em bulk do frontend.
+
+    Sem janela devolve TODAS, como sempre (o app das lojas pede assim). Com
+    `scheduled_from`/`scheduled_to`, só as das tarefas mães que caem na janela,
+    pela MESMA regra de tasks_service.apply_date_window: subtarefa não tem data
+    própria, e regra diferente faria a tela mostrar uma tarefa sem as
+    subtarefas dela.
+
+    Duas consultas (ids das mães, depois as subtarefas com in_), no molde de
+    routines_service.list_routines. Os ids ficam no servidor: mandá-los do
+    frontend na URL passaria do limite de header do Nginx num mês cheio.
+    """
+    if scheduled_from is None or scheduled_to is None:
+        res = (
+            supabase.table("subtasks")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("position", desc=False)
+            .order("created_at", desc=False)
+            .execute()
+        )
+        return [_serialize(r) for r in (res.data or [])]
+
+    mothers = apply_date_window(
+        supabase.table("tasks").select("id").eq("user_id", user_id),
+        scheduled_from,
+        scheduled_to,
+    ).execute()
+    task_ids = [str(r["id"]) for r in (mothers.data or [])]
+
+    rows: list[dict] = []
+    for i in range(0, len(task_ids), _IN_CHUNK):
+        res = (
+            supabase.table("subtasks")
+            .select("*")
+            .eq("user_id", user_id)
+            .in_("task_id", task_ids[i : i + _IN_CHUNK])
+            .execute()
+        )
+        rows.extend(res.data or [])
+    # A ordem do banco vale por lote; com mais de um, reordena no fim com a
+    # mesma chave da consulta sem janela.
+    rows.sort(key=lambda r: (r.get("position") or 0, str(r.get("created_at") or "")))
+    return [_serialize(r) for r in rows]
 
 
 def list_for_task(user_id: str, task_id: str) -> list[dict]:

@@ -10,7 +10,7 @@ Erros de validação/posse levantam ValueError com mensagem amigável:
 - o agente converte para um tool_result de erro.
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from database import supabase
 from services import calendar_sync
@@ -576,6 +576,39 @@ def find_recent_duplicate(
     return None
 
 
+def apply_date_window(query, scheduled_from: date, scheduled_to: date):
+    """
+    Restringe uma consulta em `tasks` à janela [scheduled_from, scheduled_to]
+    que uma tela mostra (o Planning pede o mês visível). Três grupos entram:
+
+      1. tarefas com scheduled_date dentro da janela;
+      2. eventos que começam ANTES da janela e terminam dentro ou depois dela
+         (end_date >= início) — o calendário desenha o evento em todos os dias
+         de scheduled_date a end_date, e sem este grupo a barra de um evento de
+         28/09 a 05/10 sumiria da janela de outubro;
+      3. tarefas sem data (scheduled_date nulo) — a "fila" do Planning, que
+         aparece em qualquer janela.
+
+    Por que `.or_()`, que nada mais no projeto usa: os três grupos são
+    ALTERNATIVAS, e `.eq`/`.gte`/`.lte` encadeados são sempre AND entre si.
+
+    O filtro de usuário NÃO entra aqui: quem chama já aplicou
+    `.eq("user_id", ...)` antes, e ele precisa ficar FORA do grupo `or`. Dentro
+    dele viraria uma alternativa ("é do usuário OU não tem data") e a consulta
+    devolveria tarefas de outros usuários.
+
+    As datas chegam como `date` (validadas pelo FastAPI no router), então o que
+    vai para a string do filtro é sempre AAAA-MM-DD — nunca texto livre do
+    cliente, que poderia carregar vírgula ou parêntese e reescrever o filtro.
+    """
+    ini, fim = scheduled_from.isoformat(), scheduled_to.isoformat()
+    return query.or_(
+        "scheduled_date.is.null,"
+        f"and(scheduled_date.gte.{ini},scheduled_date.lte.{fim}),"
+        f"and(scheduled_date.lt.{ini},end_date.gte.{ini})"
+    )
+
+
 def list_tasks(
     user_id: str,
     *,
@@ -583,7 +616,15 @@ def list_tasks(
     status: str | None = None,
     task_type: str | None = None,
     objective_id: str | None = None,
+    scheduled_from: date | None = None,
+    scheduled_to: date | None = None,
 ) -> list[dict]:
+    """
+    Tarefas do usuário com filtros opcionais. Com `scheduled_from` e
+    `scheduled_to` (sempre os dois), só a janela — ver apply_date_window. Sem
+    eles devolve TODAS, como sempre: o app já instalado nas lojas pede assim e
+    continua pedindo até o usuário atualizar.
+    """
     query = (
         supabase.table("tasks")
         .select("*, objectives(title)")
@@ -591,6 +632,8 @@ def list_tasks(
         .order("start_time", desc=False)
     )
 
+    if scheduled_from is not None and scheduled_to is not None:
+        query = apply_date_window(query, scheduled_from, scheduled_to)
     if scheduled_date:
         query = query.eq("scheduled_date", scheduled_date)
     if status:

@@ -37,6 +37,36 @@ def check_email_blocked(email: str) -> dict | None:
     return {"email": email, "can_reuse_at": can_reuse_at.isoformat()}
 
 
+def _normalize_email(value: str | None) -> str:
+    # Mesma regra do diálogo no frontend: ignora espaços nas pontas e caixa.
+    return (value or "").strip().lower()
+
+
+def confirmation_matches(user_id: str, auth_email: str | None, typed: str) -> bool:
+    """
+    O e-mail digitado na confirmação de exclusão é o desta conta?
+
+    Aceita o e-mail do Supabase Auth e também o de `profiles.email`, que é o
+    que o diálogo MOSTRA ao usuário (GET /profile prefere o do perfil). Se os
+    dois divergirem — uma troca de e-mail que atualizou só um lado —,
+    comparar com um só trancaria a pessoa fora da exclusão digitando
+    exatamente o que a tela pede. O perfil só é lido nesse caso.
+    """
+    alvo = _normalize_email(typed)
+    if not alvo:
+        return False
+    if alvo == _normalize_email(auth_email):
+        return True
+    res = (
+        supabase.table("profiles")
+        .select("email")
+        .eq("id", user_id)
+        .single()
+        .execute()
+    )
+    return alvo == _normalize_email((res.data or {}).get("email"))
+
+
 def delete_account(user_id: str, email: str) -> None:
     """
     1. Revoga a autorização na Apple, se o usuário entrou pela Apple.

@@ -1,5 +1,9 @@
 # Prompt — Janela de datas nas tarefas e confirmação digitada para excluir conta
 
+> Referências de linha reconferidas em **10/11/2026**: `Planning.tsx:716` e
+> `:690`, `Dashboard.tsx:170`, `Focus.tsx:79`, `isTaskOnDate` em `:288`,
+> `viewMode` em `:635`, `undatedTasks` em `:784`, `tasks.py:14` — todas válidas.
+
 Duas tarefas independentes. Leia o `AGENTS.md` antes de mexer em qualquer
 coisa — em especial a **§13 (Performance)** para a Tarefa 1 e a **§10
 (Segurança)** para as duas.
@@ -117,11 +121,17 @@ já visitado não busca de novo.
 A janela sai de `viewMode` + `selectedDate` (`Planning.tsx:635`):
 
 - **`"week"`** → os 7 dias de `weekDaysOf(selectedDate)` (`:349`).
-- **`"month"`** → a **grade inteira**, não o mês. `Planning.tsx:3432-3440`
-  monta `gridStart = new Date(year, month, 1 - firstWeekday)` e 35 ou 42
-  células, incluindo os dias vizinhos que fecham a primeira e a última semana.
-  Buscar só do dia 1 ao dia 30 deixa essas células do mês vizinho vazias — e
-  elas aparecem na tela.
+- **`"month"`** → a **grade inteira**, não o mês. Ela monta
+  `gridStart = new Date(year, month, 1 - firstWeekday)` e 35 ou 42 células,
+  incluindo os dias vizinhos que fecham a primeira e a última semana. Buscar só
+  do dia 1 ao dia 30 deixa essas células do mês vizinho vazias — e elas
+  aparecem na tela.
+
+> ⚠️ **São DUAS grades de mês, não uma** (reconferido em 10/11/2026):
+> `MonthCalendar` (~linha 3432) e `DesktopMonthBoard` (~linha 2619). As duas
+> têm o mesmo `const totalCells = Math.ceil((firstWeekday + daysInMonth) / 7) * 7`.
+> Corrigir só uma deixa a vista de mês do desktop com células vazias. Confira
+> as duas e diga no relatório o que fez em cada uma.
 
 Pegue uma **folga de alguns dias em cada ponta**: trocar de semana dentro do
 mesmo mês passa a não precisar de request novo, e o custo de alguns dias a mais

@@ -1,25 +1,49 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from auth_helper import get_current_user
 from services import account_service
 from limiter import limiter
+from models.schemas import AccountDeleteRequest
 
 router = APIRouter(prefix="/account", tags=["account"])
 
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
-def delete_account(user=Depends(get_current_user)):
+def delete_account(
+    body: Optional[AccountDeleteRequest] = None,
+    user=Depends(get_current_user),
+):
     """
     Exclui permanentemente a conta autenticada.
     - Registra o e-mail em deleted_accounts (bloqueio de 60 dias).
     - Remove o usuário do Supabase Auth.
     - O CASCADE das FKs apaga todos os dados (tarefas, rotinas, conversas, etc.).
+
+    `confirm_email` (opcional) é o e-mail que o usuário digitou no diálogo
+    final. Quando vem, precisa bater com o da conta, ou nada é apagado. Não é
+    credencial — o dono da conta já está autenticado —, é uma segunda barreira:
+    um bug em qualquer tela que chame api.deleteAccount() não apaga a conta de
+    um cliente atualizado sem a confirmação. Sem o campo, exclui como antes:
+    o app das lojas chama sem corpo e a exclusão é exigência da Play Store.
     """
+    if body is not None and body.confirm_email is not None:
+        if not account_service.confirmation_matches(
+            user["id"], user["email"], body.confirm_email
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="O e-mail digitado não é o desta conta.",
+            )
     try:
         account_service.delete_account(user["id"], user["email"])
     except Exception as e:
+        # O detalhe da exceção (Supabase, Apple) fica no log, sem dado pessoal;
+        # o usuário vê a mensagem dentro do diálogo e pode tentar de novo.
+        print(f"[account] exclusão falhou: {type(e).__name__}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Não foi possível excluir a conta: {e}",
+            detail="Não foi possível excluir a conta agora. Tente novamente em instantes.",
         )
 
 
