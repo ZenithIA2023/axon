@@ -57,13 +57,22 @@ def confirmation_matches(user_id: str, auth_email: str | None, typed: str) -> bo
         return False
     if alvo == _normalize_email(auth_email):
         return True
-    res = (
-        supabase.table("profiles")
-        .select("email")
-        .eq("id", user_id)
-        .single()
-        .execute()
-    )
+    # O .single() LEVANTA quando não há linha em profiles (conta sem perfil),
+    # e a exceção subia como 500 por estar fora do try do router. Sem perfil
+    # não há segundo e-mail a aceitar: a resposta certa é "não confere", e a
+    # falha continua FECHADA — nada é apagado. Mesmo molde de
+    # user_tz.stored_tz. Só o tipo do erro vai ao log, sem dado pessoal.
+    try:
+        res = (
+            supabase.table("profiles")
+            .select("email")
+            .eq("id", user_id)
+            .single()
+            .execute()
+        )
+    except Exception as e:
+        print(f"[account] perfil não lido na confirmação: {type(e).__name__}")
+        return False
     return alvo == _normalize_email((res.data or {}).get("email"))
 
 

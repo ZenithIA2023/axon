@@ -3,7 +3,7 @@
 Levantado em 10/11/2026 a partir da lista do Bernardo, com cada item conferido
 no código. **Faça de cima para baixo.** Um número por item, uma lista só.
 
-**Progresso: 14 de 46 feitos · 1 adiado · 31 na fila**
+**Progresso: 15 de 47 feitos · 1 adiado · 31 na fila**
 
 Legenda — 🤖 tarefa de agente · 🧍 tarefa do Bernardo · ⏸️ adiado · ✅ feito
 
@@ -11,35 +11,15 @@ Legenda — 🤖 tarefa de agente · 🧍 tarefa do Bernardo · ⏸️ adiado ·
 
 # AGORA
 
+Os dois primeiros **correm em paralelo**: o 1 é seu, o 34 é de
+agente. Um não espera o outro.
+
+
 ### 1. 🧍 Reconferir os 13 pontos de iOS num iPhone
 Meia hora com a Build 3, que já está no TestFlight. **Tem relógio correndo:**
 você convidou testadores para uma build cujo comportamento no iPhone só foi
 verificado no onboarding. A lista dos 13 pontos está no histórico de 23/10.
 Não compete com nenhum agente — dá para fazer enquanto um trabalha.
-
-### 33. 🤖 O hub do Planning monta tudo duas vezes
-Descoberto em 12/11/2026 no log do VPS. UMA abertura do Planning gera
-`GET /routines` ×2, `GET /profile` ×3, `POST /tasks/carry-forward` ×2,
-`GET /tasks` ×2, `GET /subtasks` ×2 e `GET /tasks/daily-stats` ×4.
-
-Causa: `Planning.tsx:522` monta `<AgendaView embedded />` e `:530` monta outra
-com `desktopMode`. O container do desktop é `hidden lg:block` — o CSS esconde,
-mas o React monta e roda os efeitos das DUAS. Vale também para `Routines`
-(`/routines` ×2) e `Goals`. O código já admitia em `Planning.tsx:695`.
-
-**Não corrompe dado.** O `carry_forward_tasks` é seguro na corrida: quem lê
-depois do update não acha mais a linha (`scheduled_date` já é hoje), e quem lê
-antes grava o mesmo `carry_count`. O custo é desperdício puro — na conta do
-Bernardo, 1.638 linhas de tarefa por abertura em vez de 819.
-
-Efeito colateral visível: o aviso "N pendentes movidas" vive em estado local de
-cada instância, e quem ganha a corrida pode ser a instância ESCONDIDA. O aviso
-pode não aparecer mesmo tendo havido movimentação.
-
-**É o maior ganho restante no Planning** e é independente do item 3: a janela
-corta linhas por request, isto corta requests. Cuidado ao consertar: `lg:hidden`
-/ `hidden lg:block` é CSS, não desmontagem — precisa de renderização
-condicional de verdade, e os dois modos têm props diferentes.
 
 ### 34. 🤖 Dois acabamentos da exclusão de conta
 Saíram da revisão do item 4 em 10/11. Nenhum bloqueia, mas o primeiro tem
@@ -56,10 +36,6 @@ implicação de loja:
   backend exclui sem a segunda checagem — falha ABERTA. O freio do frontend
   continua valendo, mas a defesa em profundidade desaparece em silêncio.
 
-### 6. 🤖 Popup de "registro de ontem" em conta nova
-É a primeira tela de quem acabou de chegar, pedindo registro de um dia em que a
-pessoa nem usava o app.
-
 ---
 
 # 🏪 PENDÊNCIAS DE LOJA — decidido em 10/11 fazer depois
@@ -67,9 +43,8 @@ pessoa nem usava o app.
 Têm relógio (as duas lojas estão revisando o app agora) mas o Bernardo optou
 por agrupar com as configurações. Registrado aqui para não se perder.
 
-- **Subir a política nova** (`./scripts/deploy.sh site`). O texto está escrito e
-  aprovado; a página no ar ainda é a de 19/10 e não menciona o funil. É o link
-  que as duas lojas abrem.
+- ✅ **Política nova publicada em 12/11/2026** (`deploy.sh site` + `backend`).
+  A página no ar agora é a de 10/11, com o funil e os dados do onboarding.
 - **Declarar App activity → App interactions** no formulário da Play Console. O
   formulário foi preenchido com o documento de setembro, que afirma "não há
   analytics"; desde 09/11 existe o funil. *Não se sabe se mexer no Data Safety
@@ -126,6 +101,19 @@ passa sem aviso — o `criar_tarefa` avisa, o `atualizar_tarefa` não.
 
 ### 14. 🤖 Verificação de conflito ao criar tarefa pela tela
 Popup pedindo confirmação, desligável nas configurações. Irmão do 12 e do 13.
+
+### 35. 🤖 Estratégias de reativação de quem sumiu
+Decidido em 12/11/2026: o Bernardo quer funcionalidades com o objetivo de
+trazer de volta quem parou de usar. **Não é urgente — ainda não há base de
+usuários para reativar** (a segunda maior conta tem 66 tarefas). Fica aqui para
+ser retomado quando houver gente de verdade.
+
+Depende do item 7, e é por causa deste item que o 7 **congela só as chamadas ao
+Claude e mantém o push**: cortar notificação de inativo economiza zero (FCM e
+APNs são grátis) e desligaria a única ferramenta de recuperação que existe.
+
+O item 7 também entrega a matéria-prima: `profiles.last_seen_at` passa a dizer
+quem sumiu e há quanto tempo.
 
 ---
 
@@ -200,6 +188,33 @@ desenhar o interior.
 
 ### 30. 🤖 Página de configurações: decidir o conjunto e o design
 ### 31. 🤖 Reformulação do design mobile
+**Fazer o item 33 junto** — ele mexe na mesma tela, e assim o risco de
+regressão no `Planning.tsx` é pago uma vez só.
+
+### 33. 🤖 O hub do Planning monta tudo duas vezes
+Descoberto em 12/11/2026 no log do VPS. UMA abertura do Planning gera
+`GET /routines` ×2, `GET /profile` ×3, `POST /tasks/carry-forward` ×2,
+`GET /tasks` ×2, `GET /subtasks` ×2 e `GET /tasks/daily-stats` ×4.
+
+Causa: `Planning.tsx:522` monta `<AgendaView embedded />` e `:530` monta outra
+com `desktopMode`. O container do desktop é `hidden lg:block` — o CSS esconde,
+mas o React monta e roda os efeitos das DUAS. Vale também para `Routines`
+(`/routines` ×2) e `Goals`. O código já admitia em `Planning.tsx:695`.
+
+**Não corrompe dado.** O `carry_forward_tasks` é seguro na corrida: quem lê
+depois do update não acha mais a linha (`scheduled_date` já é hoje), e quem lê
+antes grava o mesmo `carry_count`. O custo é desperdício puro — na conta do
+Bernardo, 1.638 linhas de tarefa por abertura em vez de 819.
+
+Efeito colateral visível: o aviso "N pendentes movidas" vive em estado local de
+cada instância, e quem ganha a corrida pode ser a instância ESCONDIDA. O aviso
+pode não aparecer mesmo tendo havido movimentação.
+
+**É o maior ganho restante no Planning** e é independente do item 3: a janela
+corta linhas por request, isto corta requests. Cuidado ao consertar: `lg:hidden`
+/ `hidden lg:block` é CSS, não desmontagem — precisa de renderização
+condicional de verdade, e os dois modos têm props diferentes.
+
 ### 32. 🤖 Modal do calendário desktop no hover (design da Luiza)
 
 ---
@@ -261,6 +276,7 @@ o Axon conhecer a pessoa, não para desviar da agenda.
 | Janela de datas no Planning | medido em 12/11 no banco: 819 → 233 linhas por abertura (tarefas 599→233, subtarefas 220→0); cache auditado, 15/15 mutações invalidam; commitado em 12/11 |
 | Exclusão de conta pedindo o e-mail | conferido funcionando pelo Bernardo em 12/11; commitado em 12/11; acabamentos no item 34 |
 | Bug da ofensiva no registro diário | causa: `DayReview.handleSave` chamava `onSaved`+`onClose` no mesmo tick e o `onClose` do pop-up disparava o aviso; a condição virou "o dia pendente ainda está em branco?" (`Dashboard.tsx`); conferido pelo Bernardo em 12/11 |
+| Pop-up de registro em conta nova | `streak_service.yesterday_reviewable` + `can_review_yesterday` no `/dashboard`, no fuso do usuário; 12 testes novos; marca do pop-up virou dado de conta (`lib/autoReviewMark`) e a data local unificada em `lib/localDate`; PR #157 |
 
 > Falta só confirmar a **bolinha visual** dos eventos — o cálculo já está certo.
 

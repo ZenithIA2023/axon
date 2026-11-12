@@ -1,5 +1,7 @@
 import {
 
+  useCallback,
+
   useEffect,
 
   useMemo,
@@ -23,6 +25,8 @@ import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 
 import {
+
+  AlertTriangle,
 
   ArrowLeft,
 
@@ -220,15 +224,19 @@ export default function Profile() {
 
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
-  useEffect(() => {
+  // Falha ao carregar o perfil. Antes era engolida (.catch → profile null): a
+  // página vinha com nome e e-mail em branco, sem explicação, e o diálogo de
+  // exclusão oferecia um botão que nunca habilitava — a pessoa ficava sem
+  // conseguir excluir a própria conta (exigência da Play) e sem saber por quê.
+  const [profileLoadError, setProfileLoadError] = useState<string | null>(null);
 
-    if (!api.isLoggedIn()) {
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
-      navigate("/login");
+  const loadProfile = useCallback(() => {
 
-      return;
+    setIsLoadingProfile(true);
 
-    }
+    setProfileLoadError(null);
 
     api
 
@@ -240,9 +248,36 @@ export default function Profile() {
 
       })
 
-      .catch(() => setProfile(null));
+      .catch((error) => {
 
-  }, [navigate]);
+        setProfile(null);
+
+        // A mensagem do request() já é para o usuário (sem detalhe interno).
+        setProfileLoadError(
+          error instanceof Error && error.message
+            ? error.message
+            : "Não foi possível carregar os dados da sua conta."
+        );
+
+      })
+
+      .finally(() => setIsLoadingProfile(false));
+
+  }, []);
+
+  useEffect(() => {
+
+    if (!api.isLoggedIn()) {
+
+      navigate("/login");
+
+      return;
+
+    }
+
+    loadProfile();
+
+  }, [navigate, loadProfile]);
 
   const resultKey = useMemo<ChronotypeResultKey>(() => {
 
@@ -309,6 +344,9 @@ export default function Profile() {
 
   // Ignora espaços nas pontas e maiúsculas nos dois lados; fora isso, igual.
   // O backend aplica a mesma regra quando recebe o e-mail.
+  // Só dá para confirmar a exclusão conhecendo o e-mail da conta.
+  const canConfirmDeletion = userEmail.trim() !== "";
+
   const deleteEmailMatches =
     userEmail.trim() !== "" &&
     deleteConfirmText.trim().toLowerCase() === userEmail.trim().toLowerCase();
@@ -395,6 +433,20 @@ export default function Profile() {
             </button>
           </header>
 
+          {profileLoadError && (
+
+            <ProfileLoadErrorNotice
+
+              message={profileLoadError}
+
+              retrying={isLoadingProfile}
+
+              onRetry={loadProfile}
+
+            />
+
+          )}
+
           <div className="grid items-start gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
 
             <div className="grid gap-4">
@@ -454,6 +506,20 @@ export default function Profile() {
 
           </button>
         </header>
+
+        {profileLoadError && (
+
+          <ProfileLoadErrorNotice
+
+            message={profileLoadError}
+
+            retrying={isLoadingProfile}
+
+            onRetry={loadProfile}
+
+          />
+
+        )}
 
         <ProfileHeader
 
@@ -587,6 +653,8 @@ export default function Profile() {
 
         description={
 
+          canConfirmDeletion ? (
+
           <>
 
             <p>
@@ -688,25 +756,126 @@ export default function Profile() {
 
           </>
 
+          ) : (
+
+            // Sem o e-mail da conta não há como confirmar a exclusão. Em vez
+            // de um botão que nunca habilita, o diálogo diz o que houve e o
+            // botão vira "Tentar de novo". Liberar a exclusão sem e-mail não é
+            // opção: seria excluir sem a confirmação digitada.
+            <p
+
+              role="alert"
+
+              className="rounded-2xl border border-red-300/25 bg-red-500/10 p-3 text-left text-sm text-red-700 dark:text-red-200"
+
+            >
+
+              Não conseguimos carregar os dados da sua conta, então não dá para
+
+              confirmar a exclusão agora. Verifique sua conexão e tente de novo.
+
+            </p>
+
+          )
+
         }
 
-        confirmLabel="Sim, excluir"
+        confirmLabel={canConfirmDeletion ? "Sim, excluir" : "Tentar de novo"}
 
         variant="danger"
 
         icon={Trash2}
 
-        loading={isDeletingAccount}
+        loading={isDeletingAccount || isLoadingProfile}
 
-        confirmDisabled={!deleteEmailMatches}
+        confirmDisabled={canConfirmDeletion && !deleteEmailMatches}
 
-        onConfirm={handleDeleteAccount}
+        onConfirm={canConfirmDeletion ? handleDeleteAccount : loadProfile}
 
         onClose={closeDeleteFinalModal}
 
       />
 
     </main>
+
+  );
+
+}
+
+// ===========================================================================
+
+// AVISO DE FALHA AO CARREGAR O PERFIL
+
+// ===========================================================================
+
+// Visível no topo da página: sem ele, o nome e o e-mail em branco pareciam
+
+// uma conta vazia, e nada explicava por que a exclusão não habilitava.
+function ProfileLoadErrorNotice({
+
+  message,
+
+  retrying,
+
+  onRetry,
+
+}: {
+
+  message: string;
+
+  retrying: boolean;
+
+  onRetry: () => void;
+
+}) {
+
+  return (
+
+    <div
+
+      role="alert"
+
+      className="mb-4 flex items-start gap-3 rounded-2xl border border-red-300/25 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-200"
+
+    >
+
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+
+      <div className="min-w-0 flex-1">
+
+        <p className="font-semibold">Não conseguimos carregar os dados da sua conta.</p>
+
+        <p className="mt-0.5 text-red-700/80 dark:text-red-200/80">{message}</p>
+
+      </div>
+
+      <button
+
+        type="button"
+
+        onClick={onRetry}
+
+        disabled={retrying}
+
+        className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-2xl border border-red-300/30 bg-white/60 px-3 text-xs font-bold text-red-700 transition active:scale-[0.98] disabled:opacity-60 dark:bg-white/[0.06] dark:text-red-100"
+
+      >
+
+        {retrying ? (
+
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+
+        ) : (
+
+          <RefreshCcw className="h-3.5 w-3.5" />
+
+        )}
+
+        Tentar de novo
+
+      </button>
+
+    </div>
 
   );
 
