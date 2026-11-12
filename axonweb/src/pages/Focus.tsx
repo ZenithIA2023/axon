@@ -75,9 +75,18 @@ export default function Focus() {
   const isPaused = status === "paused";
   const canChoose = !isRunning;
 
+  // Só as tarefas de hoje: a tela usa apenas `todayTasks` (scheduled_date ===
+  // hoje), e baixar a conta inteira deixava o Foco mais lento quanto mais
+  // histórico o usuário tinha. Depende de `today` para buscar de novo se a
+  // tela ficar aberta na virada da meia-noite (o relógio atualiza a cada 30s).
   useEffect(() => {
-    api.getTasks().then(setTasks).catch(() => setTaskError(true));
-  }, []);
+    let cancelled = false;
+    setTaskError(false);
+    api.getTasks({ scheduled_date: today })
+      .then((data) => { if (!cancelled) setTasks(data); })
+      .catch(() => { if (!cancelled) setTaskError(true); });
+    return () => { cancelled = true; };
+  }, [today]);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 30000);
     return () => window.clearInterval(timer);

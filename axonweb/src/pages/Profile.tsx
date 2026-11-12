@@ -210,6 +210,16 @@ export default function Profile() {
 
   const [showDeleteFinalModal, setShowDeleteFinalModal] = useState(false);
 
+  // Confirmação digitada da exclusão (decisão de 24/10/2026): dois cliques
+  // seguidos num menu são fáceis de dar sem querer, e a ação é irreversível e
+  // bloqueia o e-mail por 60 dias. O e-mail digitado é um freio contra
+  // acidente, não uma credencial.
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
   useEffect(() => {
 
     if (!api.isLoggedIn()) {
@@ -297,11 +307,43 @@ export default function Profile() {
 
   }
 
+  // Ignora espaços nas pontas e maiúsculas nos dois lados; fora isso, igual.
+  // O backend aplica a mesma regra quando recebe o e-mail.
+  const deleteEmailMatches =
+    userEmail.trim() !== "" &&
+    deleteConfirmText.trim().toLowerCase() === userEmail.trim().toLowerCase();
+
+  function openDeleteFinalModal() {
+
+    setDeleteConfirmText("");
+
+    setDeleteError(null);
+
+    setShowDeleteFinalModal(true);
+
+  }
+
+  function closeDeleteFinalModal() {
+
+    setShowDeleteFinalModal(false);
+
+    setDeleteConfirmText("");
+
+    setDeleteError(null);
+
+  }
+
   async function handleDeleteAccount() {
+
+    if (!deleteEmailMatches || isDeletingAccount) return;
+
+    setIsDeletingAccount(true);
+
+    setDeleteError(null);
 
     try {
 
-      await api.deleteAccount();
+      await api.deleteAccount(deleteConfirmText.trim());
 
       api.logout();
 
@@ -311,7 +353,18 @@ export default function Profile() {
 
     } catch (error) {
 
-      console.error("Erro ao excluir conta:", error);
+      // Antes o erro ia só para o console: o diálogo ficava aberto, mudo, e o
+      // usuário clicava de novo achando que o botão não funcionava. A mensagem
+      // vem do backend (sem detalhe interno) ou do request() quando sem rede.
+      setDeleteError(
+        error instanceof Error && error.message
+          ? error.message
+          : "Não foi possível excluir a conta. Tente novamente."
+      );
+
+    } finally {
+
+      setIsDeletingAccount(false);
 
     }
 
@@ -518,7 +571,7 @@ export default function Profile() {
 
           setShowDeleteFirstModal(false);
 
-          setShowDeleteFinalModal(true);
+          openDeleteFinalModal();
 
         }}
 
@@ -558,6 +611,81 @@ export default function Profile() {
 
             </div>
 
+            <label
+
+              htmlFor="confirmacao-exclusao"
+
+              className="mt-5 block text-left text-sm text-secondary"
+
+            >
+
+              Para confirmar, digite o e-mail da conta:
+
+            </label>
+
+            {/* Atributos contra o preenchimento automático: com type="email"
+                o teclado do iPhone/Android oferece o e-mail num toque e o
+                freio desaparece. inputMode mantém o @ à mão; o name não
+                parece campo de e-mail, para o gerenciador de senhas não
+                oferecer preencher. Colar continua permitido: bloquear
+                atrapalha leitor de tela e teclado alternativo sem impedir
+                exclusão nenhuma — o ato precisa ser deliberado, não uma prova. */}
+            <input
+
+              id="confirmacao-exclusao"
+
+              name="confirmacao-exclusao"
+
+              type="text"
+
+              inputMode="email"
+
+              autoComplete="off"
+
+              autoCorrect="off"
+
+              autoCapitalize="none"
+
+              spellCheck={false}
+
+              value={deleteConfirmText}
+
+              onChange={(event) => {
+
+                setDeleteConfirmText(event.target.value);
+
+                setDeleteError(null);
+
+              }}
+
+              disabled={isDeletingAccount}
+
+              aria-invalid={deleteError ? true : undefined}
+
+              aria-describedby={deleteError ? "confirmacao-exclusao-erro" : undefined}
+
+              className="mt-2 min-h-11 w-full rounded-2xl border border-[#7b2cbf]/20 bg-[#fbf8ff] px-4 text-left text-sm text-primary outline-none transition focus:border-[#7b2cbf]/45 disabled:opacity-60 dark:bg-[#191722]"
+
+            />
+
+            {deleteError && (
+
+              <p
+
+                id="confirmacao-exclusao-erro"
+
+                role="alert"
+
+                className="mt-3 rounded-2xl border border-red-300/25 bg-red-500/10 p-3 text-left text-sm text-red-700 dark:text-red-200"
+
+              >
+
+                {deleteError}
+
+              </p>
+
+            )}
+
           </>
 
         }
@@ -568,9 +696,13 @@ export default function Profile() {
 
         icon={Trash2}
 
+        loading={isDeletingAccount}
+
+        confirmDisabled={!deleteEmailMatches}
+
         onConfirm={handleDeleteAccount}
 
-        onClose={() => setShowDeleteFinalModal(false)}
+        onClose={closeDeleteFinalModal}
 
       />
 

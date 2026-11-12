@@ -563,8 +563,16 @@ export function unregisterDeviceToken(token: string, authToken: string) {
  * Ações sensíveis da conta: exclusão permanente e limpeza de sessão.
  * ========================================================================== */
 
-export function deleteAccount() {
-  return request<void>("/account", { method: "DELETE" });
+// `confirmEmail` é o e-mail que o usuário digitou no diálogo final; o backend
+// confere de novo e recusa (400) se não bater. Sem ele a exclusão acontece
+// como antes — o backend aceita os dois para não quebrar o app das lojas.
+export function deleteAccount(confirmEmail?: string) {
+  return request<void>("/account", {
+    method: "DELETE",
+    ...(confirmEmail !== undefined
+      ? { body: JSON.stringify({ confirm_email: confirmEmail }) }
+      : {}),
+  });
 }
 
 /* ============================================================================
@@ -1130,15 +1138,28 @@ export function deleteTaskTag(id: string) {
 }
 
 // Usado no Planning, Dashboard e Focus com filtros opcionais de data/status/tipo.
+// Janela de datas (AAAA-MM-DD, inclusiva nas duas pontas). Além das tarefas
+// dentro dela, o backend devolve os eventos que a atravessam e as tarefas sem
+// data (a fila) — ver tasks_service.apply_date_window.
+export interface DateWindow {
+  from: string;
+  to: string;
+}
+
 export function getTasks(params?: {
   scheduled_date?: string;
   status?: TaskStatus;
   task_type?: TaskType;
+  window?: DateWindow;
 }) {
   const query = new URLSearchParams();
   if (params?.scheduled_date) query.set("scheduled_date", params.scheduled_date);
   if (params?.status) query.set("status", params.status);
   if (params?.task_type) query.set("task_type", params.task_type);
+  if (params?.window) {
+    query.set("scheduled_from", params.window.from);
+    query.set("scheduled_to", params.window.to);
+  }
 
   const qs = query.toString();
   return request<Task[]>(`/tasks${qs ? `?${qs}` : ""}`);
@@ -1200,9 +1221,14 @@ export interface Subtask {
   created_at: string;
 }
 
-// Carrega todas as subtarefas quando a tela precisa montar um mapa por task_id.
-export function getSubtasks() {
-  return request<Subtask[]>("/subtasks");
+// Subtarefas para montar um mapa por task_id. Com `window`, só as das tarefas
+// que caem nela (mesma regra do getTasks); sem, TODAS as da conta — evite: o
+// tamanho da resposta cresce com o histórico inteiro do usuário.
+export function getSubtasks(window?: DateWindow) {
+  const qs = window
+    ? `?${new URLSearchParams({ scheduled_from: window.from, scheduled_to: window.to })}`
+    : "";
+  return request<Subtask[]>(`/subtasks${qs}`);
 }
 
 export function getTaskSubtasks(taskId: string) {

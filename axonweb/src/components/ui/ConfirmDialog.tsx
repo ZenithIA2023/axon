@@ -16,6 +16,10 @@ type ConfirmDialogProps = {
   cancelLabel?: string;
   variant?: ConfirmDialogVariant;
   loading?: boolean;
+  // Trava só o botão de confirmar (o de cancelar continua livre), para quando
+  // a confirmação depende de algo dentro de `description` — ex.: digitar o
+  // e-mail antes de excluir a conta.
+  confirmDisabled?: boolean;
   icon?: ElementType;
   onConfirm: () => void;
   onClose: () => void;
@@ -68,6 +72,7 @@ export default function ConfirmDialog({
   cancelLabel = "Cancelar",
   variant = "default",
   loading = false,
+  confirmDisabled = false,
   icon,
   onConfirm,
   onClose,
@@ -157,7 +162,7 @@ export default function ConfirmDialog({
                 <button
                   type="button"
                   onClick={onConfirm}
-                  disabled={loading}
+                  disabled={loading || confirmDisabled}
                   className={`inline-flex min-h-12 items-center justify-center rounded-2xl px-4 text-sm font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 ${config.confirmClassName}`}
                 >
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

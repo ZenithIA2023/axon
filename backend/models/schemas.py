@@ -34,6 +34,14 @@ class ResetPasswordRequest(BaseModel):
     password: str = Field(min_length=6, max_length=72)
 
 
+class AccountDeleteRequest(BaseModel):
+    # Confirmação digitada pelo usuário no diálogo final. Opcional: o app das
+    # lojas (Play Store, Build 2 do TestFlight) chama DELETE /account sem
+    # corpo, e a exclusão é exigência da loja — não pode quebrar para eles.
+    # Texto livre (não EmailStr): é só comparado, nunca usado como endereço.
+    confirm_email: Optional[str] = Field(default=None, max_length=320)
+
+
 class MessageResponse(BaseModel):
     message: str
 

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from models.schemas import TaskCreate, TaskUpdate, TaskResponse
@@ -15,15 +15,40 @@ def list_tasks(
     status: Optional[str] = Query(None),
     task_type: Optional[str] = Query(None),
     objective_id: Optional[str] = Query(None),
+    # Janela de datas (Planning). Tipadas como `date`: o FastAPI recusa com 422
+    # qualquer coisa que não seja AAAA-MM-DD antes de o valor chegar ao filtro.
+    scheduled_from: Optional[date] = Query(None, description="YYYY-MM-DD"),
+    scheduled_to: Optional[date] = Query(None, description="YYYY-MM-DD"),
     current_user: dict = Depends(get_current_user),
 ):
+    validate_date_window(scheduled_from, scheduled_to)
     return tasks_service.list_tasks(
         current_user["id"],
         scheduled_date=scheduled_date,
         status=status,
         task_type=task_type,
         objective_id=objective_id,
+        scheduled_from=scheduled_from,
+        scheduled_to=scheduled_to,
     )
+
+
+def validate_date_window(scheduled_from: Optional[date], scheduled_to: Optional[date]) -> None:
+    """
+    Janela vem inteira ou não vem. Só uma das pontas é pedido malformado: tratar
+    como "sem janela" devolveria a conta inteira em silêncio, que é o que esta
+    janela existe para evitar.
+    """
+    if (scheduled_from is None) != (scheduled_to is None):
+        raise HTTPException(
+            status_code=400,
+            detail="Informe scheduled_from e scheduled_to juntos.",
+        )
+    if scheduled_from is not None and scheduled_to is not None and scheduled_from > scheduled_to:
+        raise HTTPException(
+            status_code=400,
+            detail="scheduled_from não pode ser depois de scheduled_to.",
+        )
 
 
 @router.post("", response_model=TaskResponse, status_code=201)

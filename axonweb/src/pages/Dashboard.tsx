@@ -167,7 +167,12 @@ export default function Dashboard() {
   // --------------------------------------------------------------------------
   const loadSubtasks = useCallback(async () => {
     try {
-      const all = await api.getSubtasks();
+      // Só a janela de hoje: a seção "Hoje" mostra as tarefas de hoje (o
+      // backend usa o mesmo "hoje" no fuso do usuário, via X-Timezone). Antes
+      // baixava as subtarefas da conta inteira a cada abertura. "Hoje" é
+      // calculado a cada carga para acompanhar a virada do dia.
+      const today = new Date().toLocaleDateString("sv-SE");
+      const all = await api.getSubtasks({ from: today, to: today });
 
       const map: Record<string, Subtask[]> = {};
 

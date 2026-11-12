@@ -1,14 +1,25 @@
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import date
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from auth_helper import get_current_user
 from services import subtasks_service
 from models.schemas import SubtaskCreate, SubtaskUpdate, SubtaskResponse
+from routers.tasks import validate_date_window
 
 router = APIRouter(prefix="/subtasks", tags=["subtasks"])
 
 
 @router.get("", response_model=list[SubtaskResponse])
-def list_all_subtasks(user=Depends(get_current_user)):
-    return subtasks_service.list_all(user["id"])
+def list_all_subtasks(
+    # Mesma janela do GET /tasks: só as subtarefas das tarefas que caem nela.
+    # Sem os dois parâmetros, devolve todas (o app das lojas pede assim).
+    scheduled_from: Optional[date] = Query(None, description="YYYY-MM-DD"),
+    scheduled_to: Optional[date] = Query(None, description="YYYY-MM-DD"),
+    user=Depends(get_current_user),
+):
+    validate_date_window(scheduled_from, scheduled_to)
+    return subtasks_service.list_all(user["id"], scheduled_from, scheduled_to)
 
 
 @router.get("/task/{task_id}", response_model=list[SubtaskResponse])
