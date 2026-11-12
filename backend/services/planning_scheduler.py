@@ -24,6 +24,7 @@ from services import daily_stats_service
 from services import saved_time_service
 from services import routine_analysis_service
 from services import report_service
+from services import activity_service
 from services import user_tz as user_tz_service
 
 # Horário local (após a meia-noite) em que congelamos o snapshot do dia que
@@ -111,23 +112,56 @@ def _is_last_day_of_month(d) -> bool:
     return (d + timedelta(days=1)).day == 1
 
 
+_USER_COLUMNS = (
+    "id, name, chronotype, timezone, "
+    "daily_planning_enabled, daily_planning_time, daily_use_chronotype, "
+    "weekly_planning_enabled, weekly_planning_day, weekly_use_chronotype, "
+    "routine_analysis_enabled, routine_analysis_time"
+)
+
+
+def _fetch_users() -> list[dict]:
+    """
+    Todos os perfis com cronotipo, com last_seen_at (Migration 40).
+
+    Se a coluna ainda não existe — backend reiniciado antes de a migration ser
+    aplicada —, busca de novo SEM ela em vez de falhar. Falhar aqui pararia o
+    ciclo INTEIRO, inclusive o reconcile e os lembretes: já aconteceu com as
+    colunas de planning (Migration 16), com o scheduler falhando a cada
+    rodada. Sem a coluna, last_seen_at vem ausente e todos contam como ativos,
+    que é exatamente o comportamento de antes desta mudança.
+
+    Sem filtro de atividade AQUI de propósito: filtrar na query pularia o
+    _process_user inteiro, inclusive o que nunca pode parar.
+    """
+    try:
+        res = (
+            supabase.table("profiles")
+            .select(_USER_COLUMNS + ", last_seen_at")
+            .not_.is_("chronotype", "null")
+            .execute()
+        )
+    except Exception as e:
+        print(
+            f"[planning_scheduler] last_seen_at indisponível ({type(e).__name__}); "
+            "seguindo sem o corte por inatividade",
+            flush=True,
+        )
+        res = (
+            supabase.table("profiles")
+            .select(_USER_COLUMNS)
+            .not_.is_("chronotype", "null")
+            .execute()
+        )
+    return res.data or []
+
+
 def run() -> None:
     """Job chamado pelo APScheduler a cada 5 minutos."""
     now_utc = datetime.now(timezone.utc)
 
     try:
-        res = (
-            supabase.table("profiles")
-            .select(
-                "id, name, chronotype, timezone, "
-                "daily_planning_enabled, daily_planning_time, daily_use_chronotype, "
-                "weekly_planning_enabled, weekly_planning_day, weekly_use_chronotype, "
-                "routine_analysis_enabled, routine_analysis_time"
-            )
-            .not_.is_("chronotype", "null")
-            .execute()
-        )
-        users = res.data or []
+        users = _fetch_users()
     except Exception as e:
         print(f"[planning_scheduler] erro ao buscar usuários: {e}", flush=True)
         return
@@ -163,6 +197,13 @@ def _process_user(user: dict, now_utc: datetime) -> None:
         delta = (ch * 60 + cm) - (fh * 60 + fm)
         return 0 <= delta < minutes
 
+    # Conta inativa (21+ dias sem usar o app): congela SÓ os três blocos que
+    # chamam o Claude — relatórios, catch-up e análise de rotina. Reconcile,
+    # close_day e lembretes seguem rodando: os dados da pessoa ficam certos
+    # para quando ela voltar, e o push (grátis) é o que pode trazê-la de volta.
+    # Derivado de last_seen_at a cada ciclo: quem volta religa sozinho.
+    active = activity_service.is_active(user.get("last_seen_at"), now_utc)
+
     # Fim do dia local: congela o snapshot de conclusão do dia que acabou e
     # carrega as pendentes. Roda independente das preferências de notificação.
     if _in_window(_SNAPSHOT_FIRE_TIME):
@@ -186,7 +227,7 @@ def _process_user(user: dict, now_utc: datetime) -> None:
     # Relatórios narrativos: todo domingo 20h local (semana que está
     # terminando hoje) e todo último dia do mês 20h local (mês que está
     # terminando hoje). O próprio dia do disparo entra no período.
-    if _in_window(_REPORT_FIRE_TIME):
+    if active and _in_window(_REPORT_FIRE_TIME):
         if current_weekday == _SUNDAY:
             try:
                 report_service.generate_weekly_report(user_id, tz_name)
@@ -205,7 +246,7 @@ def _process_user(user: dict, now_utc: datetime) -> None:
     # exato das 20h. Se estava fora (deploy, queda, ambiente de dev desligado),
     # aquele relatório nunca seria gerado. Uma vez por dia verificamos se o
     # período encerrado ficou sem relatório e geramos com atraso.
-    if _in_window(_REPORT_CATCHUP_TIME):
+    if active and _in_window(_REPORT_CATCHUP_TIME):
         try:
             generated = report_service.catch_up(user_id, tz_name)
             if generated:
@@ -221,7 +262,7 @@ def _process_user(user: dict, now_utc: datetime) -> None:
     # Janela curta como a dos relatórios: chama o Claude (custo), e o índice
     # único de proposta pendente por dia segura a duplicata se a janela repetir.
     # try/except próprio: falhar aqui não pode derrubar o resto do ciclo.
-    if _bool(user.get("routine_analysis_enabled"), False) and user.get("routine_analysis_time"):
+    if active and _bool(user.get("routine_analysis_enabled"), False) and user.get("routine_analysis_time"):
         if _in_window(str(user["routine_analysis_time"])[:5]):
             try:
                 created = routine_analysis_service.run_scheduled(user_id, tz_name)

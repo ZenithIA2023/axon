@@ -1448,3 +1448,41 @@ comment on column public.profiles.work_start is
   'SEM USO desde a Migration 39 (substituída por fixed_commitments).';
 comment on column public.profiles.work_end is
   'SEM USO desde a Migration 39 (substituída por fixed_commitments).';
+
+-- =============================================
+-- Migration 40: profiles.last_seen_at (congelar o trabalho pago de inativos)
+-- ---------------------------------------------
+-- O planning_scheduler processa todo perfil com cronotipo a cada 5 min e, para
+-- quem sumiu há meses, seguia gerando relatório semanal, mensal, catch-up e
+-- análise de rotina — os quatro chamam o Claude e custam por usuário, para
+-- sempre. Com esta coluna, contas sem uso há 21 dias deixam de receber SÓ
+-- esses quatro (ver services/activity_service.py). Reconcile, close_day e
+-- os lembretes de push continuam.
+--
+-- Por que uma coluna nova: o sinal precisa significar "a pessoa usou o app".
+-- api_usage_events é gravada pelo próprio scheduler a cada chamada ao Claude
+-- (um inativo viraria ativo para sempre); tasks.updated_at é reescrito pelo
+-- carry-forward todo dia; device_tokens.last_seen_at só cobre quem aceitou
+-- push. last_seen_at é gravada em auth_helper.get_current_user, no máximo uma
+-- vez por usuário por dia.
+--
+-- BACKFILL com now(): sem ele, todas as linhas existentes nasceriam nulas. O
+-- código trata nulo como ativo, mas o backfill dá a todos os usuários atuais
+-- os mesmos 21 dias a partir de hoje, sem depender só dessa regra. O default
+-- cobre contas criadas depois desta migration até a primeira requisição.
+--
+-- Aplicar no SQL Editor ANTES de reiniciar o backend. Se o backend subir
+-- antes, o scheduler segue funcionando sem o corte (busca sem a coluna).
+-- =============================================
+alter table public.profiles
+  add column if not exists last_seen_at timestamptz;
+
+update public.profiles
+  set last_seen_at = now()
+  where last_seen_at is null;
+
+alter table public.profiles
+  alter column last_seen_at set default now();
+
+comment on column public.profiles.last_seen_at is
+  'Última requisição autenticada do usuário (no máximo 1 escrita/dia). Contas sem uso há 21+ dias não geram relatórios nem análise de rotina (Claude). Nulo = ativo.';
