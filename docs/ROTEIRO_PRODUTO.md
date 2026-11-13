@@ -3,7 +3,7 @@
 Levantado em 10/11/2026 a partir da lista do Bernardo, com cada item conferido
 no código. **Faça de cima para baixo.** Um número por item, uma lista só.
 
-**Progresso: 15 de 47 feitos · 1 adiado · 31 na fila**
+**Progresso: 17 de 48 feitos · 1 adiado · 30 na fila**
 
 Legenda — 🤖 tarefa de agente · 🧍 tarefa do Bernardo · ⏸️ adiado · ✅ feito
 
@@ -11,8 +11,8 @@ Legenda — 🤖 tarefa de agente · 🧍 tarefa do Bernardo · ⏸️ adiado ·
 
 # AGORA
 
-Os dois primeiros **correm em paralelo**: o 1 é seu, o 34 é de
-agente. Um não espera o outro.
+O item 1 é seu e depende do iPhone. Enquanto isso, os itens de agente
+seguem a ordem da lista abaixo — um não espera o outro.
 
 
 ### 1. 🧍 Reconferir os 13 pontos de iOS num iPhone
@@ -21,57 +21,63 @@ você convidou testadores para uma build cujo comportamento no iPhone só foi
 verificado no onboarding. A lista dos 13 pontos está no histórico de 23/10.
 Não compete com nenhum agente — dá para fazer enquanto um trabalha.
 
-### 34. 🤖 Dois acabamentos da exclusão de conta
-Saíram da revisão do item 4 em 10/11. Nenhum bloqueia, mas o primeiro tem
-implicação de loja:
 
-- Se o perfil não carregar, `userEmail` fica vazio em `Profile.tsx` e o botão de
-  excluir **nunca habilita** — a pessoa não consegue excluir a conta, que a Play
-  exige estar disponível. Mostrar "não foi possível carregar, recarregue" em vez
-  de um botão morto.
-- `account_service.confirmation_matches` usa `.single()`: sem linha em `profiles`
-  estoura 500 em vez de 400. Falha fechada (nada é apagado), é cosmético.
-- **No deploy, conferir na aba Network** se o `DELETE /account` leva o corpo
-  através do Nginx. Se o corpo for descartado, o `confirm_email` não chega e o
-  backend exclui sem a segunda checagem — falha ABERTA. O freio do frontend
-  continua valendo, mas a defesa em profundidade desaparece em silêncio.
+### 37. 🤖🧍 Push no iPhone — hoje NÃO chega nenhuma notificação
+Descoberto em 13/11/2026. As notificações vão para o sininho do app e, no
+Android, para o aparelho (FCM, validado na fase 3). **No iOS nada chega à tela
+de bloqueio**: faltam a capacidade de Push (`aps-environment`), o
+`GoogleService-Info.plist`, o repasse do token no `AppDelegate.swift`, e o
+plugin atual entrega no iOS um token da Apple que o FCM não aceita.
+
+Não trava a release do Android (o iOS ainda está no TestFlight), mas **tem que
+estar pronto antes da App Store** — toda a estratégia de notificação e
+reativação (itens 10, 10a e 35) depende disso para metade do público. Parte é
+do Bernardo (chave de APNs na Apple, app iOS no Firebase, Push no App ID e novo
+perfil de assinatura do CI) e parte é de agente (código nativo e plugin).
+O `GoogleService-Info.plist` segue a mesma regra do `google-services.json`:
+nunca commitado.
 
 ---
 
-# 🏪 PENDÊNCIAS DE LOJA — decidido em 10/11 fazer depois
+# 🏪 PENDÊNCIAS DE LOJA — em andamento desde 12/11
 
-Têm relógio (as duas lojas estão revisando o app agora) mas o Bernardo optou
-por agrupar com as configurações. Registrado aqui para não se perder.
+**Retomado em 12/11/2026:** o app foi aprovado para produção na Play e o teste
+externo foi aprovado na Apple. Com o app publicado, o Data Safety declarado
+virou declaração pública incorreta — é o item com relógio.
 
 - ✅ **Política nova publicada em 12/11/2026** (`deploy.sh site` + `backend`).
   A página no ar agora é a de 10/11, com o funil e os dados do onboarding.
-- **Declarar App activity → App interactions** no formulário da Play Console. O
-  formulário foi preenchido com o documento de setembro, que afirma "não há
-  analytics"; desde 09/11 existe o funil. *Não se sabe se mexer no Data Safety
-  com a revisão de produção em andamento afeta a revisão — vale perguntar ao
-  suporte da Play antes.*
-- **Confirmar se as telas de sono do onboarding** (`t09_sono_util`,
-  `t10_sono_livre`) podem ser puladas. Se não puderem, dado de saúde virou
-  obrigatório e a linha do formulário muda de "Não" para "Sim".
-- **Atualizar `docs/play-store/DATA_SAFETY.md`**: acrescentar App activity,
-  OpenRouter e Google Cloud TTS na tabela de terceiros, corrigir a frase "não há
-  analytics", a do "único dado que sobrevive à exclusão" e a data (está em
-  28/09, anterior à troca de modelos e ao onboarding novo). É documento de
-  apoio: a Play pergunta **se** há compartilhamento, não com quem.
+- ✅ **Telas de sono conferidas em 12/11: NÃO podem ser puladas** (regra em
+  `onboardingState.ts`, `case "sleep_times"`). Informações de saúde viraram
+  obrigatórias.
+- ✅ **`docs/play-store/DATA_SAFETY.md` atualizado em 12/11** — saúde
+  obrigatória, seção nova "Atividade no app", terceiros completos, exclusão.
+- **Decidido em 12/11: UMA release de produção**, com as correções já na
+  `main` (itens 3, 4, 5, 6, 34, data local unificada) **+ o item 10**. As três
+  pendências 🧍 abaixo **ainda não foram feitas** e ficam para logo antes de
+  gerar essa release — o formulário e o trader status não criam release, vão
+  para revisão junto com ela. Antes da build: testar no app real e fazer os 13
+  pontos de iOS (item 1).
+- 🧍 **Corrigir o formulário na Play Console** — duas mudanças, descritas no
+  topo do `DATA_SAFETY.md`: saúde obrigatória e Atividade no app → Interações
+  com o app. A revisão de produção já terminou, então a dúvida sobre mexer
+  durante a revisão não se aplica mais.
+- 🧍 **Seguir as tarefas de configuração do Dashboard da Play** ("Show more"),
+  na ordem que ela mostrar. Descoberto em 12/11: o acesso à produção foi
+  concedido, mas **Production está "Inactive"** — o app ainda não foi publicado.
+  O Data Safety corrigido precisa estar salvo **antes** da primeira release de
+  produção, que é revisada junto com ele.
+- 🧍 **Declarar o trader status** (faixa azul no topo da Play Console). É a
+  exigência da lei europeia de serviços digitais (DSA): se você se declarar
+  comerciante, a Play mostra seus dados de contato na página do app na UE, e sem
+  declaração o app pode sair da Play da UE. Ler em "View details" o que fica
+  público antes de responder.
 - **Etiquetas de privacidade da App Store** (Fase 5, ainda não preenchidas): o
   funil e os dados do onboarding precisam entrar desde o começo.
 
 ---
 
 # CUSTO — antes de escalar
-
-### 7. 🤖 Travar o trabalho automático de contas inativas
-O `planning_scheduler` processa todo perfil com cronotipo a cada 5 min, sem
-olhar se a pessoa ainda usa o app (`planning_scheduler.py:120-138`). Para quem
-sumiu há semanas, o backend segue gerando relatório e análise — **os dois
-chamam o Claude** — e mandando push.
-**Prompt escrito em 10/11, no histórico da conversa** (peça para eu salvar como
-arquivo quando for usar).
 
 ### 8. 🧍 Decidir planos, modelos e limites
 Decisão sua, não de agente. O `Plans.tsx` é maquete e o backend não tem
@@ -85,9 +91,48 @@ Falta a cota e o percentual — e sem o item 8 não dá para saber o que é 100%
 
 # RETENÇÃO — o que traz o usuário de volta
 
-### 10. 🤖 As quatro notificações faltantes
-30 min antes da tarefa · começo do dia · fim do dia para o registro · fim do
-dia para organizar o amanhã.
+### 10a. 🧍 Rodada de textos das notificações — ANTES da release
+Decidido em 13/11: o texto é o que faz o usuário voltar, então tem rodada
+própria, com o Bernardo, e não fica a cargo do agente que fez a mecânica. Para
+cada uma das quatro notificações: o momento em que a pessoa lê, duas ou três
+abordagens, e as variações (com ofensiva, sem ofensiva, primeiro dia). Os textos
+estão centralizados em `backend/services/day_reminders.py`. Problema já
+conhecido: "mantém sua ofensiva" não faz sentido para quem está com ofensiva 0.
+
+**Textos aprovados e implementados (13/11):** virou sistema de mensagens
+inspirado no Duolingo — várias vozes (parceiro, brincalhão, curioso, ritmo,
+dados, memória, ofensiva), sorteio sem repetir em 7 dias, regras de honestidade
+dos números, nada de dado de saúde na tela de bloqueio, e medição por variação.
+Documento aprovado: `docs/NOTIFICACOES_AXON.md` (32 textos). Catálogo em
+`services/notification_catalog.py` (313 testes, compara texto a texto com o
+documento). As decisões saíram do scheduler para `services/notification_planner.py`.
+
+**Simulador:** `backend/scripts/simular_notificacoes.py --user-id <uuid>` mostra
+a linha do tempo do dia (o que sai, quando, qual variação e por quê, e o que
+NÃO sai e por quê), sem escrever nada — guarda no cliente do Supabase recusa
+escrita e consulta de outro usuário. `--enviar-teste <tipo>` manda UMA
+notificação real só para esse usuário, pede `enviar` digitado e apaga a linha
+depois. Teste prova que simulação e `run()` real dão os mesmos envios em 3 dias.
+
+Migration 42 (`notifications.tapped_at`) aplicada em 13/11. Simulação rodada na
+conta do Bernardo em 13/11: resumo 08:00 e registro 21:00 corretos; nenhum aviso
+de 30 min porque as 5 tarefas do dia eram de rotina (excluídas de propósito).
+
+**Falta (🧍 Bernardo):** a conta não tem token de push (um mês sem usar o app).
+Abrir o app no Android, logar, conferir a permissão de notificação, ver o
+cabeçalho da simulação mostrar `android: 1` e só então rodar `--enviar-teste`.
+Fazer antes da release.
+
+**Ajustes pequenos do simulador (🤖, não bloqueiam a release):** anotar por que
+uma tarefa não recebe aviso de 30 min (de rotina, sem horário, concluída) em vez
+de silêncio; não deixar o print `[planning_scheduler] planning_daily → …` vazar
+na saída; mostrar "sem dados" em vez de "média 0%" quando não há registros.
+
+### 36. 🤖 Lembrete diário antigo consulta o banco a cada ciclo
+Achado pelo agente do item 10 em 13/11. O `planning_daily` consulta o banco a
+cada ciclo de 5 min depois do horário, e não uma vez por dia — o mesmo problema
+de escala que o aviso de 30 min resolveu com uma consulta por ciclo para todos.
+Sem urgência com a base atual.
 
 ### 11. 🤖 Botões "planejar agora" / "já planejei" nas notificações de planejamento
 
@@ -277,6 +322,9 @@ o Axon conhecer a pessoa, não para desviar da agenda.
 | Exclusão de conta pedindo o e-mail | conferido funcionando pelo Bernardo em 12/11; commitado em 12/11; acabamentos no item 34 |
 | Bug da ofensiva no registro diário | causa: `DayReview.handleSave` chamava `onSaved`+`onClose` no mesmo tick e o `onClose` do pop-up disparava o aviso; a condição virou "o dia pendente ainda está em branco?" (`Dashboard.tsx`); conferido pelo Bernardo em 12/11 |
 | Pop-up de registro em conta nova | `streak_service.yesterday_reviewable` + `can_review_yesterday` no `/dashboard`, no fuso do usuário; 12 testes novos; marca do pop-up virou dado de conta (`lib/autoReviewMark`) e a data local unificada em `lib/localDate`; PR #157 |
+| Acabamentos da exclusão de conta | falha ao carregar o perfil virou aviso visível com "Tentar de novo"; `.single()` em `try` (400, não 500); corpo do `DELETE` confirmado atravessando o Nginx em produção (422 com corpo malformado, 401 sem); commit `0d96211` |
+| Congelar trabalho pago de inativos | `profiles.last_seen_at` (Migration 40, aplicada em 12/11) gravada 1×/dia em `get_current_user`; 21 dias sem uso congelam só relatórios, catch-up e análise de rotina — reconcile, close_day e push seguem; 26 testes; **a economia só aparece a partir de 03/12/2026** (o backfill deu 21 dias a todas as contas existentes); commit `0d96211` |
+| As quatro notificações (item 10) | resumo do dia no `planning_daily`, 30 min antes (uma consulta por ciclo, paginada, fora para inativos), registro e organizar o amanhã; Migration 41 aplicada em 13/11; 61 testes; **painel de notificações remontado** em Configurações → Organização (estava órfão desde 29/07, commit `e751547`); busca de perfis do scheduler paginada nos três degraus. **Backend só sobe junto com a release**: as notificações nascem ligadas e o botão de desligar só existe na build nova. Falta a rodada de textos (10a) |
 
 > Falta só confirmar a **bolinha visual** dos eventos — o cálculo já está certo.
 

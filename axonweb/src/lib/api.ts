@@ -1325,6 +1325,15 @@ export function markNotificationRead(id: string) {
   });
 }
 
+// Toque no push (DeepLinkHandler): lida + horário do toque. Separado do
+// markNotificationRead porque a leitura pela lista do app não é toque — e a
+// comparação dos textos das notificações mede o toque.
+export function markNotificationTapped(id: string) {
+  return request<NotificationData>(`/notifications/${id}/tap`, {
+    method: "POST",
+  });
+}
+
 export function acceptNotification(id: string) {
   return request<{ analyzed: boolean; notification?: NotificationData }>(
     `/notifications/${id}/accept`,
@@ -1740,6 +1749,17 @@ export interface PlanningPreferences {
   // NOTIFICA com a proposta — nunca aplica sozinho.
   routine_analysis_enabled: boolean;
   routine_analysis_time: string | null; // "HH:MM"
+  // Lembretes do item 10. Nascem ligados.
+  task_reminder_enabled: boolean; // 30 min antes de tarefas/eventos com horário
+  day_review_reminder_enabled: boolean; // fim do dia: registro
+  plan_tomorrow_reminder_enabled: boolean; // fim do dia: organizar o amanhã
+  // Horários personalizados; null = horário do cronotipo.
+  day_review_reminder_time: string | null;
+  plan_tomorrow_reminder_time: string | null;
+  // Só leitura (o backend ignora no PUT): o horário do cronotipo, para mostrar
+  // o horário efetivo quando não há personalizado.
+  day_review_default_time?: string | null;
+  plan_tomorrow_default_time?: string | null;
 }
 
 // ===========================================================================

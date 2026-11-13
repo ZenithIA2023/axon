@@ -1,3 +1,4 @@
+from typing import Optional
 import time
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from models.schemas import FixedCommitment, ProfileResponse, ProfileUpdate, TagItem, TagPreferences, PlanningPreferences
@@ -5,6 +6,7 @@ from auth_helper import get_current_user
 from database import supabase
 from services import chronotype as chronotype_service
 from services import memory_service
+from services import day_reminders
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -228,20 +230,46 @@ def _bool_default(val, default: bool) -> bool:
     return val if val is not None else default
 
 
+_PLANNING_COLUMNS = (
+    "daily_planning_enabled, daily_planning_time, daily_use_chronotype, "
+    "weekly_planning_enabled, weekly_planning_day, weekly_use_chronotype, "
+    "routine_analysis_enabled, routine_analysis_time, chronotype"
+)
+_REMINDER_COLUMNS = (
+    "task_reminder_enabled, day_review_reminder_enabled, "
+    "plan_tomorrow_reminder_enabled, day_review_reminder_time, "
+    "plan_tomorrow_reminder_time"
+)
+
+
+def _hhmm(value) -> Optional[str]:
+    return str(value)[:5] if value else None
+
+
 @router.get("/planning", response_model=PlanningPreferences)
 def get_planning_preferences(current_user: dict = Depends(get_current_user)):
-    res = (
-        supabase.table("profiles")
-        .select(
-            "daily_planning_enabled, daily_planning_time, daily_use_chronotype, "
-            "weekly_planning_enabled, weekly_planning_day, weekly_use_chronotype, "
-            "routine_analysis_enabled, routine_analysis_time"
+    # Com a Migration 41 ainda não aplicada, o select com as colunas novas
+    # falha. Cai para o conjunto antigo em vez de quebrar a tela de
+    # notificações inteira; os lembretes novos aparecem ligados, que é o
+    # padrão deles.
+    try:
+        res = (
+            supabase.table("profiles")
+            .select(_PLANNING_COLUMNS + ", " + _REMINDER_COLUMNS)
+            .eq("id", current_user["id"])
+            .single()
+            .execute()
         )
-        .eq("id", current_user["id"])
-        .single()
-        .execute()
-    )
+    except Exception:
+        res = (
+            supabase.table("profiles")
+            .select(_PLANNING_COLUMNS)
+            .eq("id", current_user["id"])
+            .single()
+            .execute()
+        )
     d = res.data or {}
+    review_default, tomorrow_default = day_reminders.end_of_day_defaults(d.get("chronotype"))
     return PlanningPreferences(
         daily_planning_enabled=_bool_default(d.get("daily_planning_enabled"),  True),
         daily_planning_time=d.get("daily_planning_time"),
@@ -250,13 +278,20 @@ def get_planning_preferences(current_user: dict = Depends(get_current_user)):
         weekly_planning_day=d.get("weekly_planning_day"),
         weekly_use_chronotype=_bool_default(d.get("weekly_use_chronotype"),    True),
         routine_analysis_enabled=_bool_default(d.get("routine_analysis_enabled"), False),
-        routine_analysis_time=(str(d["routine_analysis_time"])[:5] if d.get("routine_analysis_time") else None),
+        routine_analysis_time=_hhmm(d.get("routine_analysis_time")),
+        task_reminder_enabled=_bool_default(d.get("task_reminder_enabled"), True),
+        day_review_reminder_enabled=_bool_default(d.get("day_review_reminder_enabled"), True),
+        plan_tomorrow_reminder_enabled=_bool_default(d.get("plan_tomorrow_reminder_enabled"), True),
+        day_review_reminder_time=_hhmm(d.get("day_review_reminder_time")),
+        plan_tomorrow_reminder_time=_hhmm(d.get("plan_tomorrow_reminder_time")),
+        day_review_default_time=review_default,
+        plan_tomorrow_default_time=tomorrow_default,
     )
 
 
 @router.put("/planning", response_model=PlanningPreferences)
 def update_planning_preferences(body: PlanningPreferences, current_user: dict = Depends(get_current_user)):
-    supabase.table("profiles").update({
+    updates = {
         "daily_planning_enabled":  body.daily_planning_enabled,
         "daily_planning_time":     body.daily_planning_time,
         "daily_use_chronotype":    body.daily_use_chronotype,
@@ -265,8 +300,29 @@ def update_planning_preferences(body: PlanningPreferences, current_user: dict = 
         "weekly_use_chronotype":   body.weekly_use_chronotype,
         "routine_analysis_enabled": body.routine_analysis_enabled,
         "routine_analysis_time":   body.routine_analysis_time,
-    }).eq("id", current_user["id"]).execute()
-    return body
+    }
+    # Campos do item 10: só entram quando o cliente os mandou. O app das lojas
+    # não os conhece e manda o corpo sem eles — gravar o padrão aqui religaria o
+    # que a pessoa desligou. Os horários vêm sempre do app novo (nulo = voltar
+    # ao horário do cronotipo), por isso usam model_fields_set e não "is None".
+    sent = body.model_fields_set
+    for field in ("task_reminder_enabled", "day_review_reminder_enabled",
+                  "plan_tomorrow_reminder_enabled"):
+        if field in sent and getattr(body, field) is not None:
+            updates[field] = getattr(body, field)
+    for field in ("day_review_reminder_time", "plan_tomorrow_reminder_time"):
+        if field in sent:
+            updates[field] = getattr(body, field) or None
+    try:
+        supabase.table("profiles").update(updates).eq("id", current_user["id"]).execute()
+    except Exception as e:
+        # Migration 41 ainda não aplicada: as colunas novas não existem. Grava o
+        # que já existia em vez de perder a alteração inteira com um 500; os
+        # interruptores novos só passam a valer depois da migration.
+        print(f"[profile] preferências novas não gravadas: {type(e).__name__}", flush=True)
+        legacy = {k: v for k, v in updates.items() if not k.endswith(("_reminder_enabled", "_reminder_time"))}
+        supabase.table("profiles").update(legacy).eq("id", current_user["id"]).execute()
+    return get_planning_preferences(current_user)
 
 
 # --- Tag preferences ---

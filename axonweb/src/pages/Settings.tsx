@@ -4,10 +4,12 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import {
   ArrowLeft,
+  Bell,
   CalendarClock,
   CalendarDays,
   Check,
   ChevronDown,
+  ChevronRight,
   Info,
   Link2,
 
@@ -20,6 +22,7 @@ import {
   Trash2,
   Volume2,
 } from "lucide-react";
+import NotificationSettingsSheet from "../components/settings/NotificationSettingsSheet";
 import TagEditorSheet from "../components/settings/TagEditorSheet";
 import TaskTagsSheet from "../components/settings/TaskTagsSheet";
 import { ThemeToggle } from "../components/theme/ThemeToggle";
@@ -44,7 +47,7 @@ const SETTINGS_SECTIONS: Array<{
   description: string;
   icon: ElementType;
 }> = [
-  { key: "organization", title: "Organização", description: "Rotina, categorias e tags", icon: CalendarClock },
+  { key: "organization", title: "Organização", description: "Rotina, notificações, categorias e tags", icon: CalendarClock },
   { key: "appearance", title: "Aparência", description: "Tema e cores do calendário", icon: Palette },
   { key: "voice", title: "Voz", description: "Experiência falada do Axon", icon: Volume2 },
   { key: "integrations", title: "Integrações", description: "Serviços conectados ao Axon", icon: Link2 },
@@ -327,6 +330,10 @@ function OrganizationSection({
   const [drafts, setDrafts] = useState<CommitmentDraft[]>(() => draftsFromCommitments(savedCommitments));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // Único ponto de entrada do painel de notificações desde o redesenho de
+  // 29/07/2026 (e751547), que tirou o antigo do Perfil: sem esta linha,
+  // ninguém liga ou desliga lembrete nenhum.
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   async function save() {
     const { commitments, error: invalid } = commitmentsFromDrafts(drafts);
@@ -395,6 +402,12 @@ function OrganizationSection({
         >
           {routineControl}
         </MobileExpandableRow>
+        <MobileSheetRow
+          icon={Bell}
+          title="Notificações"
+          description="Escolha quais lembretes receber e em que horário."
+          onOpen={() => setNotificationsOpen(true)}
+        />
         <MobileExpandableRow icon={Tags} title="Categorias" description="Personalize as opções usadas no seu registro diário.">
           <TagEditorSheet inline isOpen onClose={() => undefined} />
         </MobileExpandableRow>
@@ -405,7 +418,7 @@ function OrganizationSection({
       <div className="hidden lg:block">
         <SettingsCard
           title="Organização"
-          description="Defina o estilo da rotina, as categorias e as tags usadas pelo Axon."
+          description="Defina o estilo da rotina, as notificações, as categorias e as tags usadas pelo Axon."
         >
           <div className="space-y-5">
             <div>
@@ -413,6 +426,12 @@ function OrganizationSection({
               <div className="mt-3">{routineControl}</div>
             </div>
             <div className="grid gap-2 border-t border-slate-200 pt-5 dark:border-white/10">
+              <MobileSheetRow
+                icon={Bell}
+                title="Notificações"
+                description="Escolha quais lembretes receber e em que horário."
+                onOpen={() => setNotificationsOpen(true)}
+              />
               <MobileExpandableRow icon={Tags} title="Categorias" description="Personalize as opções usadas no seu registro diário.">
                 <TagEditorSheet inline isOpen onClose={() => undefined} />
               </MobileExpandableRow>
@@ -423,6 +442,9 @@ function OrganizationSection({
           </div>
         </SettingsCard>
       </div>
+      {/* Uma instância só, fora das duas listas (celular e desktop): as duas
+          ficam montadas e só uma aparece, e dois painéis abririam juntos. */}
+      <NotificationSettingsSheet isOpen={notificationsOpen} onClose={() => setNotificationsOpen(false)} />
     </>
   );
 }
@@ -611,6 +633,25 @@ function AboutSection() {
 }
 function SettingTitle({ icon: Icon, title }: { icon: ElementType; title: string }) {
   return <div className="flex items-center gap-2"><Icon className="h-4 w-4 text-[#6d28d9]" /><p className="text-sm font-black">{title}</p></div>;
+}
+// Mesma aparência do MobileExpandableRow, mas abre um painel em vez de expandir:
+// o de notificações é um BottomSheet com cinco seções, grande demais para
+// caber dentro de uma linha expandida.
+function MobileSheetRow({ icon: Icon, title, description, onOpen }: { icon: ElementType; title: string; description: string; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex min-h-16 w-full items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-left transition active:scale-[0.98] dark:border-white/10 dark:bg-white/[0.04]"
+    >
+      <Icon className="h-4 w-4 shrink-0 text-[#6d28d9]" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-bold">{title}</span>
+        <span className="mt-0.5 block text-[0.7rem] leading-4 text-slate-500 dark:text-white/40">{description}</span>
+      </span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+    </button>
+  );
 }
 function MobileExpandableRow({ icon: Icon, title, description, children }: { icon: ElementType; title: string; description: string; children: ReactNode }) {
   return (

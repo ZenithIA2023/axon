@@ -184,13 +184,13 @@ def create_notification(
     # o mensageiro, não o dado. `send_to_user` devolve na hora (o envio real
     # roda em thread), então o scheduler que chama isto em laço não espera rede.
     if created:
-        _push(user_id, notif_type, title, body, action)
+        _push(user_id, notif_type, title, body, action, created.get("id"))
 
     return created
 
 
 def _push(user_id: str, notif_type: str, title: str, body: str,
-          action: dict | None) -> None:
+          action: dict | None, notif_id: str | None = None) -> None:
     """
     Dispara o push da notificação recém-criada.
 
@@ -207,6 +207,18 @@ def _push(user_id: str, notif_type: str, title: str, body: str,
         data = {"type": notif_type}
         if action and action.get("task_id"):
             data["task_id"] = action["task_id"]
+        # Dia que o app deve abrir no Planning (lembretes do item 10: o dia da
+        # tarefa no "30 min antes", amanhã no "organizar o amanhã").
+        if action and action.get("date"):
+            data["date"] = action["date"]
+        # Registro do dia: "ontem" quando a ofensiva está em risco (o toque abre
+        # o registro de ontem, que é o que salva a sequência).
+        if action and action.get("registro"):
+            data["registro"] = action["registro"]
+        # O app devolve o id ao tocar, para marcar o toque (mark_tapped). O
+        # FCM só aceita valores string no `data`.
+        if notif_id:
+            data["notification_id"] = str(notif_id)
 
         push_service.send_to_user(user_id, title, body, data)
     except Exception as e:
@@ -391,6 +403,38 @@ def mark_read(user_id: str, notif_id: str) -> dict:
         .eq("user_id", user_id)
         .execute()
     )
+    return res.data[0] if res.data else {}
+
+
+def mark_tapped(user_id: str, notif_id: str) -> dict:
+    """
+    A pessoa tocou no push desta notificação: lida + horário do toque.
+
+    `tapped_at` é separado de `read_at` de propósito: read_at também é gravado
+    quando ela lê pela lista dentro do app, e a comparação de variações
+    (docs/NOTIFICACOES_AXON.md, seção 5) precisa do toque no push, não da
+    leitura. Antes da Migration 42 a coluna não existe: aí marca só como lida,
+    que é o que o toque já devia fazer de qualquer jeito.
+    """
+    agora = datetime.now(timezone.utc).isoformat()
+    base = {"status": "read", "read_at": agora}
+    try:
+        res = (
+            supabase.table("notifications")
+            .update({**base, "tapped_at": agora})
+            .eq("id", notif_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+    except Exception as e:
+        print(f"[notifications] tapped_at indisponível ({type(e).__name__}); marcando só como lida", flush=True)
+        res = (
+            supabase.table("notifications")
+            .update(base)
+            .eq("id", notif_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
     return res.data[0] if res.data else {}
 
 

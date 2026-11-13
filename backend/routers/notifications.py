@@ -76,6 +76,18 @@ def mark_read(
     return result
 
 
+@router.post("/{notification_id}/tap", response_model=NotificationResponse)
+def mark_tapped(
+    notification_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Toque no push (DeepLinkHandler): marca como lida e grava o horário do toque."""
+    result = notification_service.mark_tapped(current_user["id"], notification_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Notificação não encontrada")
+    return result
+
+
 @router.post("/{notification_id}/accept", response_model=NotificationAnalyzeResponse)
 def accept_notification(
     notification_id: str,

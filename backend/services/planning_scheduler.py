@@ -10,22 +10,25 @@ report_service.
 
 Fluxo:
   1. Busca todos os usuários com cronótipo definido (onboarding completo)
-  2. Para cada um, calcula o horário efetivo (configurado ou baseado em cronótipo)
-  3. Se a hora atual (no fuso do usuário) bate com o horário efetivo → cria notificação
-  4. Cooldowns impedem duplicatas no mesmo dia / semana
+  2. Para cada um, roda o trabalho do dia (snapshot, relatórios, análise) e as
+     notificações de planejamento
+  3. As notificações (o que sai, quando e com que texto) são decididas em
+     services/notification_planner — o mesmo código que o script de simulação
+     (backend/scripts/simular_notificacoes.py) chama
 """
 
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from database import supabase
-from services import notification_service
+# notification_service não é usado aqui desde o notification_planner, mas o
+# tests_activity troca funções dele por ps.notification_service.
+from services import notification_service  # noqa: F401
 from services import daily_stats_service
 from services import saved_time_service
 from services import routine_analysis_service
 from services import report_service
 from services import activity_service
-from services import user_tz as user_tz_service
+from services import notification_planner
 
 # Horário local (após a meia-noite) em que congelamos o snapshot do dia que
 # acabou e carregamos as pendentes. Uma folga de alguns minutos evita a borda
@@ -44,116 +47,14 @@ _REPORT_CATCHUP_TIME = "09:00"
 # weekday() de domingo (0 = segunda ... 6 = domingo).
 _SUNDAY = 6
 
-# Horários de disparo por cronótipo quando planning_use_chronotype = true
-_CHRONOTYPE_TIME = {
-    "morning":      "07:00",
-    "intermediate": "08:30",
-    "evening":      "09:30",
-    "night":        "10:30",
-    "bimodal":      "08:00",
-    # aliases em português
-    "Matutino":  "07:00",
-    "Misto":     "08:30",
-    "Vespertino":"09:30",
-    "Noturno":   "10:30",
-    "Bimodal":   "08:00",
-}
-
-_DEFAULT_WEEKLY_DAY = 0  # Segunda-feira
-
-_CURVE_KEY = {
-    "Matutino": "morning", "Vespertino": "evening", "Noturno": "night",
-    "Misto": "intermediate", "Bimodal": "bimodal",
-    "morning": "morning", "evening": "evening",
-    "night": "night", "intermediate": "intermediate", "bimodal": "bimodal",
-}
-
-_DAILY_BODY = {
-    "morning":      "Seu período de maior clareza está começando. Reserve alguns minutos para definir o que é essencial hoje — vai fazer diferença no aproveitamento do dia.",
-    "intermediate": "É um bom momento para organizar suas prioridades. Definir suas tarefas agora vai te ajudar a manter o foco ao longo do dia.",
-    "evening":      "Você ainda tem bastante energia pela frente. Planejar o dia agora garante que você vai aproveitar bem os próximos blocos.",
-    "night":        "Antes de entrar em ritmo pleno, reserve alguns minutos para definir o que é essencial hoje.",
-    "bimodal":      "Você tem dois picos de energia hoje. Planejar agora garante que você vai aproveitá-los ao máximo.",
-}
-
-_WEEKLY_BODY = {
-    "morning":      "Semana começando! Matutinos costumam render mais quando a semana está bem planejada desde o início. Que tal organizar suas prioridades?",
-    "intermediate": "É o momento ideal para definir o norte da semana. Reserve alguns minutos para distribuir suas metas pelos próximos dias.",
-    "evening":      "Mesmo que você funcione melhor à tarde, planejar a semana cedo evita perder oportunidades antes do seu pico de energia.",
-    "night":        "Sabe aquela semana que parece caótica? Costuma ser a que não foi planejada. Reserve 10 minutos agora para organizar os próximos dias.",
-    "bimodal":      "Com dois picos de energia por dia, planejar bem a semana faz toda a diferença no aproveitamento deles.",
-}
-
-_WEEKDAY_NAMES = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
-
-
-def _daily_fire_time(prefs: dict) -> str:
-    if _bool(prefs.get("daily_use_chronotype"), True):
-        return _CHRONOTYPE_TIME.get(prefs.get("chronotype", "intermediate"), "08:30")
-    return prefs.get("daily_planning_time") or "08:30"
-
-
-def _weekly_fire_time(prefs: dict) -> str:
-    if _bool(prefs.get("weekly_use_chronotype"), True):
-        return _CHRONOTYPE_TIME.get(prefs.get("chronotype", "intermediate"), "08:30")
-    return prefs.get("daily_planning_time") or "08:30"
-
-
-def _effective_weekly_day(prefs: dict) -> int:
-    day = prefs.get("weekly_planning_day")
-    return day if day is not None else _DEFAULT_WEEKLY_DAY
-
-
-def _bool(val, default: bool) -> bool:
-    return val if val is not None else default
-
 
 def _is_last_day_of_month(d) -> bool:
     return (d + timedelta(days=1)).day == 1
 
 
-_USER_COLUMNS = (
-    "id, name, chronotype, timezone, "
-    "daily_planning_enabled, daily_planning_time, daily_use_chronotype, "
-    "weekly_planning_enabled, weekly_planning_day, weekly_use_chronotype, "
-    "routine_analysis_enabled, routine_analysis_time"
-)
-
-
-def _fetch_users() -> list[dict]:
-    """
-    Todos os perfis com cronotipo, com last_seen_at (Migration 40).
-
-    Se a coluna ainda não existe — backend reiniciado antes de a migration ser
-    aplicada —, busca de novo SEM ela em vez de falhar. Falhar aqui pararia o
-    ciclo INTEIRO, inclusive o reconcile e os lembretes: já aconteceu com as
-    colunas de planning (Migration 16), com o scheduler falhando a cada
-    rodada. Sem a coluna, last_seen_at vem ausente e todos contam como ativos,
-    que é exatamente o comportamento de antes desta mudança.
-
-    Sem filtro de atividade AQUI de propósito: filtrar na query pularia o
-    _process_user inteiro, inclusive o que nunca pode parar.
-    """
-    try:
-        res = (
-            supabase.table("profiles")
-            .select(_USER_COLUMNS + ", last_seen_at")
-            .not_.is_("chronotype", "null")
-            .execute()
-        )
-    except Exception as e:
-        print(
-            f"[planning_scheduler] last_seen_at indisponível ({type(e).__name__}); "
-            "seguindo sem o corte por inatividade",
-            flush=True,
-        )
-        res = (
-            supabase.table("profiles")
-            .select(_USER_COLUMNS)
-            .not_.is_("chronotype", "null")
-            .execute()
-        )
-    return res.data or []
+# Mantidos com estes nomes: os testes de paginação e o tests_activity os usam.
+_fetch_all = notification_planner.fetch_all
+_fetch_users = notification_planner.fetch_users
 
 
 def run() -> None:
@@ -172,30 +73,29 @@ def run() -> None:
         except Exception as e:
             print(f"[planning_scheduler] erro user={user.get('id')}: {e}", flush=True)
 
+    # Fora do laço por usuário: precisa de UMA consulta para todos (ver
+    # notification_planner.task_reminders). Em try próprio: falhar aqui não
+    # desfaz o que o laço acima já fez.
+    try:
+        _send_task_reminders(users, now_utc)
+    except Exception as e:
+        print(f"[planning_scheduler] task_reminder falhou: {type(e).__name__}: {e}", flush=True)
+
+
+def _send_task_reminders(users: list[dict], now_utc: datetime) -> None:
+    notification_planner.task_reminders(users, now_utc, notification_planner.DbOutbox())
+
 
 def _process_user(user: dict, now_utc: datetime) -> None:
     user_id = user["id"]
 
     # timezone já vem no select de run() — evita uma query por usuário/minuto.
-    tz_name   = user_tz_service.normalize(user.get("timezone")) or user_tz_service.DEFAULT_TZ
+    tz_name   = notification_planner.user_tz(user)
     now_local = now_utc.astimezone(ZoneInfo(tz_name))
-    current_hhmm    = now_local.strftime("%H:%M")
     current_weekday = now_local.weekday()
 
-    # O job roda a cada 5 min e cada rodada processa todos os usuários em série.
-    # Comparar o minuto EXATO (`==`) perdia disparos de duas formas: horário
-    # configurado fora dos múltiplos de 5 (ex.: 08:37) nunca batia, e uma
-    # rodada que atrasasse pulava o minuto. Regra nova:
-    #   - lembretes (diário/semanal): disparam em qualquer rodada a partir do
-    #     horário, e o dedup por dia/semana LOCAL segura a duplicata;
-    #   - snapshot 00:10: janela curta (reconcile é idempotente, mas pesado);
-    #   - relatórios 20:00: janela curta — o catch_up das 09:00 já cobre
-    #     ausências longas, e gerar relatório chama o Claude (custo).
     def _in_window(fire: str, minutes: int = 15) -> bool:
-        fh, fm = map(int, fire.split(":"))
-        ch, cm = map(int, current_hhmm.split(":"))
-        delta = (ch * 60 + cm) - (fh * 60 + fm)
-        return 0 <= delta < minutes
+        return notification_planner.in_window(now_local, fire, minutes)
 
     # Conta inativa (21+ dias sem usar o app): congela SÓ os três blocos que
     # chamam o Claude — relatórios, catch-up e análise de rotina. Reconcile,
@@ -262,7 +162,7 @@ def _process_user(user: dict, now_utc: datetime) -> None:
     # Janela curta como a dos relatórios: chama o Claude (custo), e o índice
     # único de proposta pendente por dia segura a duplicata se a janela repetir.
     # try/except próprio: falhar aqui não pode derrubar o resto do ciclo.
-    if active and _bool(user.get("routine_analysis_enabled"), False) and user.get("routine_analysis_time"):
+    if active and notification_planner.bool_pref(user.get("routine_analysis_enabled"), False) and user.get("routine_analysis_time"):
         if _in_window(str(user["routine_analysis_time"])[:5]):
             try:
                 created = routine_analysis_service.run_scheduled(user_id, tz_name)
@@ -271,39 +171,6 @@ def _process_user(user: dict, now_utc: datetime) -> None:
             except Exception as e:
                 print(f"[planning_scheduler] routine_analysis falhou user={user_id}: {e}", flush=True)
 
-    daily_enabled  = _bool(user.get("daily_planning_enabled"),  True)
-    weekly_enabled = _bool(user.get("weekly_planning_enabled"), True)
-
-    if not daily_enabled and not weekly_enabled:
-        return
-
-    curve_key  = _CURVE_KEY.get(user.get("chronotype", "intermediate"), "intermediate")
-    first_name = (user.get("name") or "você").split()[0]
-
-    weekly_day       = _effective_weekly_day(user)
-    weekly_fire_time = _weekly_fire_time(user)
-    daily_fire_time  = _daily_fire_time(user)
-
-    # Semanal: dispara no dia + horário específico para semanal
-    if weekly_enabled and current_weekday == weekly_day and current_hhmm >= weekly_fire_time:
-        if not notification_service.has_planning_reminder_this_week(user_id, tz_name):
-            body = _WEEKLY_BODY.get(curve_key, _WEEKLY_BODY["intermediate"])
-            notification_service.create_notification(
-                user_id=user_id,
-                notif_type="planning_weekly",
-                title=f"Planejamento da semana, {first_name}",
-                body=body,
-            )
-            print(f"[planning_scheduler] planning_weekly → user={user_id}", flush=True)
-
-    # Diário: dispara todo dia no horário específico para diário
-    if daily_enabled and current_hhmm >= daily_fire_time:
-        if not notification_service.has_planning_reminder_today(user_id, tz_name):
-            body = _DAILY_BODY.get(curve_key, _DAILY_BODY["intermediate"])
-            notification_service.create_notification(
-                user_id=user_id,
-                notif_type="planning_daily",
-                title=f"Planejamento do dia, {first_name}",
-                body=body,
-            )
-            print(f"[planning_scheduler] planning_daily → user={user_id}", flush=True)
+    # Notificações de planejamento (fim do dia, resumo, semanal): decididas em
+    # notification_planner, o mesmo código que o script de simulação chama.
+    notification_planner.user_notifications(user, now_utc, notification_planner.DbOutbox())

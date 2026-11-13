@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ElementType, PointerEvent as ReactPointerEvent, ReactNode } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   CalendarDays,
   CheckCircle2,
@@ -475,6 +475,42 @@ export default function Dashboard() {
     today: api.DailyLog | null;
   } | null>(null);
   const autoReviewDecided = useRef(false);
+
+  // `?registro=hoje`: destino do toque no aviso "Registro do dia" (item 10).
+  // `?registro=ontem`: o mesmo aviso com a ofensiva em risco — abre o pop-up de
+  // ONTEM que já existe (o automático), porque é o registro de ontem que salva
+  // a sequência.
+  // Abre o registro de hoje direto e marca o pop-up automático como decidido
+  // nesta montagem — senão, à noite, os dois registros se empilhariam. A marca
+  // do dia (markAutoReviewShown) NÃO é gravada aqui: abrir pelo aviso não é o
+  // pop-up, e ele continua disponível numa próxima abertura se for o caso.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const registroParam = searchParams.get("registro");
+  useEffect(() => {
+    if (registroParam !== "hoje" && registroParam !== "ontem") return;
+    autoReviewDecided.current = true;
+    if (registroParam === "hoje") {
+      setReviewOpen(true);
+    } else {
+      // O registro de ontem é buscado aqui e não reaproveitado da montagem:
+      // aquela busca é pulada quando o pop-up automático já apareceu hoje, e
+      // abrir sem ele mostraria em branco um dia que já pode ter registro.
+      const d = new Date();
+      d.setDate(d.getDate() - 1);
+      const ontem = toISODate(d);
+      api
+        .getDailyLogYesterday()
+        .catch(() => null)
+        .then((log) => {
+          setYesterdayLog(log);
+          setAutoReviewDate(ontem);
+          setAutoReviewOpen(true);
+        });
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete("registro");
+    setSearchParams(next, { replace: true });
+  }, [registroParam, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (!api.isLoggedIn()) return;
