@@ -28,6 +28,7 @@ class _Res:
 class _Query:
     def __init__(self, db, table):
         self.db, self.table, self.cols, self.upd, self.filters = db, table, "", None, {}
+        self.rng = None
 
     @property
     def not_(self):
@@ -38,6 +39,14 @@ class _Query:
 
     def select(self, cols):
         self.cols = cols
+        return self
+
+    # O _fetch_users pagina (ordem por id + faixa); a ordem aqui já é estável.
+    def order(self, *a, **k):
+        return self
+
+    def range(self, a, b):
+        self.rng = (a, b)
         return self
 
     def update(self, data):
@@ -60,7 +69,10 @@ class _Query:
                     row.update(self.upd)
             return _Res([])
         cols = [c.strip() for c in self.cols.split(",")]
-        return _Res([{k: v for k, v in r.items() if k in cols} for r in self.db.profiles])
+        rows = [{k: v for k, v in r.items() if k in cols} for r in self.db.profiles]
+        if self.rng:
+            rows = rows[self.rng[0] : self.rng[1] + 1]
+        return _Res(rows)
 
 
 class _FakeDB:

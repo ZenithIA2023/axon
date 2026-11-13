@@ -1486,3 +1486,89 @@ alter table public.profiles
 
 comment on column public.profiles.last_seen_at is
   'Última requisição autenticada do usuário (no máximo 1 escrita/dia). Contas sem uso há 21+ dias não geram relatórios nem análise de rotina (Claude). Nulo = ativo.';
+
+-- =============================================
+-- Migration 41: notificações do dia (item 10)
+-- ---------------------------------------------
+-- Três notificações novas, todas montadas em Python (nenhuma chama o Claude):
+--   task_reminder          — 30 min antes de tarefas e eventos com horário
+--                            (exceto itens de rotina e contas inativas);
+--   day_review_reminder    — fim do dia, se o registro de hoje está incompleto;
+--   plan_tomorrow_reminder — fim do dia, depois do registro, se amanhã está vazio.
+-- O resumo da manhã reaproveita o planning_daily (só o texto mudou).
+--
+-- As três nascem LIGADAS (decisão do Bernardo) e cada uma tem seu interruptor.
+-- Os horários de fim do dia são nulos = horário do cronotipo (matutino
+-- 20:00/20:30, intermediário e bimodal 21:00/21:30, vespertino e noturno
+-- 22:00/22:30 — ver services/day_reminders.py).
+--
+-- RESTRIÇÃO DE TIPO: o supabase_schema.sql tem, comentada, uma restrição
+-- notifications_type_check com só os cinco tipos antigos. Ninguém sabe se ela
+-- está aplicada em produção; se estiver, o insert dos tipos novos falharia e a
+-- exceção seria engolida pelo try por usuário do scheduler — a notificação
+-- simplesmente nunca existiria. Por isso a restrição é recriada aqui com TODOS
+-- os tipos que o código grava (levantados com grep em 12/11/2026):
+--   simple, improvement  — notification_analyzer (o Claude escolhe entre os dois)
+--   change               — agent_tools, notification_analyzer
+--   planning_daily/weekly — planning_scheduler
+--   e os três novos acima.
+-- Se alguma linha antiga tiver um tipo fora da lista, o ADD CONSTRAINT falha
+-- na hora de aplicar — e isso é bom: falha alto, aqui, e não em silêncio no
+-- scheduler.
+--
+-- Aplicar no SQL Editor ANTES de reiniciar o backend. Se o backend subir
+-- antes, o scheduler continua rodando (cai para as colunas antigas) e os
+-- lembretes novos usam os padrões: ligados, no horário do cronotipo.
+-- =============================================
+alter table public.profiles
+  add column if not exists task_reminder_enabled          boolean not null default true,
+  add column if not exists day_review_reminder_enabled    boolean not null default true,
+  add column if not exists plan_tomorrow_reminder_enabled boolean not null default true,
+  add column if not exists day_review_reminder_time       time,
+  add column if not exists plan_tomorrow_reminder_time    time;
+
+alter table public.notifications
+  drop constraint if exists notifications_type_check;
+
+alter table public.notifications
+  add constraint notifications_type_check
+  check (type in (
+    'simple', 'improvement', 'change',
+    'planning_daily', 'planning_weekly',
+    'task_reminder', 'day_review_reminder', 'plan_tomorrow_reminder'
+  ));
+
+-- O "já avisado" do lembrete de 30 min procura notificações deste tipo pelo
+-- task_id guardado no action, uma vez por ciclo do scheduler.
+create index if not exists notifications_task_reminder_idx
+  on public.notifications ((action->>'task_id'), created_at)
+  where type = 'task_reminder';
+
+comment on column public.profiles.day_review_reminder_time is
+  'Horário do aviso de registro do dia. Nulo = horário do cronotipo.';
+comment on column public.profiles.plan_tomorrow_reminder_time is
+  'Horário do aviso de organizar o amanhã. Nulo = horário do cronotipo.';
+
+-- Migration 42: horário do toque no push (catálogo de notificações)
+--
+-- Por quê: a comparação das variações de texto (docs/NOTIFICACOES_AXON.md,
+-- seção 5) precisa saber quando a pessoa TOCOU na notificação do sistema.
+-- `read_at` não serve sozinho: ele também é gravado quando ela lê pela lista
+-- dentro do app (PATCH /notifications/{id}/read), e aí "abriu pelo push" e
+-- "viu depois no app" ficariam iguais. O toque grava os dois (POST
+-- /notifications/{id}/tap); antes desta migration, só o read_at.
+--
+-- O variant_id e a family de cada envio NÃO ganham coluna: vão no `action`
+-- (jsonb) junto do que já ia lá.
+
+alter table public.notifications
+  add column if not exists tapped_at timestamp with time zone;
+
+comment on column public.notifications.tapped_at is
+  'Quando a pessoa tocou no push desta notificação (DeepLinkHandler). Nulo = nunca tocou; read_at sozinho pode ser leitura pela lista do app.';
+
+-- O sorteio lê, a cada envio, as notificações do mesmo tipo dos últimos 7
+-- dias da pessoa (variant_history) — e o "30 min antes" lê as de um lote de
+-- usuários por ciclo. Sem índice, cada leitura varre a tabela inteira.
+create index if not exists notifications_user_type_created_idx
+  on public.notifications (user_id, type, created_at desc);

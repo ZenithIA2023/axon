@@ -268,6 +268,21 @@ class PlanningPreferences(BaseModel):
     # seguinte no horário escolhido e NOTIFICA com a proposta — nunca aplica.
     routine_analysis_enabled: bool         = False
     routine_analysis_time:   Optional[str] = None   # "HH:MM"
+    # Item 10 (Migration 41). Opcionais de propósito: o app já instalado nas
+    # lojas manda este corpo SEM estes campos, e o PUT grava o corpo inteiro —
+    # com padrão True, salvar as configurações pelo app antigo religaria à
+    # força o que a pessoa desligou no novo. None = "não mexer". O GET sempre
+    # devolve o valor efetivo.
+    task_reminder_enabled:          Optional[bool] = None
+    day_review_reminder_enabled:    Optional[bool] = None
+    plan_tomorrow_reminder_enabled: Optional[bool] = None
+    # Horários personalizados do fim do dia. None = horário do cronotipo.
+    day_review_reminder_time:       Optional[str] = None   # "HH:MM"
+    plan_tomorrow_reminder_time:    Optional[str] = None   # "HH:MM"
+    # Só leitura: o horário do cronotipo, para a tela mostrar o efetivo quando
+    # não há personalizado. Ignorados no PUT.
+    day_review_default_time:        Optional[str] = None
+    plan_tomorrow_default_time:     Optional[str] = None
 
 
 # --- Tasks ---

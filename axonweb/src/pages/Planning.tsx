@@ -340,6 +340,15 @@ function hhmm(value?: string | null): string | undefined {
   return value ? value.slice(0, 5) : undefined;
 }
 
+// "AAAA-MM-DD" → Date no fuso LOCAL (meia-noite local). `new Date("2026-11-12")`
+// seria meia-noite em UTC, que em UTC-3 é o dia ANTERIOR às 21h.
+function parseLocalISODate(value: string | null): Date | null {
+  const match = value?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function weekDaysOf(selected: Date): Date[] {
   const dow = selected.getDay(); // 0 Dom .. 6 Sáb
   const mondayOffset = dow === 0 ? -6 : 1 - dow;
@@ -694,7 +703,15 @@ function AgendaView({
     () => googleReturnNotice(searchParams.get("google"))
   );
   const toastTimer = useRef<number | null>(null);
-  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
+  // `?dia=AAAA-MM-DD` abre o Planning num dia específico: é o destino do toque
+  // nas notificações do item 10 (o dia da tarefa no "30 min antes", amanhã no
+  // "organizar o amanhã"). Lido no estado inicial pelo mesmo motivo do
+  // ?google= acima (duas AgendaView montadas), e também num efeito abaixo,
+  // para quando o Planning já estava aberto e o toque só muda a URL.
+  const diaParam = searchParams.get("dia");
+  const [selectedDate, setSelectedDate] = useState<Date>(
+    () => parseLocalISODate(diaParam) ?? new Date()
+  );
   const [carriedCount, setCarriedCount] = useState(0);
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   // A escolha vem do perfil (backend), não do navegador: no localStorage uma
@@ -876,13 +893,23 @@ function AgendaView({
       });
   }, [currentWindow, fetchWindow, showToast]);
 
-  // Tira o ?google= da URL para o aviso não voltar ao recarregar a página.
+  // Tira o ?google= e o ?dia= da URL para não voltarem ao recarregar a página.
+  // Num efeito só: dois efeitos chamando setSearchParams no mesmo ciclo
+  // partiriam da mesma URL, e o segundo devolveria o que o primeiro tirou.
   useEffect(() => {
-    if (!searchParams.has("google")) return;
+    if (!searchParams.has("google") && !searchParams.has("dia")) return;
     const next = new URLSearchParams(searchParams);
     next.delete("google");
+    next.delete("dia");
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
+
+  // Planning já aberto e o toque numa notificação muda só a URL: o estado
+  // inicial não roda de novo, então o dia vem por aqui.
+  useEffect(() => {
+    const target = parseLocalISODate(diaParam);
+    if (target) setSelectedDate(target);
+  }, [diaParam]);
 
   // Some sozinho depois de um tempo, mas é longo o bastante para ler a frase.
   useEffect(() => {

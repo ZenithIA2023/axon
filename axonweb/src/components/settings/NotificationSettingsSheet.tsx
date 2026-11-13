@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, CalendarDays, Clock, Sparkles, Zap } from "lucide-react";
+import { AlarmClock, Bell, CalendarDays, CalendarPlus, Clock, NotebookPen, Sparkles, Zap } from "lucide-react";
 
 import BottomSheet from "../ui/BottomSheet";
 import * as api from "../../lib/api";
@@ -36,6 +36,11 @@ const DEFAULT_PREFS: api.PlanningPreferences = {
   weekly_use_chronotype: true,
   routine_analysis_enabled: false,
   routine_analysis_time: null,
+  task_reminder_enabled: true,
+  day_review_reminder_enabled: true,
+  plan_tomorrow_reminder_enabled: true,
+  day_review_reminder_time: null,
+  plan_tomorrow_reminder_time: null,
 };
 
 // ===========================================================================
@@ -140,6 +145,8 @@ export default function NotificationSettingsSheet({ isOpen, onClose }: Props) {
       ) : (
         <div className="space-y-6">
           <DailyPlanningSection prefs={prefs} onUpdate={update} />
+          <DuringDaySection prefs={prefs} onUpdate={update} />
+          <EndOfDaySection prefs={prefs} onUpdate={update} />
           <WeeklyPlanningSection prefs={prefs} onUpdate={update} />
           <RoutineAnalysisSection prefs={prefs} onUpdate={update} />
         </div>
@@ -179,7 +186,7 @@ function DailyPlanningSection({
         <ToggleRow
           icon={Bell}
           title="Lembrete diário"
-          description="Receba um lembrete para planejar seu dia."
+          description="Um resumo do seu dia: quantas tarefas e qual é a primeira."
           enabled={prefs.daily_planning_enabled}
           onToggle={() =>
             onUpdate({
@@ -219,6 +226,129 @@ function DailyPlanningSection({
         )}
       </div>
     </section>
+  );
+}
+
+// Item 10: aviso de 30 minutos antes. Um interruptor só, sem horário: a
+// antecedência é fixa.
+function DuringDaySection({
+  prefs,
+  onUpdate,
+}: {
+  prefs: api.PlanningPreferences;
+  onUpdate: (patch: Partial<api.PlanningPreferences>) => void;
+}) {
+  return (
+    <section>
+      <SectionTitle title="Ao longo do dia" />
+
+      <ToggleRow
+        icon={AlarmClock}
+        title="30 minutos antes"
+        description="Aviso antes de tarefas e eventos com horário. Itens de rotina não avisam."
+        enabled={prefs.task_reminder_enabled}
+        onToggle={() =>
+          onUpdate({ task_reminder_enabled: !prefs.task_reminder_enabled })
+        }
+      />
+    </section>
+  );
+}
+
+// Item 10: os dois avisos de fim do dia. Cada um com interruptor e horário; o
+// horário vazio (null) segue o cronotipo, e o padrão aparece no campo para a
+// pessoa saber quando vai receber.
+function EndOfDaySection({
+  prefs,
+  onUpdate,
+}: {
+  prefs: api.PlanningPreferences;
+  onUpdate: (patch: Partial<api.PlanningPreferences>) => void;
+}) {
+  return (
+    <section>
+      <SectionTitle title="Fim do dia" />
+
+      <div className="space-y-3">
+        <ToggleRow
+          icon={NotebookPen}
+          title="Registro do dia"
+          description="Lembra de registrar como foi o dia, se ainda não registrou."
+          enabled={prefs.day_review_reminder_enabled}
+          onToggle={() =>
+            onUpdate({
+              day_review_reminder_enabled: !prefs.day_review_reminder_enabled,
+            })
+          }
+        />
+
+        {prefs.day_review_reminder_enabled && (
+          <EndOfDayTimeRow
+            value={prefs.day_review_reminder_time}
+            fallback={prefs.day_review_default_time ?? "21:00"}
+            onChange={(value) => onUpdate({ day_review_reminder_time: value })}
+          />
+        )}
+
+        <ToggleRow
+          icon={CalendarPlus}
+          title="Organizar o amanhã"
+          description="Sugere planejar o dia seguinte, se ele ainda estiver vazio."
+          enabled={prefs.plan_tomorrow_reminder_enabled}
+          onToggle={() =>
+            onUpdate({
+              plan_tomorrow_reminder_enabled:
+                !prefs.plan_tomorrow_reminder_enabled,
+            })
+          }
+        />
+
+        {prefs.plan_tomorrow_reminder_enabled && (
+          <EndOfDayTimeRow
+            value={prefs.plan_tomorrow_reminder_time}
+            fallback={prefs.plan_tomorrow_default_time ?? "21:30"}
+            onChange={(value) => onUpdate({ plan_tomorrow_reminder_time: value })}
+          />
+        )}
+      </div>
+    </section>
+  );
+}
+
+// Horário de um aviso de fim do dia. Mostra o efetivo (personalizado ou do
+// cronotipo); quando personalizado, oferece voltar ao do cronotipo.
+function EndOfDayTimeRow({
+  value,
+  fallback,
+  onChange,
+}: {
+  value: string | null;
+  fallback: string;
+  onChange: (value: string | null) => void;
+}) {
+  return (
+    <PickerRow icon={Clock} label="Horário">
+      <div className="flex flex-col items-end gap-1">
+        <input
+          type="time"
+          value={value ?? fallback}
+          onChange={(event) => onChange(event.target.value || null)}
+          className="rounded-xl border border-soft bg-surface-muted px-3 py-2 text-sm font-medium text-primary outline-none focus:border-accent-soft"
+          style={{ colorScheme: "dark" }}
+        />
+        {value ? (
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            className="text-[0.7rem] font-semibold text-accent"
+          >
+            Usar o do cronotipo ({fallback})
+          </button>
+        ) : (
+          <span className="text-[0.7rem] text-muted">Pelo seu cronotipo</span>
+        )}
+      </div>
+    </PickerRow>
   );
 }
 
